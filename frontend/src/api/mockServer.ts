@@ -171,6 +171,8 @@ const routes: [string, string, Handler][] = [
   ['POST', '/drafts/:id/notify', (p) => {
     const d = db.details.find((x) => x.id === Number(p.id))
     if (!d) throw notFound('초안')
+    // 디자인 브리프 3.3 — Mattermost 전송은 확정 후에만. 화면은 버튼을 잠가 막지만
+    // 규칙 자체는 서버가 지켜야 한다. 2026-09-09 기준 실서버는 이 검사가 없어 담당자 2에게 알렸다.
     if (d.status !== 'CONFIRMED') {
       throw new MockHttpError(409, 'DRAFT_NOT_CONFIRMED', '확정한 뒤에 보낼 수 있습니다.')
     }
@@ -248,10 +250,10 @@ const routes: [string, string, Handler][] = [
     const { label } = body as { label: string }
     const issued: IssuedApiKey = {
       ...(clone(apiKeyIssuedJson) as IssuedApiKey),
-      id: ++nextId, label, createdAt: now(), lastUsedAt: null,
+      id: ++nextId, label, createdAt: now(),
     }
     const { key: _k, ...meta } = issued
-    db.apiKeys.push(meta)
+    db.apiKeys.push({ ...meta, lastUsedAt: null })
     return issued
   }],
 

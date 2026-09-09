@@ -176,9 +176,15 @@ export interface ApiKey {
   lastUsedAt: string | null
 }
 
-/** 발급 직후 한 번만 평문 키가 온다. */
-export interface IssuedApiKey extends ApiKey {
+/**
+ * 발급 직후 한 번만 평문 키가 온다. 목록 항목(ApiKey)과 달리 `lastUsedAt` 이 없다 —
+ * 방금 만든 키라 사용 이력이 있을 수 없다. 상속하면 타입이 실제 응답을 속인다.
+ */
+export interface IssuedApiKey {
+  id: number
+  label: string
   key: string
+  createdAt: string
 }
 
 export interface NotifySettings {
