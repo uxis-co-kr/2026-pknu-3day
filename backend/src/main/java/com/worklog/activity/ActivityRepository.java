@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -68,6 +69,27 @@ public interface ActivityRepository
             @Param("type") ActivityType type,
             @Param("start") OffsetDateTime start,
             @Param("end") OffsetDateTime end);
+
+    /**
+     * 뒤늦게 가입한 사용자의 기존 활동을 소급해서 연결한다 (PRD F1-5).
+     *
+     * <p>매핑은 수집 시점에만 일어나므로, 커밋이 먼저 쌓이고 그 뒤에 로그인하면 그 활동들은
+     * external_login 만 남은 채 영영 사용자에 붙지 않는다. 재수집으로도 안 고쳐진다 —
+     * 이미 저장한 sha 는 건너뛰기 때문이다. 로그인 시점에 한 번 이어 준다.
+     *
+     * @return 새로 연결된 활동 수
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Activity a set a.user.id = :userId"
+            + " where a.user is null and lower(a.externalLogin) = lower(:login)")
+    int linkExistingActivities(@Param("userId") Long userId, @Param("login") String login);
+
+    /** 아직 어느 사용자에도 붙지 않은 활동 수 — 통계에서 총계와 사용자별 합의 차이를 설명한다. */
+    @Query("select a.type, count(a) from Activity a"
+            + " where a.user is null and a.occurredAt >= :start and a.occurredAt < :end"
+            + " group by a.type")
+    List<Object[]> countUnmappedByTypeBetween(
+            @Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
 
     /** 활동이 있는 사용자 id — 18:00 초안 스케줄러가 대상을 고를 때 쓴다. */
     @Query("select distinct a.user.id from Activity a"

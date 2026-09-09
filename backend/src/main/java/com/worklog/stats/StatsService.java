@@ -42,6 +42,8 @@ public class StatsService {
 
         OffsetDateTime staleThreshold = OffsetDateTime.now().minus(STALE_AFTER);
 
+        Map<ActivityType, Long> unmapped = unmappedFor(date);
+
         return new DailyStatsResponse(
                 date,
                 commitsToday,
@@ -50,7 +52,21 @@ public class StatsService {
                 sessionRepository.countByWorkDate(date),
                 commitsToday - commitsYesterday,
                 sessionRepository.countStale(date, staleThreshold),
+                new DailyStatsResponse.Unmapped(
+                        unmapped.getOrDefault(ActivityType.COMMIT, 0L),
+                        unmapped.getOrDefault(ActivityType.PR_OPENED, 0L),
+                        unmapped.getOrDefault(ActivityType.PR_MERGED, 0L)),
                 byUser(date));
+    }
+
+    /** 총계와 byUser 합계의 차이 — 가입하지 않은 GitHub 계정의 활동이다. */
+    private Map<ActivityType, Long> unmappedFor(LocalDate date) {
+        Map<ActivityType, Long> counts = new EnumMap<>(ActivityType.class);
+        for (Object[] row : activityRepository.countUnmappedByTypeBetween(
+                KstDates.startOf(date), KstDates.endOf(date))) {
+            counts.put((ActivityType) row[0], (Long) row[1]);
+        }
+        return counts;
     }
 
     private Map<ActivityType, Long> countsFor(LocalDate date) {
