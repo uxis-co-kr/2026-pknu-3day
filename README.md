@@ -32,7 +32,7 @@ GitHub 활동과 VS Code 안의 미커밋 작업을 모아 **업무 일지 초�
 세 개의 명령으로 전체가 뜬다.
 
 ```bash
-# 1) DB — 호스트 5433 으로 노출된다 (로컬 PostgreSQL 5432 와 충돌 회피)
+# 1) DB — 호스트 5432 로 노출된다 (루트 .env 의 POSTGRES_PORT 로 바꿀 수 있다)
 docker compose up -d
 
 # 2) 백엔드 (http://localhost:8080/api)
@@ -65,10 +65,10 @@ cd backend && set -a && source .env && set +a && ./gradlew bootRun
 docker compose exec postgres psql -U worklog -d worklog -c '\dt'
 ```
 
-호스트에서 직접 붙을 때는 5433 을 쓴다.
+호스트에서 직접 붙을 때는 노출 포트를 쓴다 (기본 5432).
 
 ```bash
-psql -h localhost -p 5433 -U worklog -d worklog
+psql -h localhost -p 5432 -U worklog -d worklog
 ```
 
 ## 데이터베이스
