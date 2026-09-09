@@ -1,0 +1,89 @@
+{
+  "from": "2026-09-03",
+  "to": "2026-09-09",
+  "granularity": "day",
+  "items": [
+    {
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "totals": {
+        "commits": 23,
+        "prs": 4,
+        "merges": 3
+      },
+      "series": [
+        {
+          "date": "2026-09-03",
+          "commits": 5,
+          "prs": 0,
+          "merges": 1,
+          "draft": {
+            "id": 13,
+            "status": "CONFIRMED"
+          }
+        },
+        {
+          "date": "2026-09-04",
+          "commits": 3,
+          "prs": 1,
+          "merges": 0,
+          "draft": {
+            "id": 12,
+            "status": "CONFIRMED"
+          }
+        },
+        {
+          "date": "2026-09-05",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-09-06",
+          "commits": 7,
+          "prs": 1,
+          "merges": 0,
+          "draft": {
+            "id": 11,
+            "status": "CONFIRMED"
+          }
+        },
+        {
+          "date": "2026-09-07",
+          "commits": 4,
+          "prs": 0,
+          "merges": 1,
+          "draft": {
+            "id": 10,
+            "status": "CONFIRMED"
+          }
+        },
+        {
+          "date": "2026-09-08",
+          "commits": 2,
+          "prs": 1,
+          "merges": 0,
+          "draft": {
+            "id": 9,
+            "status": "CONFIRMED"
+          }
+        },
+        {
+          "date": "2026-09-09",
+          "commits": 2,
+          "prs": 1,
+          "merges": 1,
+          "draft": {
+            "id": 7,
+            "status": "DRAFT"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": 9,
+  "userId": 3,
+  "workDate": "2026-09-08",
+  "version": 1,
+  "status": "CONFIRMED",
+  "contentMd": "# 2026-09-08 업무 일지 — 배태일\n\n## 완료한 작업\n- [withly/punchcheck] 출석 도메인 모델과 테이블 초안을 잡았습니다. (commit 3f10ab7)\n\n## 진행 중 / 미커밋\n- 없음\n\n## 계획 / TODO\n- 출석 API 엔드포인트 설계\n\n## 메모\n(직접 작성)\n",
+  "createdAt": "2026-09-08T18:04:00+09:00",
+  "updatedAt": "2026-09-08T18:06:00+09:00",
+  "confirmedAt": "2026-09-08T18:10:00+09:00",
+  "sourceActivities": [],
+  "sourceSessions": []
+}

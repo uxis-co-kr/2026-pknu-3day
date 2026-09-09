@@ -1,0 +1,407 @@
+{
+  "items": [
+    {
+      "id": 107,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "2ae77c0",
+      "sha": "2ae77c0",
+      "title": "feat: 출석 통계 집계 쿼리 추가",
+      "url": "https://github.com/withly/punchcheck/commit/2ae77c0",
+      "branch": "main",
+      "filesChanged": 3,
+      "additions": 64,
+      "deletions": 2,
+      "summary": "부서별 출석률을 한 번의 쿼리로 집계하도록 했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T09:35:00+09:00"
+    },
+    {
+      "id": 101,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "abc1234",
+      "sha": "abc1234",
+      "title": "feat: 출석 API 추가",
+      "url": "https://github.com/withly/punchcheck/commit/abc1234",
+      "branch": "main",
+      "filesChanged": 4,
+      "additions": 120,
+      "deletions": 8,
+      "summary": "출석 체크 REST API를 추가하고 중복 출석을 막는 검증 로직을 넣었습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T10:12:00+09:00"
+    },
+    {
+      "id": 113,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 5,
+        "login": "seoyeon-lee",
+        "name": "이서연",
+        "avatarUrl": null
+      },
+      "externalId": "4c9017f",
+      "sha": "4c9017f",
+      "title": "feat: 사원 검색 자동완성",
+      "url": "https://github.com/withly/punchcheck/commit/4c9017f",
+      "branch": "main",
+      "filesChanged": 5,
+      "additions": 96,
+      "deletions": 11,
+      "summary": "사원 이름으로 검색할 때 자동완성 목록을 보여주도록 했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T10:40:00+09:00"
+    },
+    {
+      "id": 108,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "c04b8de",
+      "sha": "c04b8de",
+      "title": "test: 출석 집계 쿼리 테스트",
+      "url": "https://github.com/withly/punchcheck/commit/c04b8de",
+      "branch": "main",
+      "filesChanged": 2,
+      "additions": 51,
+      "deletions": 0,
+      "summary": "출석 집계 쿼리에 대한 단위 테스트를 추가했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T11:02:00+09:00"
+    },
+    {
+      "id": 102,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "d9e8f71",
+      "sha": "d9e8f71",
+      "title": "fix: 출석 시각 타임존 오류",
+      "url": "https://github.com/withly/punchcheck/commit/d9e8f71",
+      "branch": "main",
+      "filesChanged": 2,
+      "additions": 14,
+      "deletions": 6,
+      "summary": "출석 시각이 UTC로 저장되던 문제를 KST 기준으로 수정했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T11:40:00+09:00"
+    },
+    {
+      "id": 114,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 5,
+        "login": "seoyeon-lee",
+        "name": "이서연",
+        "avatarUrl": null
+      },
+      "externalId": "a72b5c3",
+      "sha": "a72b5c3",
+      "title": "style: 검색 결과 목록 여백 정리",
+      "url": "https://github.com/withly/punchcheck/commit/a72b5c3",
+      "branch": "main",
+      "filesChanged": 2,
+      "additions": 18,
+      "deletions": 18,
+      "summary": "검색 결과 목록의 행 간격과 여백을 맞췄습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T12:20:00+09:00"
+    },
+    {
+      "id": 109,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "9d2f6b1",
+      "sha": "9d2f6b1",
+      "title": "fix: 부서 필터 누락 수정",
+      "url": "https://github.com/withly/punchcheck/commit/9d2f6b1",
+      "branch": "main",
+      "filesChanged": 1,
+      "additions": 9,
+      "deletions": 4,
+      "summary": "부서 필터가 집계 쿼리에 전달되지 않던 문제를 고쳤습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T13:48:00+09:00"
+    },
+    {
+      "id": 103,
+      "type": "PR_OPENED",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "12",
+      "sha": null,
+      "title": "출석 API 및 타임존 수정",
+      "url": "https://github.com/withly/punchcheck/pull/12",
+      "branch": "main",
+      "filesChanged": null,
+      "additions": null,
+      "deletions": null,
+      "summary": null,
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T14:05:00+09:00"
+    },
+    {
+      "id": 115,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 5,
+        "login": "seoyeon-lee",
+        "name": "이서연",
+        "avatarUrl": null
+      },
+      "externalId": "f03d8e6",
+      "sha": "f03d8e6",
+      "title": "fix: 검색어 공백 처리",
+      "url": "https://github.com/withly/punchcheck/commit/f03d8e6",
+      "branch": "main",
+      "filesChanged": 1,
+      "additions": 12,
+      "deletions": 5,
+      "summary": "검색어 앞뒤 공백 때문에 결과가 비던 문제를 고쳤습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T14:31:00+09:00"
+    },
+    {
+      "id": 110,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "e8a3057",
+      "sha": "e8a3057",
+      "title": "chore: 사용하지 않는 DTO 제거",
+      "url": "https://github.com/withly/punchcheck/commit/e8a3057",
+      "branch": "main",
+      "filesChanged": 4,
+      "additions": 3,
+      "deletions": 47,
+      "summary": "더 이상 참조되지 않는 DTO 네 개를 삭제했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T15:10:00+09:00"
+    },
+    {
+      "id": 112,
+      "type": "COMMIT",
+      "repo": {
+        "id": 2,
+        "fullName": "withly/salty-web"
+      },
+      "user": {
+        "id": 5,
+        "login": "seoyeon-lee",
+        "name": "이서연",
+        "avatarUrl": null
+      },
+      "externalId": "b61e4a9",
+      "sha": "b61e4a9",
+      "title": "fix: 로그인 리다이렉트 오류",
+      "url": "https://github.com/withly/salty-web/commit/b61e4a9",
+      "branch": "main",
+      "filesChanged": 1,
+      "additions": 9,
+      "deletions": 2,
+      "summary": null,
+      "summaryStatus": "FAILED",
+      "occurredAt": "2026-09-09T15:48:00+09:00"
+    },
+    {
+      "id": 111,
+      "type": "PR_OPENED",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "13",
+      "sha": null,
+      "title": "출석 통계 집계 쿼리",
+      "url": "https://github.com/withly/punchcheck/pull/13",
+      "branch": "main",
+      "filesChanged": null,
+      "additions": null,
+      "deletions": null,
+      "summary": null,
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T15:52:00+09:00"
+    },
+    {
+      "id": 106,
+      "type": "COMMIT",
+      "repo": {
+        "id": 2,
+        "fullName": "withly/salty-web"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "7b3d914",
+      "sha": "7b3d914",
+      "title": "refactor: 온보딩 스텝 컴포넌트 분리",
+      "url": "https://github.com/withly/salty-web/commit/7b3d914",
+      "branch": "main",
+      "filesChanged": 5,
+      "additions": 88,
+      "deletions": 62,
+      "summary": "온보딩 화면의 단계별 컴포넌트를 파일로 분리했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T16:05:00+09:00"
+    },
+    {
+      "id": 104,
+      "type": "PR_MERGED",
+      "repo": {
+        "id": 2,
+        "fullName": "withly/salty-web"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "11",
+      "sha": null,
+      "title": "온보딩 화면 리팩토링",
+      "url": "https://github.com/withly/salty-web/pull/11",
+      "branch": "main",
+      "filesChanged": null,
+      "additions": null,
+      "deletions": null,
+      "summary": null,
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T16:30:00+09:00"
+    },
+    {
+      "id": 116,
+      "type": "PR_OPENED",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 5,
+        "login": "seoyeon-lee",
+        "name": "이서연",
+        "avatarUrl": null
+      },
+      "externalId": "14",
+      "sha": null,
+      "title": "사원 검색 자동완성",
+      "url": "https://github.com/withly/punchcheck/pull/14",
+      "branch": "main",
+      "filesChanged": null,
+      "additions": null,
+      "deletions": null,
+      "summary": null,
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T16:58:00+09:00"
+    },
+    {
+      "id": 105,
+      "type": "COMMIT",
+      "repo": {
+        "id": 2,
+        "fullName": "withly/salty-web"
+      },
+      "user": {
+        "id": 4,
+        "login": "minsu-kim",
+        "name": "김민수",
+        "avatarUrl": null
+      },
+      "externalId": "5f1c02a",
+      "sha": "5f1c02a",
+      "title": "chore: 빌드 스크립트 정리",
+      "url": "https://github.com/withly/salty-web/commit/5f1c02a",
+      "branch": "main",
+      "filesChanged": 6,
+      "additions": 42,
+      "deletions": 31,
+      "summary": null,
+      "summaryStatus": "PENDING",
+      "occurredAt": "2026-09-09T17:22:00+09:00"
+    }
+  ],
+  "page": 0,
+  "size": 50,
+  "total": 16
+}
