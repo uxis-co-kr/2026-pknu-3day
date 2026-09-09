@@ -1,0 +1,110 @@
+package com.worklog.config;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.worklog.auth.ApiKeyAuthFilter;
+import com.worklog.auth.AuthMethod;
+import com.worklog.auth.JwtAuthFilter;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+/**
+ * 인증 규칙 (PRD F5, 7).
+ *
+ * <p>servlet context-path 가 {@code /api} 이므로 아래 매처는 prefix 없이 {@code /me} 처럼 쓴다.
+ *
+ * <p>인증 수단은 두 가지다. ★ 표시 엔드포인트는 JWT / API Key 둘 다 받고,
+ * VS Code 확장과 외부 연동 경로는 API Key 로만 연다. 필터가 부여한 권한
+ * (AUTH_JWT / AUTH_API_KEY)으로 구분하므로 컨트롤러 쪽에는 아무 설정이 필요 없다.
+ */
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    private final ObjectMapper objectMapper;
+    private final String frontendUrl;
+    private final JwtAuthFilter jwtAuthFilter;
+    private final ApiKeyAuthFilter apiKeyAuthFilter;
+
+    public SecurityConfig(
+            ObjectMapper objectMapper,
+            @org.springframework.beans.factory.annotation.Value("${worklog.frontend-url}")
+                    String frontendUrl,
+            JwtAuthFilter jwtAuthFilter,
+            ApiKeyAuthFilter apiKeyAuthFilter) {
+        this.objectMapper = objectMapper;
+        this.frontendUrl = frontendUrl;
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.apiKeyAuthFilter = apiKeyAuthFilter;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .formLogin(f -> f.disable())
+                .httpBasic(b -> b.disable())
+                .logout(l -> l.disable())
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/health", "/auth/**")
+                        .permitAll()
+                        // 확장이 보고하는 경로와 외부 연동은 개인 키로만 열린다 (PRD 7).
+                        // 같은 /vscode/sessions 라도 대시보드가 쓰는 GET 은 ★ 라 아래 규칙을 탄다.
+                        .requestMatchers(HttpMethod.POST, "/vscode/sessions")
+                        .hasAuthority(AuthMethod.API_KEY.authority())
+                        .requestMatchers("/external/**")
+                        .hasAuthority(AuthMethod.API_KEY.authority())
+                        .anyRequest()
+                        .hasAnyAuthority(AuthMethod.JWT.authority(), AuthMethod.API_KEY.authority()))
+                .exceptionHandling(e -> e.authenticationEntryPoint(authenticationEntryPoint())
+                        .accessDeniedHandler(accessDeniedHandler()))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    /** 프론트(Vite dev server)에서 Bearer 토큰으로 호출할 수 있게 열어둔다. */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(java.util.List.of(frontendUrl));
+        config.setAllowedMethods(java.util.List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(java.util.List.of("*"));
+        config.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    private AuthenticationEntryPoint authenticationEntryPoint() {
+        return (request, response, ex) ->
+                write(response, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "인증이 필요합니다.");
+    }
+
+    private AccessDeniedHandler accessDeniedHandler() {
+        return (request, response, ex) ->
+                write(response, HttpStatus.FORBIDDEN, "FORBIDDEN", "이 리소스에 접근할 권한이 없습니다.");
+    }
+
+    private void write(HttpServletResponse response, HttpStatus status, String code, String message)
+            throws java.io.IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        objectMapper.writeValue(response.getWriter(), new ApiError(code, message));
+    }
+}

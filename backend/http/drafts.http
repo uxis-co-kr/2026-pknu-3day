@@ -1,0 +1,31 @@
+### 초안 생성 수동 검증 (생성은 담당자 2, 조회·수정·확정은 담당자 1)
+@base = http://localhost:8080/api
+@jwt = 로그인_후_리다이렉트_URL의_token_값
+
+### 오늘 초안 생성 (본인)
+POST {{base}}/drafts/generate
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{}
+
+### 날짜 지정 생성 — 다시 부르면 version 이 올라간다 (덮어쓰지 않는다)
+POST {{base}}/drafts/generate
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "date": "2026-09-10" }
+
+### 다른 사용자 초안 생성
+POST {{base}}/drafts/generate
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "date": "2026-09-10", "userId": 2 }
+
+### 활동이 없는 날짜 → 204 No Content
+POST {{base}}/drafts/generate
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "date": "2020-01-01" }

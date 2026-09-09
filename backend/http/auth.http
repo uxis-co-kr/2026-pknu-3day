@@ -1,0 +1,38 @@
+### 인증 관련 수동 검증 (JetBrains HTTP Client / VS Code REST Client)
+@base = http://localhost:8080/api
+@jwt = 로그인_후_리다이렉트_URL의_token_값을_붙여넣는다
+@apiKey = POST /me/api-keys 응답의 key 를 붙여넣는다
+
+### 헬스 체크 — 무인증
+GET {{base}}/health
+
+### GitHub 로그인 시작
+# 브라우저에서 열어야 한다. 로그인하면
+# http://localhost:5173/auth/done?token=eyJ... 로 리다이렉트되고, 그 token 이 JWT 다.
+GET {{base}}/auth/github
+
+### 현재 사용자 — JWT
+GET {{base}}/me
+Authorization: Bearer {{jwt}}
+
+### 현재 사용자 — 인증 없음 (401 UNAUTHORIZED 를 기대)
+GET {{base}}/me
+
+### API Key 발급 (2-3)
+POST {{base}}/me/api-keys
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "label": "vscode-extension" }
+
+### API Key 목록 (2-3)
+GET {{base}}/me/api-keys
+Authorization: Bearer {{jwt}}
+
+### 현재 사용자 — API Key (2-3)
+GET {{base}}/me
+X-Api-Key: {{apiKey}}
+
+### API Key 폐기 (2-3)
+DELETE {{base}}/me/api-keys/1
+Authorization: Bearer {{jwt}}

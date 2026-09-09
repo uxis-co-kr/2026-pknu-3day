@@ -1,0 +1,15 @@
+{
+  "provider": "gemma4",
+  "presets": [
+    {
+      "id": "gemma4",
+      "model": "google/gemma-4-26b-a4b-qat",
+      "connected": true
+    },
+    {
+      "id": "qwen3",
+      "model": "qwen3.8:27b",
+      "connected": false
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "fullName": "withly/punchcheck",
+    "defaultBranch": "main",
+    "lastSyncedAt": "2026-09-09T17:52:00+09:00",
+    "registeredBy": {
+      "id": 3,
+      "login": "taeil"
+    },
+    "todayActivityCount": 9,
+    "syncStatus": "OK"
+  },
+  {
+    "id": 2,
+    "fullName": "withly/salty-web",
+    "defaultBranch": "main",
+    "lastSyncedAt": "2026-09-09T17:48:00+09:00",
+    "registeredBy": {
+      "id": 3,
+      "login": "taeil"
+    },
+    "todayActivityCount": 3,
+    "syncStatus": "OK"
+  }
+]

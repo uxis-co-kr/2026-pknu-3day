@@ -3,6 +3,8 @@ package com.worklog.github;
 import com.worklog.auth.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -50,6 +52,15 @@ public class Repo {
     /** 다음 수집의 since 파라미터. null 이면 최근 7일을 훑는다. */
     @Column(name = "last_synced_at")
     private OffsetDateTime lastSyncedAt;
+
+    /** 마지막 동기화 결과 — OK | FAILED. 진행 중(SYNCING)은 저장하지 않는다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_sync_status", nullable = false, length = 20)
+    private SyncStatus lastSyncStatus = SyncStatus.OK;
+
+    /** 실패 원인. 화면에 그대로 보여주지 않고 운영자가 로그 대신 볼 용도. */
+    @Column(name = "last_sync_error", columnDefinition = "text")
+    private String lastSyncError;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

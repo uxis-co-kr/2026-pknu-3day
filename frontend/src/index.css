@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 디자인 브리프 2. 스타일 제약
+ *  - 데스크톱 전용 1440 x 900, 콘텐츠 영역 최대 폭 1200
+ *  - 중립 그레이 베이스 + 포인트 1색(파랑 #2563eb)
+ *  - 의미색은 상태 배지에만
+ *  - 다크 모드 없음 (.dark 블록을 두지 않는다)
+ */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* 포인트 1색 — #2563eb */
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 72.2% 50.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    /* 상태 배지 — DRAFT 회색 / CONFIRMED 초록 / FAILED 빨강 / 미커밋 주황 */
+    --status-draft: 215.4 16.3% 46.9%;
+    --status-confirmed: 142.1 70.6% 35.3%;
+    --status-failed: 0 72.2% 50.6%;
+    --status-uncommitted: 24.6 95% 53.1%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* 본문 14px 기준 */
+    font-size: 14px;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* 데스크톱 전용. 1440 미만으로 줄여도 레이아웃을 재배치하지 않고 가로 스크롤을 허용한다. */
+  #root {
+    min-width: 1280px;
+  }
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "label": "MacBook VS Code",
+    "createdAt": "2026-09-01T10:20:00+09:00",
+    "lastUsedAt": "2026-09-09T17:58:00+09:00"
+  },
+  {
+    "id": 2,
+    "label": "Mattermost 봇",
+    "createdAt": "2026-09-03T14:05:00+09:00",
+    "lastUsedAt": "2026-09-08T18:00:00+09:00"
+  }
+]

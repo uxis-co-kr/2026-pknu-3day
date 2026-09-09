@@ -1,0 +1,32 @@
+{
+  "date": "2026-09-09",
+  "commits": 12,
+  "prs": 3,
+  "merges": 1,
+  "sessions": 2,
+  "commitsDelta": 3,
+  "staleSessions": 1,
+  "byUser": [
+    {
+      "userId": 3,
+      "commits": 2,
+      "prs": 1,
+      "merges": 1,
+      "sessions": 1
+    },
+    {
+      "userId": 4,
+      "commits": 6,
+      "prs": 1,
+      "merges": 0,
+      "sessions": 0
+    },
+    {
+      "userId": 5,
+      "commits": 4,
+      "prs": 1,
+      "merges": 0,
+      "sessions": 1
+    }
+  ]
+}
