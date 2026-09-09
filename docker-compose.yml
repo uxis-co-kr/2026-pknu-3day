@@ -8,9 +8,9 @@ services:
       POSTGRES_PASSWORD: worklog
       TZ: Asia/Seoul
     ports:
-      # 호스트 5432 는 로컬에 설치된 PostgreSQL 이 쓰는 경우가 많아 5433 으로 내보낸다.
-      # 컨테이너 안에서는 그대로 5432.
-      - "5433:5432"
+      # 기본값은 PRD 8. 의 5432. 로컬에 PostgreSQL 이 이미 5432 를 쓰고 있으면
+      # 루트 .env 에 POSTGRES_PORT=5433 처럼 적어 덮어쓴다. 컨테이너 안에서는 그대로 5432.
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - worklog-pgdata:/var/lib/postgresql/data
     healthcheck:
