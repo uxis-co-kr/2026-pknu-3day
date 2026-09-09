@@ -1,5 +1,8 @@
 # 담당자 1 (클라이언트) 할 일 — WorkLog Drafter
 
+> **1일차(2026-09-09) 마감: P0 전부 완료.** 결과는 [DAY1_client_result.md](DAY1_client_result.md) 참고.
+> 3일차 예정이던 F9·F10(1-13)까지 미리 끝냈다. 남은 것은 2일차의 확장(1-6·1-7)과 초안 API(1-8), 실서버 전환(1-9).
+
 기준 문서: `docs/PRD_090910.md`, `docs/DESIGN_BRIEF.md` · 브랜치: `VsPeristalsis_dashboard` (PRD의 `track/client`에 해당)
 
 ## 내 소유 영역
@@ -9,38 +12,38 @@
 - `backend/.../draft/` 중 `DraftController` + `DraftService`의 조회·수정·확정 (생성 로직 `DraftGenerator`는 담당자 2)
 
 ## 우선순위
-| ID | 기능 | 우선순위 |
-|----|------|---------|
-| F4 | 대시보드 — 일별 조회, 사용자/리포 필터, 초안 편집·확정 UI | P0 |
-| F3b | 초안 CRUD/확정 API (`GET/PATCH /drafts`, `/confirm`) | P0 |
-| F6 | VS Code 확장 (수집·전송) + `POST /vscode/sessions` 수신 API | P0 |
-| F11 | `.vsix`, 프론트 빌드, 설치 README | P1 |
-| F9 | `/settings` LLM 모델 옵션 UI | P2 |
-| F10 | `/people` 인원별 통계·Recharts 차트 | P2 |
+| ID | 기능 | 우선순위 | 상태 |
+|----|------|---------|------|
+| F4 | 대시보드 — 일별 조회, 사용자/리포 필터, 초안 편집·확정 UI | P0 | ✅ 목업 기준 완료 (1일차) |
+| F3b | 초안 CRUD/확정 API (`GET/PATCH /drafts`, `/confirm`) | P0 | ⬜ 2일차 (1-8) |
+| F6 | VS Code 확장 (수집·전송) + `POST /vscode/sessions` 수신 API | P0 | 🔶 수신 API 완료 (1-4) / 확장 2일차 |
+| F11 | `.vsix`, 프론트 빌드, 설치 README | P1 | ⬜ 3일차 (1-12) |
+| F9 | `/settings` LLM 모델 옵션 UI | P2 | ✅ 1일차에 미리 완료 |
+| F10 | `/people` 인원별 통계·Recharts 차트 | P2 | ✅ 1일차에 미리 완료 (+ 잔디 달력) |
 
 ---
 
 ## 1일차 — 목업 및 목업 데이터로 테스트
 
 ### 공통 (오전, 담당자 2와 함께)
-- [ ] 1-0a 모노레포 스캐폴딩 `backend/`(Spring Boot 3.3, Java 21, Gradle) · `frontend/`(React 18 + TS + Vite) · `vscode-extension/`(TS), `docker-compose.yml`(postgres 16), 루트 README → 세 프로젝트 각각 빌드
-- [ ] 1-0b Flyway V1 스키마(§6) + JPA 엔티티 전부 → `bootRun` 후 테이블 생성 확인
-- [ ] 1-0c §7 API 계약 최종 확인, 목업 JSON 필드명 합의
-- [ ] **동기화 포인트 ① (정오)** 공통 작업 커밋 → 브랜치 분기
+- [x] 1-0a 모노레포 스캐폴딩 `backend/`(Spring Boot 3.3, Java 21, Gradle) · `frontend/`(React 18 + TS + Vite) · `vscode-extension/`(TS), `docker-compose.yml`(postgres 16), 루트 README → 세 프로젝트 각각 빌드
+- [x] 1-0b Flyway V1 스키마(§6) + JPA 엔티티 전부 → `bootRun` 후 테이블 생성 확인
+- [x] 1-0c §7 API 계약 최종 확인, 목업 JSON 필드명 합의
+- [x] **동기화 포인트 ① (정오)** 공통 작업 커밋 → 브랜치 분기
 
 ### 내 트랙
-- [ ] 1-1 Claude Design으로 `DESIGN_BRIEF.md`의 9개 아트보드(6화면) 생성 → Figma 동기화 → 팀 리뷰 후 확정
-- [ ] 1-1 확정 화면의 예시 값을 §7 스키마 그대로 `frontend/src/mocks/*.json`으로 변환 (사용자 3 · 리포 2 · 활동 약 40 · 초안 3(DRAFT 2, CONFIRMED 1) · 세션 4). 필드명은 실 API와 완전히 동일
-- [ ] 1-2 `frontend/src/api/apiClient.ts` — `VITE_USE_MOCK=true`면 mocks JSON, 아니면 `fetch` 실서버. TanStack Query 훅
-- [ ] 1-3 shadcn/ui + Tailwind로 페이지 구현 (Figma 확정 화면 기준, 1440×900 데스크톱 전용)
-  - [ ] `/login` 로그인
-  - [ ] `/` 홈 — 날짜 선택기, 요약 카드 4개, 필터 바(리포·사용자·타입), 사용자별 활동 타임라인, 미커밋 세션 행, "초안 생성/열기" 버튼
-  - [ ] `/drafts/:id` 초안 편집 — 좌 에디터(편집/미리보기 Tabs) + 우 근거 패널, DRAFT/CONFIRMED 상태 변형
-  - [ ] `/repos` 리포 관리 — 등록·삭제·동기화, 빈 상태
-  - [ ] `/settings` 설정 — API Key 목록·발급 Dialog, Mattermost, LLM 모델 라디오
-  - [ ] 공통 레이아웃 — 사이드바(홈/초안/리포/인원/설정) + 상단 바(날짜 선택기, 아바타)
-- [ ] 1-4 `POST /vscode/sessions` 수신 API (X-Api-Key, `(user, remoteUrl, branch, workDate)` UPSERT) + `GET /vscode/sessions?date&userId` → curl로 UPSERT 확인
-- [ ] 1-5 커밋, 태그 `day1-client`
+- [x] 1-1 Claude Design으로 `DESIGN_BRIEF.md`의 9개 아트보드(6화면) 생성 → Figma 동기화 → 팀 리뷰 후 확정
+- [x] 1-1 확정 화면의 예시 값을 §7 스키마 그대로 `frontend/src/mocks/*.json`으로 변환 (사용자 3 · 리포 2 · 활동 약 40 · 초안 3(DRAFT 2, CONFIRMED 1) · 세션 4). 필드명은 실 API와 완전히 동일
+- [x] 1-2 `frontend/src/api/apiClient.ts` — `VITE_USE_MOCK=true`면 mocks JSON, 아니면 `fetch` 실서버. TanStack Query 훅
+- [x] 1-3 shadcn/ui + Tailwind로 페이지 구현 (Figma 확정 화면 기준, 1440×900 데스크톱 전용)
+  - [x] `/login` 로그인
+  - [x] `/` 홈 — 날짜 선택기, 요약 카드 4개, 필터 바(리포·사용자·타입), 사용자별 활동 타임라인, 미커밋 세션 행, "초안 생성/열기" 버튼
+  - [x] `/drafts/:id` 초안 편집 — 좌 에디터(편집/미리보기 Tabs) + 우 근거 패널, DRAFT/CONFIRMED 상태 변형
+  - [x] `/repos` 리포 관리 — 등록·삭제·동기화, 빈 상태
+  - [x] `/settings` 설정 — API Key 목록·발급 Dialog, Mattermost, LLM 모델 라디오
+  - [x] 공통 레이아웃 — 사이드바(홈/초안/리포/인원/설정) + 상단 바(날짜 선택기, 아바타)
+- [x] 1-4 `POST /vscode/sessions` 수신 API (X-Api-Key, `(user, remoteUrl, branch, workDate)` UPSERT) + `GET /vscode/sessions?date&userId` → curl로 UPSERT 확인
+- [x] 1-5 커밋, 태그 `day1-client`
 
 ## 2일차 — 백엔드 + API
 
@@ -55,7 +58,7 @@
 
 - [ ] 1-11 E2E 시나리오 1·3·4·5·9 점검·수정 (아래 참고)
 - [ ] 1-12 F11 — `vsce`로 `.vsix` 패키징, 프론트 빌드, 설치 README (Figma 링크 기재)
-- [ ] 1-13 (여유 시) F9 `/settings` LLM 옵션 UI, F10 `/people` 통계 페이지 + Recharts 막대 그래프
+- [x] 1-13 (여유 시) F9 `/settings` LLM 옵션 UI, F10 `/people` 통계 페이지 + Recharts 막대 그래프
 - [ ] 1-14 (P2까지 끝나면) X2 모바일 UI(열람·확정만) → X3 확장 사이드바 뷰
 - [ ] **동기화 포인트 ③ (16:00)** 최종 머지, 전체 E2E 재실행, 태그 `v0.1.0`
 
