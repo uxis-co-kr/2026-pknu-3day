@@ -3,7 +3,7 @@ spring:
     name: worklog-backend
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/worklog}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/worklog}
     username: ${DB_USER:worklog}
     password: ${DB_PASSWORD:worklog}
 
