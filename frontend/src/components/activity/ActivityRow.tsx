@@ -7,17 +7,11 @@ import { formatTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
 import type { Activity } from '@/types/api'
 
-/**
- * 수집기가 PR_MERGED 의 title 에는 "PR #N 머지: " 를 이미 붙여 오고 PR_OPENED 에는 안 붙인다.
- * 표기 형식은 화면이 정하므로, 들어온 접두사는 떼고 여기서 다시 붙인다.
- */
-const PR_PREFIX = /^PR\s*#\d+\s*(열림|머지)\s*:\s*/
-
+/** 서버는 GitHub 이 준 제목만 저장한다. 표기는 읽는 쪽이 type 과 externalId 로 붙인다. */
 function title(a: Activity): string {
-  const plain = a.title.replace(PR_PREFIX, '')
-  if (a.type === 'PR_OPENED') return `PR #${a.externalId} 열림: ${plain}`
-  if (a.type === 'PR_MERGED') return `PR #${a.externalId} 머지: ${plain}`
-  return plain
+  if (a.type === 'PR_OPENED') return `PR #${a.externalId} 열림: ${a.title}`
+  if (a.type === 'PR_MERGED') return `PR #${a.externalId} 머지: ${a.title}`
+  return a.title
 }
 
 /** 홈 타임라인과 초안 근거 패널이 같은 행을 쓴다. `dense` 는 근거 패널용. */

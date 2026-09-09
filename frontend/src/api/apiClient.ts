@@ -15,7 +15,7 @@ export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
  *
  * 2026-09-10 기준 미구현: 알림·LLM 설정(F7/F9 백엔드), 인원별 통계(2-14).
  */
-const MOCK_FALLBACK_PATHS = [/^\/settings\//, /^\/stats\/people/]
+const MOCK_FALLBACK_PATHS = [/^\/settings\/llm/, /^\/stats\/people/]
 
 function fallsBackToMock(path: string): boolean {
   return MOCK_FALLBACK_PATHS.some((p) => p.test(path))

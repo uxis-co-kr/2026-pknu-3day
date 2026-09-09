@@ -6,6 +6,11 @@
   "sessions": 2,
   "commitsDelta": 3,
   "staleSessions": 1,
+  "unmapped": {
+    "commits": 0,
+    "prs": 0,
+    "merges": 0
+  },
   "byUser": [
     {
       "userId": 3,

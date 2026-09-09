@@ -196,6 +196,17 @@ export default function HomePage() {
           </Card>
         ))}
 
+        {/*
+          * 총계 = byUser 합계 + unmapped 다. 가입하지 않은 외부 기여자의 활동은 어느 사용자
+          * 카드에도 붙지 않아 요약 카드 숫자와 타임라인이 어긋나 보인다. 있을 때만 한 줄로 설명한다.
+          */}
+        {(s?.unmapped?.commits ?? 0) > 0 && (
+          <p className="px-1 text-[12px] text-muted-foreground">
+            사용자에 연결되지 않은 활동 {s!.unmapped.commits}건은 타임라인에 표시되지 않습니다.
+            해당 GitHub 계정으로 한 번 로그인하면 연결됩니다.
+          </p>
+        )}
+
         {!stats.isLoading && rows.length === 0 && (
           <Card className="rounded-lg p-10 text-center text-[13px] text-muted-foreground shadow-none">
             이 날짜에는 기록된 활동이 없습니다.

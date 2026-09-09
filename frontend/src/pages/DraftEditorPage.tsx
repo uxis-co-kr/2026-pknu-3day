@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useConfirmDraft, useDraft, useGenerateDraft, useNotifyDraft, useSaveDraft } from '@/api/hooks'
 import { ApiError } from '@/api/apiClient'
 import { formatTime } from '@/lib/date'
+import { cn } from '@/lib/utils'
 
 export default function DraftEditorPage() {
   const { id } = useParams()
@@ -26,7 +27,7 @@ export default function DraftEditorPage() {
 
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [content, setContent] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const confirmed = draft?.status === 'CONFIRMED'
 
@@ -39,7 +40,8 @@ export default function DraftEditorPage() {
 
   useEffect(() => {
     if (!message) return
-    const t = setTimeout(() => setMessage(null), 2500)
+    // 실패 안내는 읽을 시간이 더 필요하다 (webhook URL 을 등록하라는 안내가 온다).
+    const t = setTimeout(() => setMessage(null), message.failed ? 6000 : 2500)
     return () => clearTimeout(t)
   }, [message])
 
@@ -66,9 +68,12 @@ export default function DraftEditorPage() {
   async function run(action: () => Promise<unknown>, ok: string) {
     try {
       await action()
-      setMessage(ok)
+      setMessage({ text: ok, failed: false })
     } catch (e) {
-      setMessage(e instanceof ApiError ? e.message : '요청에 실패했습니다.')
+      setMessage({
+        text: e instanceof ApiError ? e.message : '요청에 실패했습니다.',
+        failed: true,
+      })
     }
   }
 
@@ -98,7 +103,16 @@ export default function DraftEditorPage() {
               ? `확정 ${draft.workDate} ${formatTime(draft.confirmedAt)}`
               : `마지막 저장 ${formatTime(draft.updatedAt)}`}
           </span>
-          {message && <span className="text-[12px] font-medium text-primary">{message}</span>}
+          {message && (
+            <span
+              className={cn(
+                'text-[12px] font-medium',
+                message.failed ? 'text-status-failed' : 'text-primary',
+              )}
+            >
+              {message.text}
+            </span>
+          )}
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'edit' | 'preview')} className="flex min-h-0 flex-1 flex-col">

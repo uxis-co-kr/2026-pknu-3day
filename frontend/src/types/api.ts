@@ -127,6 +127,11 @@ export interface DailyStats {
   commitsDelta: number
   /** "⚠ 6시간 이상 1건" */
   staleSessions: number
+  /**
+   * 사용자에 연결되지 않은 활동 수. 총계 = byUser 합계 + unmapped 가 항상 성립한다.
+   * 가입하지 않은 외부 기여자의 커밋이 여기 잡힌다.
+   */
+  unmapped: { commits: number; prs: number; merges: number }
   byUser: { userId: number; commits: number; prs: number; merges: number; sessions: number }[]
 }
 
