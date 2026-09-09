@@ -1,0 +1,36 @@
+### 리포 등록 · 수집 수동 검증
+@base = http://localhost:8080/api
+@jwt = 로그인_후_리다이렉트_URL의_token_값을_붙여넣는다
+
+### 등록된 리포 목록
+GET {{base}}/repos
+Authorization: Bearer {{jwt}}
+
+### 리포 등록 — 접근 권한을 확인한 뒤 저장한다
+POST {{base}}/repos
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "fullName": "uxis-co-kr/2026-pknu-3day" }
+
+### 형식이 틀린 이름 (400 INVALID_FULL_NAME)
+POST {{base}}/repos
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "fullName": "2026-pknu-3day" }
+
+### 접근할 수 없는 리포 (403 REPO_NOT_ACCESSIBLE)
+POST {{base}}/repos
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{ "fullName": "torvalds/no-such-private-repo" }
+
+### 수동 동기화 — 즉시 202, 수집은 비동기로 돈다
+POST {{base}}/repos/1/sync
+Authorization: Bearer {{jwt}}
+
+### 리포 삭제
+DELETE {{base}}/repos/1
+Authorization: Bearer {{jwt}}
