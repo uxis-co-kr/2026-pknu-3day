@@ -45,14 +45,14 @@ export default function ActivityRow({
       </span>
 
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        {activity.summaryStatus === 'PENDING' && (
+        {!dense && activity.summaryStatus === 'PENDING' && (
           <>
             <Skeleton className="h-3 w-40" />
             <span className="text-[12px] text-muted-foreground">요약 생성 중…</span>
           </>
         )}
-        {activity.summaryStatus === 'FAILED' && <SummaryStatusBadge status="FAILED" />}
-        {activity.summaryStatus === 'DONE' && activity.summary && (
+        {!dense && activity.summaryStatus === 'FAILED' && <SummaryStatusBadge status="FAILED" />}
+        {!dense && activity.summaryStatus === 'DONE' && activity.summary && (
           <span className="truncate text-[12px] text-muted-foreground">{activity.summary}</span>
         )}
       </span>

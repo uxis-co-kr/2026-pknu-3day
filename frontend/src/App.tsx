@@ -1,13 +1,16 @@
+import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from '@/components/layout/AppLayout'
 import RequireAuth from '@/components/layout/RequireAuth'
 import AuthDonePage from '@/pages/AuthDonePage'
 import LoginPage from '@/pages/LoginPage'
 import HomePage from '@/pages/HomePage'
-import DraftEditorPage from '@/pages/DraftEditorPage'
 import ReposPage from '@/pages/ReposPage'
-import PeoplePage from '@/pages/PeoplePage'
 import SettingsPage from '@/pages/SettingsPage'
+
+// recharts 와 react-markdown 은 이 두 화면에서만 쓴다. 첫 로딩에서 떼어 낸다.
+const DraftEditorPage = lazy(() => import('@/pages/DraftEditorPage'))
+const PeoplePage = lazy(() => import('@/pages/PeoplePage'))
 
 /**
  * 디자인 브리프 3. 의 6개 화면. 여기에 없는 페이지는 추가하지 않는다.
@@ -18,19 +21,21 @@ import SettingsPage from '@/pages/SettingsPage'
  */
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/auth/done" element={<AuthDonePage />} />
-      <Route element={<RequireAuth />}>
-        <Route element={<AppLayout />}>
+    <Suspense fallback={<div className="p-6 text-muted-foreground">불러오는 중…</div>}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/done" element={<AuthDonePage />} />
+        <Route element={<RequireAuth />}>
+            <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/drafts/:id" element={<DraftEditorPage />} />
           <Route path="/repos" element={<ReposPage />} />
           <Route path="/people" element={<PeoplePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }

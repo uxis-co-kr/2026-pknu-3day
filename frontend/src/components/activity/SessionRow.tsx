@@ -22,7 +22,7 @@ export default function SessionRow({
             {session.branch}
           </span>
           <span className="text-[12px] text-muted-foreground">
-            미커밋 {files}파일 · 마지막 커밋 {formatRelative(session.lastCommitAt)}
+            {dense ? `${files}파일` : `미커밋 ${files}파일 · 마지막 커밋 ${formatRelative(session.lastCommitAt)}`}
           </span>
         </div>
         {session.todos.length > 0 && (dense ? (
@@ -38,7 +38,7 @@ export default function SessionRow({
             TODO {session.todos.length}건 — {session.todos[0].text}
           </p>
         ))}
-        {session.planNote && (
+        {!dense && session.planNote && (
           <p className="border-l-2 border-status-uncommitted/40 pl-2 text-[12px] italic text-muted-foreground">
             &quot;{session.planNote}&quot;
           </p>

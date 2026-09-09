@@ -25,7 +25,7 @@ export default function EvidencePanel({
             GitHub 활동 ({activities.length})
           </h3>
           <div className="-mx-1">
-            {activities.map((a) => (
+            {[...activities].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt)).map((a) => (
               <ActivityRow
                 key={a.id}
                 activity={a}
