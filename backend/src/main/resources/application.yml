@@ -66,6 +66,9 @@ worklog:
         base-url: "http://agent.uxis.co.kr:11435/v1"
         model: "qwen3.8:27b"
         api-key: "${QWEN3_API_KEY:}"
+        # 실측 결과 3,000자 diff 한 건에 50초 이상 걸린다. PRD F2 의 기본 60초로는
+        # 큰 커밋이 매번 타임아웃으로 실패한다.
+        timeout-seconds: 180
 
 logging:
   level:
