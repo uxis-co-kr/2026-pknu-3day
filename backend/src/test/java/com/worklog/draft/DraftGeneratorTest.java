@@ -15,6 +15,7 @@ import com.worklog.activity.ActivityType;
 import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.github.Repo;
+import com.worklog.notify.NotifyService;
 import com.worklog.vscode.VscodeSessionRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -32,6 +33,7 @@ class DraftGeneratorTest {
     private ActivityRepository activityRepository;
     private VscodeSessionRepository sessionRepository;
     private DraftRepository draftRepository;
+    private NotifyService notifyService;
     private DraftGenerator generator;
 
     @BeforeEach
@@ -40,6 +42,7 @@ class DraftGeneratorTest {
         sessionRepository = mock(VscodeSessionRepository.class);
         draftRepository = mock(DraftRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
+        notifyService = mock(NotifyService.class);
 
         User user = new User();
         user.setId(USER_ID);
@@ -50,7 +53,7 @@ class DraftGeneratorTest {
         when(sessionRepository.findByUserIdAndWorkDate(anyLong(), any())).thenReturn(List.of());
 
         generator = new DraftGenerator(
-                activityRepository, sessionRepository, draftRepository, userRepository);
+                activityRepository, sessionRepository, draftRepository, userRepository, notifyService);
     }
 
     private static Activity commit(Long id, String summary) {
@@ -86,6 +89,17 @@ class DraftGeneratorTest {
         assertThat(draft.getContentMd()).contains("# 2026-09-10 업무 일지 — 배태일");
         assertThat(draft.getSourceActivityIds()).containsExactly(101L, 102L);
         assertThat(draft.getSourceSessionIds()).isEmpty();
+        // 생성 완료 알림 (PRD F7 이벤트 1)
+        verify(notifyService).notifyDraftCreated(draft);
+    }
+
+    @Test
+    @DisplayName("초안을 만들지 않았으면 알림도 보내지 않는다")
+    void doesNotNotifyWhenNothingGenerated() {
+        givenActivities();
+
+        assertThat(generator.generate(USER_ID, DAY)).isEmpty();
+        verify(notifyService, never()).notifyDraftCreated(any());
     }
 
     @Test
@@ -144,6 +158,7 @@ class DraftGeneratorTest {
     @DisplayName("이름이 없으면 GitHub login 을 쓴다")
     void fallsBackToLogin() {
         UserRepository userRepository = mock(UserRepository.class);
+        notifyService = mock(NotifyService.class);
         User noName = new User();
         noName.setId(USER_ID);
         noName.setLogin("taeil");
@@ -152,7 +167,7 @@ class DraftGeneratorTest {
         givenActivities(commit(101L, "요약"));
 
         DraftGenerator g = new DraftGenerator(
-                activityRepository, sessionRepository, draftRepository, userRepository);
+                activityRepository, sessionRepository, draftRepository, userRepository, notifyService);
 
         assertThat(g.generate(USER_ID, DAY).orElseThrow().getContentMd())
                 .contains("업무 일지 — taeil");
