@@ -12,12 +12,13 @@ public interface RepoRepository extends JpaRepository<Repo, Long> {
 
     boolean existsByFullName(String fullName);
 
-    List<Repo> findAllByOrderByFullNameAsc();
-
     /**
-     * 수집기는 트랜잭션 밖에서 돌기 때문에 등록자를 지연 로딩할 수 없다.
-     * 토큰을 꺼내야 하므로 함께 읽어 온다.
+     * 등록자는 LAZY 라, 트랜잭션 밖(컨트롤러의 응답 매핑, 트랜잭션 없이 도는 수집기)에서
+     * 건드리면 LazyInitializationException 이 난다. 두 경로 모두 함께 읽어 온다.
      */
+    @Query("select r from Repo r left join fetch r.registeredBy order by r.fullName asc")
+    List<Repo> findAllWithRegistrant();
+
     @Query("select r from Repo r left join fetch r.registeredBy where r.id = :id")
     Optional<Repo> findWithRegistrant(@Param("id") Long id);
 }

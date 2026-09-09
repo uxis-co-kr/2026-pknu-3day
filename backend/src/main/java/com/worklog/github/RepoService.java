@@ -40,7 +40,7 @@ public class RepoService {
 
     @Transactional(readOnly = true)
     public List<Repo> list() {
-        return repoRepository.findAllByOrderByFullNameAsc();
+        return repoRepository.findAllWithRegistrant();
     }
 
     @Transactional
