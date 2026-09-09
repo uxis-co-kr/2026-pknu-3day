@@ -1,6 +1,7 @@
 package com.worklog.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.worklog.auth.JwtAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +14,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -22,8 +24,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  *
  * <p>servlet context-path 가 {@code /api} 이므로 아래 매처는 prefix 없이 {@code /me} 처럼 쓴다.
  *
- * <p>인증 필터(JwtAuthFilter, ApiKeyAuthFilter)는 2-2 / 2-3 에서 이 체인에 끼운다.
- * 지금은 무인증 경로만 열려 있고 나머지는 전부 401 이다.
+ * <p>ApiKeyAuthFilter 는 2-3 에서 이 체인에 함께 끼운다.
  */
 @Configuration
 @EnableWebSecurity
@@ -31,13 +32,16 @@ public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
     private final String frontendUrl;
+    private final JwtAuthFilter jwtAuthFilter;
 
     public SecurityConfig(
             ObjectMapper objectMapper,
             @org.springframework.beans.factory.annotation.Value("${worklog.frontend-url}")
-                    String frontendUrl) {
+                    String frontendUrl,
+            JwtAuthFilter jwtAuthFilter) {
         this.objectMapper = objectMapper;
         this.frontendUrl = frontendUrl;
+        this.jwtAuthFilter = jwtAuthFilter;
     }
 
     @Bean
@@ -53,7 +57,8 @@ public class SecurityConfig {
                         .anyRequest()
                         .authenticated())
                 .exceptionHandling(e -> e.authenticationEntryPoint(authenticationEntryPoint())
-                        .accessDeniedHandler(accessDeniedHandler()));
+                        .accessDeniedHandler(accessDeniedHandler()))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
