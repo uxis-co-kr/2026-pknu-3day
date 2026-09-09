@@ -1,0 +1,194 @@
+{
+  "id": 7,
+  "userId": 3,
+  "workDate": "2026-09-09",
+  "version": 1,
+  "status": "DRAFT",
+  "contentMd": "# 2026-09-09 업무 일지 — 배태일\n\n## 완료한 작업\n- [withly/punchcheck] 출석 체크 REST API를 추가하고 중복 출석을 막는 검증 로직을 넣었습니다. (commit abc1234)\n- [withly/punchcheck] 출석 시각이 UTC로 저장되던 문제를 KST 기준으로 수정했습니다. (commit d9e8f71)\n- [withly/punchcheck] PR #12 오픈: 출석 API 및 타임존 수정\n- [withly/salty-web] PR #11 머지: 온보딩 화면 리팩토링\n\n## 진행 중 / 미커밋\n- [withly/punchcheck] feature/attendance — 출석 검증 테스트 4개 파일 작성 중 (미커밋)\n\n## 계획 / TODO\n- 중복 출석 검증 테스트 추가\n- 오후에 출석 중복 검증 로직 마무리\n\n## 메모\n(직접 작성)\n",
+  "createdAt": "2026-09-09T18:00:00+09:00",
+  "updatedAt": "2026-09-09T18:02:00+09:00",
+  "confirmedAt": null,
+  "sourceActivities": [
+    {
+      "id": 101,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "abc1234",
+      "sha": "abc1234",
+      "title": "feat: 출석 API 추가",
+      "url": "https://github.com/withly/punchcheck/commit/abc1234",
+      "branch": "main",
+      "filesChanged": 4,
+      "additions": 120,
+      "deletions": 8,
+      "summary": "출석 체크 REST API를 추가하고 중복 출석을 막는 검증 로직을 넣었습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T10:12:00+09:00"
+    },
+    {
+      "id": 102,
+      "type": "COMMIT",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "d9e8f71",
+      "sha": "d9e8f71",
+      "title": "fix: 출석 시각 타임존 오류",
+      "url": "https://github.com/withly/punchcheck/commit/d9e8f71",
+      "branch": "main",
+      "filesChanged": 2,
+      "additions": 14,
+      "deletions": 6,
+      "summary": "출석 시각이 UTC로 저장되던 문제를 KST 기준으로 수정했습니다.",
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T11:40:00+09:00"
+    },
+    {
+      "id": 103,
+      "type": "PR_OPENED",
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "12",
+      "sha": null,
+      "title": "출석 API 및 타임존 수정",
+      "url": "https://github.com/withly/punchcheck/pull/12",
+      "branch": "main",
+      "filesChanged": null,
+      "additions": null,
+      "deletions": null,
+      "summary": null,
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T14:05:00+09:00"
+    },
+    {
+      "id": 104,
+      "type": "PR_MERGED",
+      "repo": {
+        "id": 2,
+        "fullName": "withly/salty-web"
+      },
+      "user": {
+        "id": 3,
+        "login": "taeil",
+        "name": "배태일",
+        "avatarUrl": null
+      },
+      "externalId": "11",
+      "sha": null,
+      "title": "온보딩 화면 리팩토링",
+      "url": "https://github.com/withly/salty-web/pull/11",
+      "branch": "main",
+      "filesChanged": null,
+      "additions": null,
+      "deletions": null,
+      "summary": null,
+      "summaryStatus": "DONE",
+      "occurredAt": "2026-09-09T16:30:00+09:00"
+    }
+  ],
+  "sourceSessions": [
+    {
+      "id": 21,
+      "userId": 3,
+      "repo": {
+        "id": 1,
+        "fullName": "withly/punchcheck"
+      },
+      "remoteUrl": "https://github.com/withly/punchcheck.git",
+      "branch": "feature/attendance",
+      "workDate": "2026-09-09",
+      "uncommittedFiles": [
+        {
+          "path": "src/api/attendance.ts",
+          "additions": 40,
+          "deletions": 3,
+          "diff": "@@ -12,6 +12,46 @@\n+export async function checkDuplicate(...)"
+        },
+        {
+          "path": "src/api/attendance.test.ts",
+          "additions": 62,
+          "deletions": 0,
+          "diff": "@@ -0,0 +1,62 @@\n+describe('중복 출석', () => {"
+        },
+        {
+          "path": "src/domain/attendance.ts",
+          "additions": 18,
+          "deletions": 4,
+          "diff": "@@ -30,7 +30,21 @@"
+        },
+        {
+          "path": "src/domain/attendance.test.ts",
+          "additions": 24,
+          "deletions": 0,
+          "diff": "@@ -0,0 +1,24 @@"
+        }
+      ],
+      "todos": [
+        {
+          "path": "src/api/attendance.test.ts",
+          "line": 42,
+          "text": "중복 출석 검증 테스트 추가"
+        },
+        {
+          "path": "src/domain/attendance.ts",
+          "line": 57,
+          "text": "오후에 출석 중복 검증 로직 마무리"
+        }
+      ],
+      "planNote": "오후에 출석 중복 검증 로직 마무리",
+      "editTimeline": [
+        {
+          "path": "src/api/attendance.ts",
+          "firstSavedAt": "2026-09-09T13:10:00+09:00",
+          "lastSavedAt": "2026-09-09T17:41:00+09:00",
+          "saveCount": 17
+        },
+        {
+          "path": "src/api/attendance.test.ts",
+          "firstSavedAt": "2026-09-09T14:02:00+09:00",
+          "lastSavedAt": "2026-09-09T17:55:00+09:00",
+          "saveCount": 23
+        },
+        {
+          "path": "src/domain/attendance.ts",
+          "firstSavedAt": "2026-09-09T13:22:00+09:00",
+          "lastSavedAt": "2026-09-09T16:48:00+09:00",
+          "saveCount": 8
+        },
+        {
+          "path": "src/domain/attendance.test.ts",
+          "firstSavedAt": "2026-09-09T15:30:00+09:00",
+          "lastSavedAt": "2026-09-09T17:12:00+09:00",
+          "saveCount": 6
+        }
+      ],
+      "summary": "출석 검증 테스트 4개 파일 작성 중 (미커밋)",
+      "lastCommitAt": "2026-09-09T12:00:00+09:00",
+      "reportedAt": "2026-09-09T17:58:00+09:00"
+    }
+  ]
+}
