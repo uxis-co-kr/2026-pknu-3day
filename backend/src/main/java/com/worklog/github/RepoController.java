@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -50,11 +51,16 @@ public class RepoController {
         return ResponseEntity.noContent().build();
     }
 
-    /** 수집은 오래 걸릴 수 있으므로 던지고 바로 202 로 답한다 (PRD F1-5). */
+    /**
+     * 수집은 오래 걸릴 수 있으므로 던지고 바로 202 로 답한다 (PRD F1-5).
+     *
+     * @param full 최근 7일을 다시 훑는다. 수집 대상이 늘었을 때의 백필용.
+     */
     @PostMapping("/{id}/sync")
-    public ResponseEntity<Void> sync(@PathVariable Long id) {
+    public ResponseEntity<Void> sync(
+            @PathVariable Long id, @RequestParam(defaultValue = "false") boolean full) {
         repoService.get(id); // 없는 리포면 404
-        collector.syncAsync(id);
+        collector.syncAsync(id, full);
         return ResponseEntity.accepted().build();
     }
 
