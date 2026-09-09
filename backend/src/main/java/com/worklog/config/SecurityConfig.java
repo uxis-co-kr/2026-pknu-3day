@@ -1,10 +1,13 @@
 package com.worklog.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.worklog.auth.ApiKeyAuthFilter;
+import com.worklog.auth.AuthMethod;
 import com.worklog.auth.JwtAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
@@ -24,7 +27,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  *
  * <p>servlet context-path 가 {@code /api} 이므로 아래 매처는 prefix 없이 {@code /me} 처럼 쓴다.
  *
- * <p>ApiKeyAuthFilter 는 2-3 에서 이 체인에 함께 끼운다.
+ * <p>인증 수단은 두 가지다. ★ 표시 엔드포인트는 JWT / API Key 둘 다 받고,
+ * VS Code 확장과 외부 연동 경로는 API Key 로만 연다. 필터가 부여한 권한
+ * (AUTH_JWT / AUTH_API_KEY)으로 구분하므로 컨트롤러 쪽에는 아무 설정이 필요 없다.
  */
 @Configuration
 @EnableWebSecurity
@@ -33,15 +38,18 @@ public class SecurityConfig {
     private final ObjectMapper objectMapper;
     private final String frontendUrl;
     private final JwtAuthFilter jwtAuthFilter;
+    private final ApiKeyAuthFilter apiKeyAuthFilter;
 
     public SecurityConfig(
             ObjectMapper objectMapper,
             @org.springframework.beans.factory.annotation.Value("${worklog.frontend-url}")
                     String frontendUrl,
-            JwtAuthFilter jwtAuthFilter) {
+            JwtAuthFilter jwtAuthFilter,
+            ApiKeyAuthFilter apiKeyAuthFilter) {
         this.objectMapper = objectMapper;
         this.frontendUrl = frontendUrl;
         this.jwtAuthFilter = jwtAuthFilter;
+        this.apiKeyAuthFilter = apiKeyAuthFilter;
     }
 
     @Bean
@@ -54,11 +62,18 @@ public class SecurityConfig {
                 .logout(l -> l.disable())
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/health", "/auth/**")
                         .permitAll()
+                        // 확장이 보고하는 경로와 외부 연동은 개인 키로만 열린다 (PRD 7).
+                        // 같은 /vscode/sessions 라도 대시보드가 쓰는 GET 은 ★ 라 아래 규칙을 탄다.
+                        .requestMatchers(HttpMethod.POST, "/vscode/sessions")
+                        .hasAuthority(AuthMethod.API_KEY.authority())
+                        .requestMatchers("/external/**")
+                        .hasAuthority(AuthMethod.API_KEY.authority())
                         .anyRequest()
-                        .authenticated())
+                        .hasAnyAuthority(AuthMethod.JWT.authority(), AuthMethod.API_KEY.authority()))
                 .exceptionHandling(e -> e.authenticationEntryPoint(authenticationEntryPoint())
                         .accessDeniedHandler(accessDeniedHandler()))
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(apiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
