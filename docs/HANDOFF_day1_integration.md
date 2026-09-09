@@ -1,6 +1,8 @@
 # 담당자 1에게 — 1일차 연동 트랙 결과
 
-날짜: 2026-09-09 · 브랜치 `git_peristalsis` · 태그 `day1-integration` · 커밋 `22288ab`
+날짜: 2026-09-09 · 브랜치 `git_peristalsis` · 태그 `day1-integration` → **`day2-integration`**
+
+> **2일차 갱신**: 조회 API·초안 생성·알림·외부 API 가 추가됐다. 아래 표에 전부 반영돼 있다.
 기준 문서: [PRD_090910.md](PRD_090910.md) · [DAY1_integration_plan2.md](DAY1_integration_plan2.md)
 
 내일 오전 `VITE_USE_MOCK=false` 전환에 필요한 것만 정리했다.
@@ -36,6 +38,14 @@
 | POST | `/api/repos` | JWT | 201, 본문 `{fullName}` |
 | DELETE | `/api/repos/{id}` | JWT | 204 |
 | POST | `/api/repos/{id}/sync` | JWT | 202 (수집은 비동기) |
+| POST | `/api/repos/{id}/sync?full=true` | JWT | 202 — last_synced_at 무시하고 최근 7일 재수집(백필) |
+| GET | `/api/activities` | JWT / API Key | `{items, page, size, total}` — `date` 또는 `from`/`to`, `userId`, `repoId`, `type`, `page`, `size` |
+| GET | `/api/activities/{id}` | JWT / API Key | 목록 항목 + `message`, `rawDiff` |
+| GET | `/api/stats/daily` | JWT / API Key | `{date, commits, prs, merges, sessions, commitsDelta, staleSessions, byUser[]}` |
+| POST | `/api/drafts/generate` | JWT | 201 + 초안 / **204 활동 없음** — 본문 `{date?, userId?}` |
+| POST | `/api/drafts/{id}/notify` | JWT | 200 `{sent:true}` / 503 `NOTIFY_FAILED` |
+| GET/PUT | `/api/settings/notify` | JWT | `{mattermostWebhookUrl, remindUncommitted}` |
+| GET | `/api/external/summary` | **API Key 만** | `{date, users:[{userId, login, name, draftStatus, draftVersion, highlights[]}]}` |
 
 실제 응답 예시:
 
@@ -48,8 +58,15 @@
   "lastSyncedAt":"2026-09-09T13:54:05.098788+09:00","registeredBy":{"id":1,"login":"UngsikJo"}}]
 ```
 
-**아직 없는 것** (담당자 2의 2일차): `/activities`, `/drafts/generate`, `/stats/*`, `/external/*`, 요약 채우기.
-`activities` 테이블에는 이미 실제 커밋이 쌓여 있고 `summary` 는 아직 null, `summary_status = PENDING` 이다.
+**아직 없는 것** (3일차): `GET /stats/people`(P2), `GET/PUT /settings/llm`(P2), 미커밋 리마인드 스케줄러.
+
+`activities` 에는 커밋과 PR/머지가 모두 쌓여 있고 `summary` 도 채워져 있다
+(`summary_status = DONE`). 사내 LLM(gemma4/qwen3) 으로 실제 한국어 요약이 들어간다.
+
+**초안 조회·수정·확정(`GET /drafts`, `PATCH`, `/confirm`)은 담당자 1의 1-8 이다.**
+생성만 담당자 2가 맡는다 — `POST /drafts/generate` 는 `draft/DraftGenerateController.java`,
+전송은 `draft/DraftNotifyController.java` 에 따로 두었으니 `DraftController` 는
+자유롭게 만들면 된다. `DraftRepository` 는 이미 있으니 메서드만 추가하면 된다.
 
 ## 3. 오류 형식 — 전부 이 모양이다
 
@@ -66,6 +83,10 @@
 | 이미 등록된 리포 | 409 | `REPO_ALREADY_REGISTERED` |
 | 본문 검증 실패 | 400 | `VALIDATION_ERROR` |
 | 없는 경로 | 404 | `NOT_FOUND` |
+| 쿼리 파라미터 형식 오류 (`type=NOPE`, `date=yesterday`) | 400 | `INVALID_PARAMETER` |
+| `from` 이 `to` 보다 뒤 | 400 | `INVALID_DATE_RANGE` |
+| 없는 활동 / 초안 | 404 | `ACTIVITY_NOT_FOUND` / `DRAFT_NOT_FOUND` |
+| Mattermost 전송 실패 | 503 | `NOTIFY_FAILED` |
 
 ## 4. `POST /vscode/sessions` 를 만들 때 (1-4)
 
@@ -110,3 +131,40 @@ set -a && source .env && set +a && ./gradlew bootRun
 - 연동 트랙은 `git_peristalsis`, 태그 `day1-integration`.
 - 스키마는 Flyway 로만 바꾼다. `V1__init.sql` 은 이미 적용됐으므로 수정하지 말고 `V2__*.sql` 을 추가한다.
 - `Draft` 엔티티 필드 변경은 합의 후에 (PRD 2).
+
+
+---
+
+## 7. 2일차에 알아 둘 것
+
+### 날짜는 전부 KST 기준
+
+`date`, `from`, `to` 파라미터는 KST 하루(00:00~24:00)로 해석한다. `occurredAt` 은
+`TIMESTAMPTZ` 라 응답에는 `+09:00` 오프셋이 붙어 나간다.
+
+### 미가입 사용자의 활동
+
+GitHub 계정이 서비스에 로그인한 적이 없으면 `user` 가 **null** 이고 `externalLogin` 에만
+로그인 이름이 들어간다. 지금 실제로 이 상태인 데이터가 있다 (`Ae-Ti` 의 PR 4건).
+아바타·이름 자리를 어떻게 보일지 정해야 한다.
+
+또한 이런 활동은 **초안 생성 대상에서 제외**된다 (PRD 12).
+
+### `syncStatus`
+
+- `SYNCING` — 지금 수집 중. DB 에 저장하지 않고 응답 시점에 판단한다
+- `FAILED` — 마지막 수집이 실패. 다음 수집이 성공하면 `OK` 로 돌아온다
+- 화면에 "재시도" 버튼을 둔다면 `POST /repos/{id}/sync` 를 그대로 부르면 된다
+
+### 초안 버전
+
+같은 (사용자, 날짜) 에 재생성하면 **덮어쓰지 않고 version + 1** 로 새 행이 생긴다.
+18:00 자동 생성은 확정본(`CONFIRMED`)이 있으면 건너뛰지만, **수동 재생성은 확정본이 있어도
+새 DRAFT 를 만든다** (PRD F3, E2E 4). 목록에서 최신 버전을 고르려면
+`(user_id, work_date)` 별 `max(version)` 을 쓴다.
+
+### LLM 프로바이더 전환
+
+`WORKLOG_LLM_PROVIDER=mock|gemma4|qwen3` 로 재시작하면 코드 수정 없이 바뀐다.
+기동 로그에 `프리셋 gemma4 검증 성공` 이 찍히고, 실패하면 경고 후 mock 으로 폴백한다.
+qwen3 는 응답이 느리다(3,000자 diff 한 건에 50초 이상) — 개발 중에는 `mock` 이 편하다.
