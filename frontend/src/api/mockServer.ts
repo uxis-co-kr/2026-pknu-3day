@@ -101,7 +101,27 @@ const routes: [string, string, Handler][] = [
   }],
 
   ['GET', '/stats/daily', () => db.statsDaily],
-  ['GET', '/stats/people', () => db.statsPeople],
+  // 기간 탭이 실제로 반응하도록 요청한 구간만 잘라서 합계를 다시 낸다.
+  ['GET', '/stats/people', (_p, q) => {
+    const from = q.get('from') ?? db.statsPeople.from
+    const to = q.get('to') ?? db.statsPeople.to
+    const userId = q.get('userId')
+    const items = db.statsPeople.items
+      .filter((i) => !userId || i.user.id === Number(userId))
+      .map((i) => {
+        const series = i.series.filter((s) => s.date >= from && s.date <= to)
+        return {
+          ...i,
+          series,
+          totals: {
+            commits: series.reduce((n, s) => n + s.commits, 0),
+            prs: series.reduce((n, s) => n + s.prs, 0),
+            merges: series.reduce((n, s) => n + s.merges, 0),
+          },
+        }
+      })
+    return { ...db.statsPeople, from, to, items }
+  }],
 
   ['GET', '/vscode/sessions', (_p, q) => {
     const date = q.get('date')

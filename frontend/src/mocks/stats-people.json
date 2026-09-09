@@ -1,5 +1,5 @@
 {
-  "from": "2026-09-03",
+  "from": "2026-08-01",
   "to": "2026-09-09",
   "granularity": "day",
   "items": [
@@ -11,11 +11,242 @@
         "avatarUrl": null
       },
       "totals": {
-        "commits": 23,
-        "prs": 4,
-        "merges": 3
+        "commits": 129,
+        "prs": 11,
+        "merges": 11
       },
       "series": [
+        {
+          "date": "2026-08-01",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-02",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-03",
+          "commits": 7,
+          "prs": 1,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-04",
+          "commits": 9,
+          "prs": 0,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-05",
+          "commits": 8,
+          "prs": 1,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-06",
+          "commits": 3,
+          "prs": 0,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-07",
+          "commits": 4,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-08",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-09",
+          "commits": 6,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-10",
+          "commits": 3,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-11",
+          "commits": 7,
+          "prs": 1,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-12",
+          "commits": 3,
+          "prs": 0,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-13",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-14",
+          "commits": 6,
+          "prs": 1,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-15",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-16",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-17",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-18",
+          "commits": 2,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-19",
+          "commits": 1,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-20",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-21",
+          "commits": 2,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-22",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-23",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-24",
+          "commits": 1,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-25",
+          "commits": 5,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-26",
+          "commits": 8,
+          "prs": 1,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-27",
+          "commits": 3,
+          "prs": 0,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-28",
+          "commits": 9,
+          "prs": 1,
+          "merges": 1,
+          "draft": null
+        },
+        {
+          "date": "2026-08-29",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-30",
+          "commits": 0,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-08-31",
+          "commits": 7,
+          "prs": 0,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-09-01",
+          "commits": 9,
+          "prs": 1,
+          "merges": 0,
+          "draft": null
+        },
+        {
+          "date": "2026-09-02",
+          "commits": 3,
+          "prs": 0,
+          "merges": 1,
+          "draft": null
+        },
         {
           "date": "2026-09-03",
           "commits": 5,

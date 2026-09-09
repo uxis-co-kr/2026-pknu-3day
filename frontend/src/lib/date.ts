@@ -55,3 +55,24 @@ export function formatRelative(iso: string | null | undefined): string {
   if (h < 24) return `${h}시간 전`
   return `${Math.floor(h / 24)}일 전`
 }
+
+export function startOfMonth(isoDate: string): string {
+  return `${isoDate.slice(0, 7)}-01`
+}
+
+export function endOfMonth(isoDate: string): string {
+  const [y, m] = isoDate.split('-').map(Number)
+  return toIsoDate(new Date(y, m, 0))
+}
+
+/** "2026년 9월" */
+export function monthLabel(isoDate: string): string {
+  const [y, m] = isoDate.split('-').map(Number)
+  return `${y}년 ${m}월`
+}
+
+/** 그 달의 1일이 무슨 요일인지 (0=일). 달력 첫 줄의 빈 칸 수와 같다. */
+export function firstWeekdayOfMonth(isoDate: string): number {
+  const [y, m] = isoDate.split('-').map(Number)
+  return new Date(y, m - 1, 1).getDay()
+}

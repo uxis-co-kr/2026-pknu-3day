@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import ActivityRow from '@/components/activity/ActivityRow'
 import SessionRow from '@/components/activity/SessionRow'
@@ -9,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import ContributionCalendar from '@/components/people/ContributionCalendar'
+import { Input } from '@/components/ui/input'
 import { useActivities, useMe, usePeopleStats, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
-import { addDays } from '@/lib/date'
+import { addDays, endOfMonth, startOfMonth } from '@/lib/date'
 import { cn } from '@/lib/utils'
 
 /** 단일 계열이라 범례를 두지 않는다. 강조 막대는 선택한 날짜 하나뿐이고, 아래 표가 데이터 뷰를 겸한다. */
@@ -34,13 +36,27 @@ export default function PeoplePage() {
   const { date } = useSelectedDate()
   const { data: me } = useMe()
 
-  const [period, setPeriod] = useState<Period>('week')
+  // 날짜와 같이 주소에 담는다. 새로고침·링크 공유에도 보던 기간이 그대로 열린다.
+  const [params, setParams] = useSearchParams()
+  const period = (params.get('period') as Period | null) ?? 'week'
+  const setPeriod = (next: Period) => {
+    const p = new URLSearchParams(params)
+    if (next === 'week') p.delete('period')
+    else p.set('period', next)
+    setParams(p, { replace: true })
+  }
   const [userId, setUserId] = useState<number | undefined>(undefined)
   const [openDate, setOpenDate] = useState<string | null>(date)
+  const [customFrom, setCustomFrom] = useState(addDays(date, -13))
+  const [customTo, setCustomTo] = useState(date)
 
-  const span = period === 'month' ? 29 : 6
-  const from = addDays(date, -span)
-  const stats = usePeopleStats({ from, to: date, userId: userId ?? me?.id })
+  const range =
+    period === 'week' ? { from: addDays(date, -6), to: date }
+    : period === 'month' ? { from: startOfMonth(date), to: endOfMonth(date) }
+    : { from: customFrom, to: customTo }
+
+  const { from } = range
+  const stats = usePeopleStats({ from, to: range.to, userId: userId ?? me?.id })
   const row = stats.data?.items[0]
 
   const dayActivities = useActivities({ date: openDate ?? date, userId: row?.user.id })
@@ -64,13 +80,26 @@ export default function PeoplePage() {
           </SelectContent>
         </Select>
 
-        <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
-          <TabsList className="h-[34px]">
-            <TabsTrigger value="week" className="h-[26px] text-[13px]">이번 주</TabsTrigger>
-            <TabsTrigger value="month" className="h-[26px] text-[13px]">이번 달</TabsTrigger>
-            <TabsTrigger value="custom" className="h-[26px] text-[13px]">직접 선택</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2.5">
+          {period === 'custom' && (
+            <div className="flex items-center gap-1.5">
+              <Input type="date" value={customFrom} max={customTo}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-[34px] w-[150px] text-[13px]" />
+              <span className="text-[13px] text-muted-foreground">~</span>
+              <Input type="date" value={customTo} min={customFrom}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-[34px] w-[150px] text-[13px]" />
+            </div>
+          )}
+          <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
+            <TabsList className="h-[34px]">
+              <TabsTrigger value="week" className="h-[26px] text-[13px]">이번 주</TabsTrigger>
+              <TabsTrigger value="month" className="h-[26px] text-[13px]">이번 달</TabsTrigger>
+              <TabsTrigger value="custom" className="h-[26px] text-[13px]">직접 선택</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -86,6 +115,16 @@ export default function PeoplePage() {
       </div>
 
       <Card className="rounded-lg p-5 shadow-none">
+        {period === 'month' ? (
+          <ContributionCalendar
+            series={row?.series ?? []}
+            month={date}
+            selected={openDate}
+            maxDate={date}
+            onSelect={(d) => setOpenDate(openDate === d ? null : d)}
+          />
+        ) : (
+          <>
         <h2 className="text-[13px] font-medium">일별 커밋 수</h2>
         <div className="mt-4 h-[130px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -106,9 +145,11 @@ export default function PeoplePage() {
                   <Cell key={p.date} fill={p.date === date ? BAR_ACTIVE : BAR} />
                 ))}
               </Bar>
-            </BarChart>
+              </BarChart>
           </ResponsiveContainer>
         </div>
+          </>
+        )}
       </Card>
 
       <Card className="overflow-hidden rounded-lg shadow-none">
