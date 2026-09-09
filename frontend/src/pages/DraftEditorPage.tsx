@@ -86,7 +86,9 @@ export default function DraftEditorPage() {
     )
   }
 
-  const author = draft.sourceActivities[0]?.user?.name
+  const sourceActivities = draft.sourceActivities ?? []
+  const sourceSessions = draft.sourceSessions ?? []
+  const author = sourceActivities[0]?.user?.name
   const busy = save.isPending || confirm.isPending || notify.isPending || regenerate.isPending
 
   return (
@@ -183,7 +185,7 @@ export default function DraftEditorPage() {
         </div>
       </Card>
 
-      <EvidencePanel activities={draft.sourceActivities} sessions={draft.sourceSessions} onJump={jumpTo} />
+      <EvidencePanel activities={sourceActivities} sessions={sourceSessions} onJump={jumpTo} />
     </div>
   )
 }

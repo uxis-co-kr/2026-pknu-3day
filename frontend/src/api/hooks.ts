@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, qs } from './apiClient'
 import type {
-  Activity, ApiKey, DailyStats, Draft, DraftSummary, IssuedApiKey, LlmSettings,
-  Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
+  Activity, ApiKey, DailyStats, Draft, DraftSummary, GeneratedDraft, IssuedApiKey,
+  LlmSettings, Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
 } from '@/types/api'
 
 /** 쿼리 키는 여기서만 만든다. 무효화할 때 경로를 헷갈리지 않기 위해서다. */
@@ -71,10 +71,20 @@ export const useSaveDraft = () =>
 export const useConfirmDraft = () =>
   useDraftMutation(({ id }: { id: number }) => api.post<Draft>(`/drafts/${id}/confirm`))
 
-/** 204 면 그날 활동이 없다는 뜻이라 null 이 온다 (PRD 7.). */
-export const useGenerateDraft = () =>
-  useDraftMutation(({ date, userId }: { date: string; userId?: number }) =>
-    api.post<Draft | null>('/drafts/generate', { date, userId }))
+/**
+ * 새 초안 생성·재생성. 204 면 그날 활동이 없다는 뜻이라 null 이 온다 (PRD 7.).
+ *
+ * 응답이 상세와 모양이 달라 상세 캐시에 넣지 않는다. 목록만 무효화하고, 화면은 새 id 로
+ * 이동해 GET /drafts/{id} 를 다시 읽는다.
+ */
+export const useGenerateDraft = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ date, userId }: { date: string; userId?: number }) =>
+      api.post<GeneratedDraft | null>('/drafts/generate', { date, userId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['drafts'] }),
+  })
+}
 
 export const useNotifyDraft = () =>
   useDraftMutation(({ id }: { id: number }) => api.post<{ sent: boolean }>(`/drafts/${id}/notify`))

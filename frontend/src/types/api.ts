@@ -117,6 +117,21 @@ export interface Draft extends DraftSummary {
   sourceSessions: VscodeSession[]
 }
 
+/**
+ * `POST /drafts/generate` 응답. 상세(Draft)와 **모양이 다르다** — 근거가 객체가 아니라 id 배열이고
+ * 타임스탬프가 없다. 상세 캐시에 그대로 넣으면 화면이 sourceActivities 를 못 찾아 터진다.
+ */
+export interface GeneratedDraft {
+  id: number
+  userId: number
+  workDate: string
+  version: number
+  status: DraftStatus
+  contentMd: string
+  sourceActivityIds: number[]
+  sourceSessionIds: number[]
+}
+
 export interface DailyStats {
   date: string
   commits: number

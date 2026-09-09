@@ -194,7 +194,18 @@ const routes: [string, string, Handler][] = [
     db.details.push(detail)
     const { contentMd: _c, sourceActivities: _a, sourceSessions: _s, ...meta } = detail
     db.drafts.push(meta)
-    return detail
+    // 실서버의 생성 응답은 상세와 모양이 다르다 — 근거가 id 배열이고 타임스탬프가 없다.
+    // 목업이 상세를 돌려주면 이 차이가 가려져 실서버에서만 터진다.
+    return {
+      id: detail.id,
+      userId: detail.userId,
+      workDate: detail.workDate,
+      version: detail.version,
+      status: detail.status,
+      contentMd: detail.contentMd,
+      sourceActivityIds: detail.sourceActivities.map((a) => a.id),
+      sourceSessionIds: detail.sourceSessions.map((x) => x.id),
+    }
   }],
 
   ['GET', '/repos', () => db.repos],
