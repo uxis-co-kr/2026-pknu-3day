@@ -56,6 +56,11 @@ public class GitHubCollector {
         this.gitHubApiClient = gitHubApiClient;
     }
 
+    /** 응답 시점의 syncStatus 판단용 (PRD 7. GET /repos). */
+    public boolean isSyncing(Long repoId) {
+        return inProgress.contains(repoId);
+    }
+
     @Async
     public void syncAsync(Long repoId) {
         syncAsync(repoId, false);
@@ -134,12 +139,28 @@ public class GitHubCollector {
             saved += collectPullRequests(repo, since, token);
 
             repo.setLastSyncedAt(syncStartedAt);
+            repo.setLastSyncStatus(SyncStatus.OK);
+            repo.setLastSyncError(null);
             repoRepository.save(repo);
             log.info("리포 {} 동기화 완료 — 커밋 {}건 조회, 신규 활동 {}건", repo.getFullName(), commits.size(), saved);
             return saved;
+        } catch (Exception e) {
+            // 실패를 기록해 화면이 배지를 띄울 수 있게 한다. last_synced_at 은 갱신하지 않아
+            // 다음 시도가 같은 구간을 다시 훑는다.
+            markFailed(repoId, e);
+            throw e;
         } finally {
             inProgress.remove(repoId);
         }
+    }
+
+    private void markFailed(Long repoId, Exception cause) {
+        repoRepository.findById(repoId).ifPresent(repo -> {
+            repo.setLastSyncStatus(SyncStatus.FAILED);
+            String message = cause.getMessage();
+            repo.setLastSyncError(message == null ? cause.getClass().getSimpleName() : message);
+            repoRepository.save(repo);
+        });
     }
 
     /**

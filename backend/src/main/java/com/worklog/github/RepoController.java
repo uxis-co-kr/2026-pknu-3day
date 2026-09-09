@@ -1,10 +1,16 @@
 package com.worklog.github;
 
+import com.worklog.activity.ActivityRepository;
+import com.worklog.activity.ActivityType;
 import com.worklog.auth.AuthenticatedUser;
 import com.worklog.auth.User;
+import com.worklog.config.KstDates;
 import jakarta.validation.constraints.NotBlank;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,15 +32,42 @@ public class RepoController {
 
     private final RepoService repoService;
     private final GitHubCollector collector;
+    private final ActivityRepository activityRepository;
 
-    public RepoController(RepoService repoService, GitHubCollector collector) {
+    public RepoController(
+            RepoService repoService,
+            GitHubCollector collector,
+            ActivityRepository activityRepository) {
         this.repoService = repoService;
         this.collector = collector;
+        this.activityRepository = activityRepository;
     }
 
     @GetMapping
     public List<RepoResponse> list() {
-        return repoService.list().stream().map(RepoResponse::from).toList();
+        Map<Long, Long> todayCommits = todayCommitCounts();
+        return repoService.list().stream()
+                .map(repo -> RepoResponse.from(
+                        repo,
+                        todayCommits.getOrDefault(repo.getId(), 0L),
+                        syncStatusOf(repo)))
+                .toList();
+    }
+
+    /** 리포별 오늘(KST) 커밋 수를 한 번의 쿼리로 모은다 — 리포마다 세면 N+1 이 된다. */
+    private Map<Long, Long> todayCommitCounts() {
+        LocalDate today = KstDates.today();
+        Map<Long, Long> counts = new HashMap<>();
+        for (Object[] row : activityRepository.countByRepoBetween(
+                ActivityType.COMMIT, KstDates.startOf(today), KstDates.endOf(today))) {
+            counts.put((Long) row[0], (Long) row[1]);
+        }
+        return counts;
+    }
+
+    /** 진행 중은 저장하지 않고 수집기에 물어본다 — 프로세스가 죽어도 상태가 굳지 않는다. */
+    private SyncStatus syncStatusOf(Repo repo) {
+        return collector.isSyncing(repo.getId()) ? SyncStatus.SYNCING : repo.getLastSyncStatus();
     }
 
     @PostMapping
@@ -42,7 +75,9 @@ public class RepoController {
             @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestBody @jakarta.validation.Valid RegisterRequest request) {
         Repo repo = repoService.register(principal.id(), request.fullName());
-        return ResponseEntity.status(HttpStatus.CREATED).body(RepoResponse.from(repo));
+        // 갓 등록한 리포라 오늘 활동은 아직 0 이고 아직 동기화한 적이 없다.
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(RepoResponse.from(repo, 0L, SyncStatus.OK));
     }
 
     @DeleteMapping("/{id}")
@@ -71,16 +106,20 @@ public class RepoController {
             String fullName,
             String defaultBranch,
             OffsetDateTime lastSyncedAt,
-            RegisteredBy registeredBy) {
+            RegisteredBy registeredBy,
+            long todayActivityCount,
+            SyncStatus syncStatus) {
 
-        static RepoResponse from(Repo repo) {
+        static RepoResponse from(Repo repo, long todayActivityCount, SyncStatus syncStatus) {
             User user = repo.getRegisteredBy();
             return new RepoResponse(
                     repo.getId(),
                     repo.getFullName(),
                     repo.getDefaultBranch(),
                     repo.getLastSyncedAt(),
-                    user == null ? null : new RegisteredBy(user.getId(), user.getLogin()));
+                    user == null ? null : new RegisteredBy(user.getId(), user.getLogin()),
+                    todayActivityCount,
+                    syncStatus);
         }
 
         public record RegisteredBy(Long id, String login) {}
