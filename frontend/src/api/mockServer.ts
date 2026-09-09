@@ -57,8 +57,8 @@ const notFound = (what: string) => new MockHttpError(404, 'NOT_FOUND', `${what}�
 
 /** 초안 본문을 근거에서 조립한다. 실서버의 DraftGenerator 자리를 흉내만 낸다. */
 function composeDraft(userId: number, date: string): string {
-  const user = db.activities.find((a) => a.user.id === userId)?.user
-  const acts = db.activities.filter((a) => a.user.id === userId && a.occurredAt.startsWith(date))
+  const user = db.activities.find((a) => a.user?.id === userId)?.user
+  const acts = db.activities.filter((a) => a.user?.id === userId && a.occurredAt.startsWith(date))
   const sess = db.sessions.filter((s) => s.userId === userId && s.workDate === date)
   const done = acts.map((a) => {
     const repo = `[${a.repo.fullName}]`
@@ -94,7 +94,7 @@ const routes: [string, string, Handler][] = [
     const type = q.get('type')
     const items = db.activities.filter((a) =>
       (!date || a.occurredAt.startsWith(date)) &&
-      (!userId || a.user.id === Number(userId)) &&
+      (!userId || a.user?.id === Number(userId)) &&
       (!repoId || a.repo.id === Number(repoId)) &&
       (!type || a.type === type))
     return { items, page: 0, size: 50, total: items.length } satisfies Page<Activity>
@@ -171,6 +171,8 @@ const routes: [string, string, Handler][] = [
   ['POST', '/drafts/:id/notify', (p) => {
     const d = db.details.find((x) => x.id === Number(p.id))
     if (!d) throw notFound('초안')
+    // 디자인 브리프 3.3 — Mattermost 전송은 확정 후에만. 화면은 버튼을 잠가 막지만
+    // 규칙 자체는 서버가 지켜야 한다. 2026-09-09 기준 실서버는 이 검사가 없어 담당자 2에게 알렸다.
     if (d.status !== 'CONFIRMED') {
       throw new MockHttpError(409, 'DRAFT_NOT_CONFIRMED', '확정한 뒤에 보낼 수 있습니다.')
     }
@@ -181,20 +183,31 @@ const routes: [string, string, Handler][] = [
   ['POST', '/drafts/generate', (_p, _q, body) => {
     const { date, userId } = body as { date: string; userId?: number }
     const uid = userId ?? db.me.id
-    const has = db.activities.some((a) => a.user.id === uid && a.occurredAt.startsWith(date))
+    const has = db.activities.some((a) => a.user?.id === uid && a.occurredAt.startsWith(date))
     if (!has) return null
     const version = Math.max(0, ...db.drafts.filter((d) => d.userId === uid && d.workDate === date).map((d) => d.version)) + 1
     const detail: Draft = {
       id: ++nextId, userId: uid, workDate: date, version, status: 'DRAFT',
       contentMd: composeDraft(uid, date),
-      sourceActivities: db.activities.filter((a) => a.user.id === uid && a.occurredAt.startsWith(date)),
+      sourceActivities: db.activities.filter((a) => a.user?.id === uid && a.occurredAt.startsWith(date)),
       sourceSessions: db.sessions.filter((s) => s.userId === uid && s.workDate === date),
       createdAt: now(), updatedAt: now(), confirmedAt: null,
     }
     db.details.push(detail)
     const { contentMd: _c, sourceActivities: _a, sourceSessions: _s, ...meta } = detail
     db.drafts.push(meta)
-    return detail
+    // 실서버의 생성 응답은 상세와 모양이 다르다 — 근거가 id 배열이고 타임스탬프가 없다.
+    // 목업이 상세를 돌려주면 이 차이가 가려져 실서버에서만 터진다.
+    return {
+      id: detail.id,
+      userId: detail.userId,
+      workDate: detail.workDate,
+      version: detail.version,
+      status: detail.status,
+      contentMd: detail.contentMd,
+      sourceActivityIds: detail.sourceActivities.map((a) => a.id),
+      sourceSessionIds: detail.sourceSessions.map((x) => x.id),
+    }
   }],
 
   ['GET', '/repos', () => db.repos],
@@ -237,10 +250,10 @@ const routes: [string, string, Handler][] = [
     const { label } = body as { label: string }
     const issued: IssuedApiKey = {
       ...(clone(apiKeyIssuedJson) as IssuedApiKey),
-      id: ++nextId, label, createdAt: now(), lastUsedAt: null,
+      id: ++nextId, label, createdAt: now(),
     }
     const { key: _k, ...meta } = issued
-    db.apiKeys.push(meta)
+    db.apiKeys.push({ ...meta, lastUsedAt: null })
     return issued
   }],
 

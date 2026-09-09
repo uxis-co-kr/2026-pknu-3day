@@ -22,6 +22,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "b61e4a9",
       "sha": "b61e4a9",
       "title": "fix: 로그인 리다이렉트 오류",
@@ -47,6 +48,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "4c9017f",
       "sha": "4c9017f",
       "title": "feat: 사원 검색 자동완성",
@@ -72,6 +74,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "a72b5c3",
       "sha": "a72b5c3",
       "title": "style: 검색 결과 목록 여백 정리",
@@ -97,6 +100,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "f03d8e6",
       "sha": "f03d8e6",
       "title": "fix: 검색어 공백 처리",
@@ -122,6 +126,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "14",
       "sha": null,
       "title": "사원 검색 자동완성",

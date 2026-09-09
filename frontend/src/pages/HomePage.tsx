@@ -48,17 +48,24 @@ export default function HomePage() {
   const [userFilter, setUserFilter] = useState('all')
   const [types, setTypes] = useState<TypeKey[]>(TYPE_TABS.map((t) => t.key))
 
-  const allActivities = activities.data?.items ?? []
+  // 서버는 최신순으로 주는데 타임라인은 시간순이다 (아트보드 2: 10:12 → 16:30).
+  const allActivities = [...(activities.data?.items ?? [])].sort((a, b) =>
+    a.occurredAt.localeCompare(b.occurredAt))
   const allSessions = sessions.data ?? []
 
-  /** 사용자 이름은 활동에만 실려 오므로 여기서 모아 둔다. */
+  /**
+   * 사용자 이름은 활동에만 실려 오므로 여기서 모아 둔다.
+   * 가입하지 않은 GitHub 계정의 활동은 user 가 null 이다. /stats/daily 의 byUser 도 그런 활동을
+   * 빼고 세므로, 사용자 카드에서도 똑같이 뺀다 (PRD F1-5).
+   */
   const users = useMemo(() => {
     const map = new Map<number, UserRef>()
-    for (const a of allActivities) if (!map.has(a.user.id)) map.set(a.user.id, a.user)
+    for (const a of allActivities) if (a.user && !map.has(a.user.id)) map.set(a.user.id, a.user)
     return map
   }, [allActivities])
 
   const shownActivities = allActivities.filter((a) =>
+    a.user !== null &&
     types.includes(a.type) &&
     (repoFilter === 'all' || a.repo.id === Number(repoFilter)) &&
     (userFilter === 'all' || a.user.id === Number(userFilter)))
@@ -72,7 +79,7 @@ export default function HomePage() {
   const rows = (stats.data?.byUser ?? []).map((u) => ({
     stat: u,
     user: users.get(u.userId),
-    activities: shownActivities.filter((a) => a.user.id === u.userId),
+    activities: shownActivities.filter((a) => a.user?.id === u.userId),
     sessions: shownSessions.filter((s) => s.userId === u.userId),
     draft: drafts.data?.find((d) => d.userId === u.userId),
   })).filter((r) => (userFilter === 'all' || r.stat.userId === Number(userFilter)))
@@ -188,6 +195,17 @@ export default function HomePage() {
             )}
           </Card>
         ))}
+
+        {/*
+          * 총계 = byUser 합계 + unmapped 다. 가입하지 않은 외부 기여자의 활동은 어느 사용자
+          * 카드에도 붙지 않아 요약 카드 숫자와 타임라인이 어긋나 보인다. 있을 때만 한 줄로 설명한다.
+          */}
+        {(s?.unmapped?.commits ?? 0) > 0 && (
+          <p className="px-1 text-[12px] text-muted-foreground">
+            사용자에 연결되지 않은 활동 {s!.unmapped.commits}건은 타임라인에 표시되지 않습니다.
+            해당 GitHub 계정으로 한 번 로그인하면 연결됩니다.
+          </p>
+        )}
 
         {!stats.isLoading && rows.length === 0 && (
           <Card className="rounded-lg p-10 text-center text-[13px] text-muted-foreground shadow-none">

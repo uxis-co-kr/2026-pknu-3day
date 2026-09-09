@@ -13,6 +13,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "2ae77c0",
       "sha": "2ae77c0",
       "title": "feat: 출석 통계 집계 쿼리 추가",
@@ -38,6 +39,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "abc1234",
       "sha": "abc1234",
       "title": "feat: 출석 API 추가",
@@ -63,6 +65,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "4c9017f",
       "sha": "4c9017f",
       "title": "feat: 사원 검색 자동완성",
@@ -88,6 +91,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "c04b8de",
       "sha": "c04b8de",
       "title": "test: 출석 집계 쿼리 테스트",
@@ -113,6 +117,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "d9e8f71",
       "sha": "d9e8f71",
       "title": "fix: 출석 시각 타임존 오류",
@@ -138,6 +143,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "a72b5c3",
       "sha": "a72b5c3",
       "title": "style: 검색 결과 목록 여백 정리",
@@ -163,6 +169,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "9d2f6b1",
       "sha": "9d2f6b1",
       "title": "fix: 부서 필터 누락 수정",
@@ -188,6 +195,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "12",
       "sha": null,
       "title": "출석 API 및 타임존 수정",
@@ -213,6 +221,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "f03d8e6",
       "sha": "f03d8e6",
       "title": "fix: 검색어 공백 처리",
@@ -238,6 +247,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "e8a3057",
       "sha": "e8a3057",
       "title": "chore: 사용하지 않는 DTO 제거",
@@ -263,6 +273,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "b61e4a9",
       "sha": "b61e4a9",
       "title": "fix: 로그인 리다이렉트 오류",
@@ -288,6 +299,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "13",
       "sha": null,
       "title": "출석 통계 집계 쿼리",
@@ -313,6 +325,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "7b3d914",
       "sha": "7b3d914",
       "title": "refactor: 온보딩 스텝 컴포넌트 분리",
@@ -338,6 +351,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "11",
       "sha": null,
       "title": "온보딩 화면 리팩토링",
@@ -363,6 +377,7 @@
         "name": "이서연",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "14",
       "sha": null,
       "title": "사원 검색 자동완성",
@@ -388,6 +403,7 @@
         "name": "김민수",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "5f1c02a",
       "sha": "5f1c02a",
       "title": "chore: 빌드 스크립트 정리",

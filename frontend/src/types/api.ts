@@ -38,7 +38,9 @@ export interface Activity {
   id: number
   type: ActivityType
   repo: RepoRef
-  user: UserRef
+  /** 가입하지 않은 GitHub 계정의 활동은 null 이고 externalLogin 만 채워진다 (PRD F1-5). */
+  user: UserRef | null
+  externalLogin: string | null
   /** COMMIT 은 sha, PR_OPENED/PR_MERGED 는 PR 번호 */
   externalId: string
   sha: string | null
@@ -115,6 +117,21 @@ export interface Draft extends DraftSummary {
   sourceSessions: VscodeSession[]
 }
 
+/**
+ * `POST /drafts/generate` 응답. 상세(Draft)와 **모양이 다르다** — 근거가 객체가 아니라 id 배열이고
+ * 타임스탬프가 없다. 상세 캐시에 그대로 넣으면 화면이 sourceActivities 를 못 찾아 터진다.
+ */
+export interface GeneratedDraft {
+  id: number
+  userId: number
+  workDate: string
+  version: number
+  status: DraftStatus
+  contentMd: string
+  sourceActivityIds: number[]
+  sourceSessionIds: number[]
+}
+
 export interface DailyStats {
   date: string
   commits: number
@@ -125,6 +142,11 @@ export interface DailyStats {
   commitsDelta: number
   /** "⚠ 6시간 이상 1건" */
   staleSessions: number
+  /**
+   * 사용자에 연결되지 않은 활동 수. 총계 = byUser 합계 + unmapped 가 항상 성립한다.
+   * 가입하지 않은 외부 기여자의 커밋이 여기 잡힌다.
+   */
+  unmapped: { commits: number; prs: number; merges: number }
   byUser: { userId: number; commits: number; prs: number; merges: number; sessions: number }[]
 }
 
@@ -154,9 +176,15 @@ export interface ApiKey {
   lastUsedAt: string | null
 }
 
-/** 발급 직후 한 번만 평문 키가 온다. */
-export interface IssuedApiKey extends ApiKey {
+/**
+ * 발급 직후 한 번만 평문 키가 온다. 목록 항목(ApiKey)과 달리 `lastUsedAt` 이 없다 —
+ * 방금 만든 키라 사용 이력이 있을 수 없다. 상속하면 타입이 실제 응답을 속인다.
+ */
+export interface IssuedApiKey {
+  id: number
+  label: string
   key: string
+  createdAt: string
 }
 
 export interface NotifySettings {
