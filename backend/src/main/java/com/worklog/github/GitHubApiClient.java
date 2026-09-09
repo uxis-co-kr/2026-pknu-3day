@@ -2,6 +2,7 @@ package com.worklog.github;
 
 import com.worklog.config.ApiException;
 import com.worklog.github.dto.GitHubCommitDto;
+import com.worklog.github.dto.GitHubPullRequestDto;
 import com.worklog.github.dto.GitHubRepoDto;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -79,6 +80,53 @@ public class GitHubApiClient {
             }
             all.addAll(batch);
             if (batch.size() < PER_PAGE) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    /**
+     * since 이후에 갱신된 PR 목록 (PRD F1-2).
+     *
+     * <p>커밋과 달리 GitHub 이 since 파라미터를 받지 않는다. 갱신 최신순으로 받아
+     * since 보다 오래된 PR 을 만나면 멈춘다 (결정 ⑪).
+     */
+    public List<GitHubPullRequestDto> listPullRequests(
+            String owner, String name, OffsetDateTime since, String token) {
+        List<GitHubPullRequestDto> all = new ArrayList<>();
+        for (int page = 1; page <= MAX_PAGES; page++) {
+            final int currentPage = page;
+            List<GitHubPullRequestDto> batch;
+            try {
+                batch = restClient
+                        .get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/repos/{owner}/{name}/pulls")
+                                .queryParam("state", "all")
+                                .queryParam("sort", "updated")
+                                .queryParam("direction", "desc")
+                                .queryParam("per_page", PER_PAGE)
+                                .queryParam("page", currentPage)
+                                .build(owner, name))
+                        .headers(h -> headers(h, token))
+                        .retrieve()
+                        .body(new org.springframework.core.ParameterizedTypeReference<>() {});
+            } catch (RestClientResponseException e) {
+                throw githubFailure(e);
+            }
+            if (batch == null || batch.isEmpty()) {
+                break;
+            }
+            boolean reachedOlderThanSince = false;
+            for (GitHubPullRequestDto pr : batch) {
+                if (pr.updatedAt() != null && pr.updatedAt().isBefore(since)) {
+                    reachedOlderThanSince = true;
+                    break;
+                }
+                all.add(pr);
+            }
+            if (reachedOlderThanSince || batch.size() < PER_PAGE) {
                 break;
             }
         }

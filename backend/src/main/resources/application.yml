@@ -3,7 +3,7 @@ spring:
     name: worklog-backend
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/worklog}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/worklog}
     username: ${DB_USER:worklog}
     password: ${DB_PASSWORD:worklog}
 
@@ -55,6 +55,8 @@ worklog:
   # PRD F2. 구현체는 OpenAiCompatProvider 하나이고, 모델은 프리셋으로만 추가한다.
   llm:
     provider: ${WORKLOG_LLM_PROVIDER:mock}
+    # 요약 파이프라인 주기. 수집 직후 대시보드에 바로 뜨도록 짧게 잡는다.
+    summary-interval-ms: ${WORKLOG_SUMMARY_INTERVAL_MS:60000}
     presets:
       gemma4:
         base-url: "http://61.32.164.99:18000/v1"

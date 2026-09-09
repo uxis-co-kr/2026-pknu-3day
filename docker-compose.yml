@@ -8,9 +8,9 @@ services:
       POSTGRES_PASSWORD: worklog
       TZ: Asia/Seoul
     ports:
-      # 기본값은 PRD 8. 의 5432. 로컬에 PostgreSQL 이 이미 5432 를 쓰고 있으면
-      # 루트 .env 에 POSTGRES_PORT=5433 처럼 적어 덮어쓴다. 컨테이너 안에서는 그대로 5432.
-      - "${POSTGRES_PORT:-5432}:5432"
+      # 팀 개발기 두 대 모두 로컬 PostgreSQL 이 127.0.0.1:5432 를 점유하고 있어 기본값을 5433 으로 둔다.
+      # 5432 를 쓰고 싶으면 루트 .env 에 POSTGRES_PORT=5432 로 덮어쓴다. 컨테이너 안에서는 그대로 5432.
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - worklog-pgdata:/var/lib/postgresql/data
     healthcheck:

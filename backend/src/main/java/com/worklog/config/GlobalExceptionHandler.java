@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -38,6 +40,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraint(ConstraintViolationException e) {
         return ResponseEntity.badRequest().body(new ApiError("VALIDATION_ERROR", e.getMessage()));
+    }
+
+    /**
+     * 쿼리 파라미터 형식 오류 — 알 수 없는 enum 값(type=NOPE), 날짜 형식 오류 등.
+     * 클라이언트 잘못이므로 500 이 아니라 400 이다.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        String allowed = "";
+        Class<?> required = e.getRequiredType();
+        if (required != null && required.isEnum()) {
+            allowed = " 가능한 값: %s".formatted(java.util.Arrays.toString(required.getEnumConstants()));
+        }
+        return ResponseEntity.badRequest()
+                .body(new ApiError(
+                        "INVALID_PARAMETER",
+                        "%s 값이 올바르지 않습니다: %s.%s".formatted(e.getName(), e.getValue(), allowed)));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParam(MissingServletRequestParameterException e) {
+        return ResponseEntity.badRequest()
+                .body(new ApiError(
+                        "MISSING_PARAMETER", "%s 파라미터가 필요합니다.".formatted(e.getParameterName())));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

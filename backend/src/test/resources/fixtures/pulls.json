@@ -1,0 +1,30 @@
+[
+  {
+    "number": 2,
+    "title": "docs: 확정 화면이 요구하는 응답 필드를 API 명세(7.)에 반영",
+    "body": "확정된 UI 화면이 요구하는 필드를 PRD 7.에 반영했다.",
+    "state": "closed",
+    "html_url": "https://github.com/uxis-co-kr/2026-pknu-3day/pull/2",
+    "created_at": "2026-09-09T05:01:00Z",
+    "updated_at": "2026-09-09T05:07:01Z",
+    "merged_at": "2026-09-09T05:07:01Z",
+    "user": { "id": 180127159, "login": "UngsikJo" },
+    "merged_by": { "id": 180127159, "login": "UngsikJo" },
+    "head": { "ref": "docs/api-contract-ui-fields", "sha": "5d3a987" },
+    "base": { "ref": "git_peristalsis", "sha": "a6581b9" }
+  },
+  {
+    "number": 3,
+    "title": "feat: 진행 중인 작업",
+    "body": null,
+    "state": "open",
+    "html_url": "https://github.com/uxis-co-kr/2026-pknu-3day/pull/3",
+    "created_at": "2026-09-09T06:00:00Z",
+    "updated_at": "2026-09-09T06:30:00Z",
+    "merged_at": null,
+    "user": { "id": 116807409, "login": "Ae-Ti" },
+    "merged_by": null,
+    "head": { "ref": "feature/wip", "sha": "cccccc1" },
+    "base": { "ref": "main", "sha": "a27e71d" }
+  }
+]
