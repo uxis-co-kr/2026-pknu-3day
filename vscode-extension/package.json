@@ -1,0 +1,65 @@
+{
+  "name": "worklog-drafter",
+  "displayName": "WorkLog Drafter",
+  "description": "커밋되지 않은 작업과 오늘의 계획을 모아 WorkLog Drafter 서버로 보낸다.",
+  "version": "0.1.0",
+  "publisher": "withly",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "worklog.recordPlan",
+        "title": "WorkLog: 오늘 계획 기록"
+      },
+      {
+        "command": "worklog.sendNow",
+        "title": "WorkLog: 지금 전송"
+      }
+    ],
+    "configuration": {
+      "title": "WorkLog Drafter",
+      "properties": {
+        "worklog.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "백엔드 주소. /api 는 붙이지 않는다."
+        },
+        "worklog.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "설정 > API Key 에서 발급한 개인 키 (wl_ 로 시작)."
+        },
+        "worklog.intervalMinutes": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "description": "자동 전송 주기(분)."
+        },
+        "worklog.collectDiff": {
+          "type": "boolean",
+          "default": true,
+          "description": "미커밋 diff 본문을 함께 보낼지. 끄면 파일 경로와 변경 줄 수만 보낸다."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.7.2"
+  }
+}
