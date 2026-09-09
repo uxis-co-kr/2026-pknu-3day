@@ -1,0 +1,28 @@
+# --- secrets ---
+.env
+*.env
+!*.env.example
+
+# --- macOS ---
+.DS_Store
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+!.vscode/extensions.json
+
+# --- Gradle / Java ---
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# --- Node ---
+node_modules/
+dist/
+*.vsix
+npm-debug.log*
+yarn-error.log*
+
+# --- logs ---
+*.log

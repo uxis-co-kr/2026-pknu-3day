@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: worklog-postgres
+    environment:
+      POSTGRES_DB: worklog
+      POSTGRES_USER: worklog
+      POSTGRES_PASSWORD: worklog
+      TZ: Asia/Seoul
+    ports:
+      # 호스트 5432 는 로컬에 설치된 PostgreSQL 이 쓰는 경우가 많아 5433 으로 내보낸다.
+      # 컨테이너 안에서는 그대로 5432.
+      - "5433:5432"
+    volumes:
+      - worklog-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worklog -d worklog"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  worklog-pgdata:
