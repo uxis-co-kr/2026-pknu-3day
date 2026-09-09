@@ -57,8 +57,8 @@ const notFound = (what: string) => new MockHttpError(404, 'NOT_FOUND', `${what}�
 
 /** 초안 본문을 근거에서 조립한다. 실서버의 DraftGenerator 자리를 흉내만 낸다. */
 function composeDraft(userId: number, date: string): string {
-  const user = db.activities.find((a) => a.user.id === userId)?.user
-  const acts = db.activities.filter((a) => a.user.id === userId && a.occurredAt.startsWith(date))
+  const user = db.activities.find((a) => a.user?.id === userId)?.user
+  const acts = db.activities.filter((a) => a.user?.id === userId && a.occurredAt.startsWith(date))
   const sess = db.sessions.filter((s) => s.userId === userId && s.workDate === date)
   const done = acts.map((a) => {
     const repo = `[${a.repo.fullName}]`
@@ -94,7 +94,7 @@ const routes: [string, string, Handler][] = [
     const type = q.get('type')
     const items = db.activities.filter((a) =>
       (!date || a.occurredAt.startsWith(date)) &&
-      (!userId || a.user.id === Number(userId)) &&
+      (!userId || a.user?.id === Number(userId)) &&
       (!repoId || a.repo.id === Number(repoId)) &&
       (!type || a.type === type))
     return { items, page: 0, size: 50, total: items.length } satisfies Page<Activity>
@@ -181,13 +181,13 @@ const routes: [string, string, Handler][] = [
   ['POST', '/drafts/generate', (_p, _q, body) => {
     const { date, userId } = body as { date: string; userId?: number }
     const uid = userId ?? db.me.id
-    const has = db.activities.some((a) => a.user.id === uid && a.occurredAt.startsWith(date))
+    const has = db.activities.some((a) => a.user?.id === uid && a.occurredAt.startsWith(date))
     if (!has) return null
     const version = Math.max(0, ...db.drafts.filter((d) => d.userId === uid && d.workDate === date).map((d) => d.version)) + 1
     const detail: Draft = {
       id: ++nextId, userId: uid, workDate: date, version, status: 'DRAFT',
       contentMd: composeDraft(uid, date),
-      sourceActivities: db.activities.filter((a) => a.user.id === uid && a.occurredAt.startsWith(date)),
+      sourceActivities: db.activities.filter((a) => a.user?.id === uid && a.occurredAt.startsWith(date)),
       sourceSessions: db.sessions.filter((s) => s.userId === uid && s.workDate === date),
       createdAt: now(), updatedAt: now(), confirmedAt: null,
     }

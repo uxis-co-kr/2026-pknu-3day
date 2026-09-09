@@ -81,7 +81,7 @@ export default function DraftEditorPage() {
     )
   }
 
-  const author = draft.sourceActivities[0]?.user.name
+  const author = draft.sourceActivities[0]?.user?.name
   const busy = save.isPending || confirm.isPending || notify.isPending || regenerate.isPending
 
   return (

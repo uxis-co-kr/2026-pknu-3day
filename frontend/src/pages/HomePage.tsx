@@ -48,17 +48,24 @@ export default function HomePage() {
   const [userFilter, setUserFilter] = useState('all')
   const [types, setTypes] = useState<TypeKey[]>(TYPE_TABS.map((t) => t.key))
 
-  const allActivities = activities.data?.items ?? []
+  // 서버는 최신순으로 주는데 타임라인은 시간순이다 (아트보드 2: 10:12 → 16:30).
+  const allActivities = [...(activities.data?.items ?? [])].sort((a, b) =>
+    a.occurredAt.localeCompare(b.occurredAt))
   const allSessions = sessions.data ?? []
 
-  /** 사용자 이름은 활동에만 실려 오므로 여기서 모아 둔다. */
+  /**
+   * 사용자 이름은 활동에만 실려 오므로 여기서 모아 둔다.
+   * 가입하지 않은 GitHub 계정의 활동은 user 가 null 이다. /stats/daily 의 byUser 도 그런 활동을
+   * 빼고 세므로, 사용자 카드에서도 똑같이 뺀다 (PRD F1-5).
+   */
   const users = useMemo(() => {
     const map = new Map<number, UserRef>()
-    for (const a of allActivities) if (!map.has(a.user.id)) map.set(a.user.id, a.user)
+    for (const a of allActivities) if (a.user && !map.has(a.user.id)) map.set(a.user.id, a.user)
     return map
   }, [allActivities])
 
   const shownActivities = allActivities.filter((a) =>
+    a.user !== null &&
     types.includes(a.type) &&
     (repoFilter === 'all' || a.repo.id === Number(repoFilter)) &&
     (userFilter === 'all' || a.user.id === Number(userFilter)))
@@ -72,7 +79,7 @@ export default function HomePage() {
   const rows = (stats.data?.byUser ?? []).map((u) => ({
     stat: u,
     user: users.get(u.userId),
-    activities: shownActivities.filter((a) => a.user.id === u.userId),
+    activities: shownActivities.filter((a) => a.user?.id === u.userId),
     sessions: shownSessions.filter((s) => s.userId === u.userId),
     draft: drafts.data?.find((d) => d.userId === u.userId),
   })).filter((r) => (userFilter === 'all' || r.stat.userId === Number(userFilter)))

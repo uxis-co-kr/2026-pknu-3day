@@ -38,7 +38,9 @@ export interface Activity {
   id: number
   type: ActivityType
   repo: RepoRef
-  user: UserRef
+  /** 가입하지 않은 GitHub 계정의 활동은 null 이고 externalLogin 만 채워진다 (PRD F1-5). */
+  user: UserRef | null
+  externalLogin: string | null
   /** COMMIT 은 sha, PR_OPENED/PR_MERGED 는 PR 번호 */
   externalId: string
   sha: string | null

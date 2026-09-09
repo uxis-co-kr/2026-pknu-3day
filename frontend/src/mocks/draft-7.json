@@ -22,6 +22,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "abc1234",
       "sha": "abc1234",
       "title": "feat: 출석 API 추가",
@@ -47,6 +48,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "d9e8f71",
       "sha": "d9e8f71",
       "title": "fix: 출석 시각 타임존 오류",
@@ -72,6 +74,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "12",
       "sha": null,
       "title": "출석 API 및 타임존 수정",
@@ -97,6 +100,7 @@
         "name": "배태일",
         "avatarUrl": null
       },
+      "externalLogin": null,
       "externalId": "11",
       "sha": null,
       "title": "온보딩 화면 리팩토링",
