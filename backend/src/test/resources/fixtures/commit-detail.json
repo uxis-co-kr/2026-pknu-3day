@@ -1,0 +1,25 @@
+{
+  "sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+  "html_url": "https://github.com/uxis-co-kr/2026-pknu-3day/commit/a1b2c3d",
+  "commit": {
+    "message": "feat: 출석 API 추가\n\n중복 출석 검증은 다음 커밋에서 붙인다.",
+    "author": { "name": "배태일", "email": "taeil@example.com", "date": "2026-09-09T10:12:00Z" }
+  },
+  "author": { "id": 116807409, "login": "Ae-Ti" },
+  "stats": { "additions": 120, "deletions": 8, "total": 128 },
+  "files": [
+    {
+      "filename": "src/api/attendance.ts",
+      "additions": 40,
+      "deletions": 3,
+      "changes": 43,
+      "patch": "@@ -1,3 +1,5 @@\n+export function check() {\n+  return true;\n+}\n const a = 1;"
+    },
+    {
+      "filename": "docs/logo.png",
+      "additions": 0,
+      "deletions": 0,
+      "changes": 0
+    }
+  ]
+}
