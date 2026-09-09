@@ -19,12 +19,12 @@ export default function EvidencePanel({
       <div className="flex h-[46px] shrink-0 items-center border-b px-[18px] text-sm font-semibold">
         이 초안의 근거
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-[18px] py-3">
+      <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-[18px] py-3">
         <section>
           <h3 className="mb-1 text-[12px] font-medium text-muted-foreground">
             GitHub 활동 ({activities.length})
           </h3>
-          <div className="-mx-1">
+          <div className="-mx-1 min-w-0">
             {[...activities].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt)).map((a) => (
               <ActivityRow
                 key={a.id}

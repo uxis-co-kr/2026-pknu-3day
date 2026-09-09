@@ -8,6 +8,19 @@ import type { ApiErrorBody } from '@/types/api'
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
+/**
+ * 실서버로 전환했지만 아직 백엔드에 없는 경로. 여기 걸린 경로만 404 일 때 목업으로 떨어진다.
+ * 404 를 무조건 목업으로 돌리면 `/drafts/9999` 같은 정상적인 "없음" 까지 가짜 데이터로 덮여
+ * 버리므로, 목록을 명시해 두고 엔드포인트가 생길 때마다 지운다.
+ *
+ * 2026-09-10 기준 미구현: 알림·LLM 설정(F7/F9 백엔드), 인원별 통계(2-14).
+ */
+const MOCK_FALLBACK_PATHS = [/^\/settings\//, /^\/stats\/people/]
+
+function fallsBackToMock(path: string): boolean {
+  return MOCK_FALLBACK_PATHS.some((p) => p.test(path))
+}
+
 const TOKEN_KEY = 'worklog.token'
 
 export const auth = {
@@ -70,6 +83,11 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
     auth.clear()
     if (window.location.pathname !== '/login') window.location.assign('/login')
     throw new ApiError(401, 'UNAUTHORIZED', '로그인이 필요합니다.')
+  }
+
+  if (res.status === 404 && fallsBackToMock(path.split('?')[0])) {
+    console.warn(`[worklog] ${path} 는 아직 서버에 없어 목업으로 대신합니다.`)
+    return (await handleMock(method, path, body)) as T
   }
 
   if (!res.ok) {
