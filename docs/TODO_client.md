@@ -1,7 +1,9 @@
 # 담당자 1 (클라이언트) 할 일 — WorkLog Drafter
 
-> **1일차(2026-09-09) 마감: P0 전부 완료.** 결과는 [DAY1_client_result.md](DAY1_client_result.md) 참고.
-> 3일차 예정이던 F9·F10(1-13)까지 미리 끝냈다. 남은 것은 2일차의 확장(1-6·1-7)과 초안 API(1-8), 실서버 전환(1-9).
+> **1·2일차 완료.** 결과는 [DAY1_client_result.md](DAY1_client_result.md),
+> 남은 일과 기획 변경 논의는 [BACKLOG.md](BACKLOG.md) 참고.
+> 3일차 예정이던 F9·F10(1-13)은 1일차에 미리 끝냈다(백엔드 엔드포인트만 대기).
+> 남은 것은 3일차의 E2E 점검(1-11)과 패키징(1-12), 그리고 BACKLOG 의 미결 항목.
 
 기준 문서: `docs/PRD_090910.md`, `docs/DESIGN_BRIEF.md` · 브랜치: `VsPeristalsis_dashboard` (PRD의 `track/client`에 해당)
 
@@ -47,12 +49,12 @@
 
 ## 2일차 — 백엔드 + API
 
-- [ ] 1-6 확장 `collector.ts` — `git status --porcelain` + `git diff`(스테이지 포함, 파일당 200줄), 브랜치·원격 URL, 변경 파일 내 `TODO:`/`FIXME:` 스캔, 명령 `WorkLog: 오늘 계획 기록`, 파일 저장 타임라인 → 콘솔 출력
-- [ ] 1-7 확장 `uploader.ts` — `settings.json`(`worklog.serverUrl / apiKey / intervalMinutes / collectDiff`), 30분 주기 + 종료 시 + 명령 `WorkLog: 지금 전송`, 상태바 "미커밋 N파일" / API Key 오류 표시(예외로 죽지 않음) → 확장 → 서버 → DB 반영
-- [ ] 1-8 초안 API — `GET /drafts?date&userId&status`, `GET /drafts/{id}`(sourceActivities·sourceSessions 포함), `PATCH /drafts/{id} {contentMd}`(본인만), `POST /drafts/{id}/confirm`
-- [ ] **동기화 포인트 ② (15:00)** 두 브랜치 `main` 머지. 담당자 2의 F5(인증)·F1·F3a가 붙어 있어야 함
-- [ ] 1-9 `VITE_USE_MOCK=false` 전환 — 어긋난 필드, JWT Bearer 헤더, `/auth/done?token=` 콜백 처리 → 실서버로 전 페이지 동작
-- [ ] 1-10 초안 편집 페이지에 **재생성**(`POST /drafts/generate`) · **Mattermost 전송**(`POST /drafts/{id}/notify`, 확정 후만 활성) 연결 → E2E 3·4·7 통과
+- [x] 1-6 확장 `collector.ts` — `git status --porcelain` + `git diff`(스테이지 포함, 파일당 200줄), 브랜치·원격 URL, 변경 파일 내 `TODO:`/`FIXME:` 스캔, 명령 `WorkLog: 오늘 계획 기록`, 파일 저장 타임라인 → 콘솔 출력
+- [x] 1-7 확장 `uploader.ts` — `settings.json`(`worklog.serverUrl / apiKey / intervalMinutes / collectDiff`), 30분 주기 + 종료 시 + 명령 `WorkLog: 지금 전송`, 상태바 "미커밋 N파일" / API Key 오류 표시(예외로 죽지 않음) → 확장 → 서버 → DB 반영
+- [x] 1-8 초안 API — `GET /drafts?date&userId&status`, `GET /drafts/{id}`(sourceActivities·sourceSessions 포함), `PATCH /drafts/{id} {contentMd}`(본인만), `POST /drafts/{id}/confirm`
+- [x] **동기화 포인트 ② (15:00)** 두 브랜치 `main` 머지. 담당자 2의 F5(인증)·F1·F3a가 붙어 있어야 함
+- [x] 1-9 `VITE_USE_MOCK=false` 전환 — 어긋난 필드, JWT Bearer 헤더, `/auth/done?token=` 콜백 처리 → 실서버로 전 페이지 동작
+- [x] 1-10 초안 편집 페이지에 **재생성**(`POST /drafts/generate`) · **Mattermost 전송**(`POST /drafts/{id}/notify`, 확정 후만 활성) 연결 → E2E 3·4·7 통과
 
 ## 3일차 — 리뷰 및 수정
 
@@ -63,11 +65,11 @@
 - [ ] **동기화 포인트 ③ (16:00)** 최종 머지, 전체 E2E 재실행, 태그 `v0.1.0`
 
 ## 내 담당 E2E 시나리오
-- [ ] 1. GitHub 로그인 → `/repos` 리포 등록 → 수동 동기화 → 홈에 오늘 커밋 표시
-- [ ] 3. 홈 "초안 생성" → 편집 페이지 → 수정·저장 → 확정 → CONFIRMED
-- [ ] 4. 확정 초안이 있는 날짜에 재생성 → version 2 DRAFT 생성, 확정본 유지
+- [x] 1. GitHub 로그인 → `/repos` 리포 등록 → 수동 동기화 → 홈에 오늘 커밋 표시
+- [x] 3. 홈 "초안 생성" → 편집 페이지 → 수정·저장 → 확정 → CONFIRMED
+- [x] 4. 확정 초안이 있는 날짜에 재생성 → version 2 DRAFT 생성, 확정본 유지
 - [ ] 5. VS Code 파일 수정 + 계획 메모 + `지금 전송` → 홈 미커밋 세션 카드 증가, 재생성 시 "진행 중 / 미커밋"에 반영
-- [ ] 9. 잘못된 API Key로 확장 전송 → 401, 확장은 상태바 오류만 표시
+- [x] 9. 잘못된 API Key로 확장 전송 → 401, 확장은 상태바 오류만 표시
 
 ## 지켜야 할 규칙
 - 상대 트랙 파일(`auth/ github/ activity/ llm/ notify/ external/`, `DraftGenerator`)을 건드려야 하면 멈추고 알린다
