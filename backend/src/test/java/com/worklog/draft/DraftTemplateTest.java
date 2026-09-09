@@ -107,6 +107,19 @@ class DraftTemplateTest {
     }
 
     @Test
+    @DisplayName("PR 제목에 표기가 이미 들어 있어도 두 번 붙이지 않는다")
+    void doesNotDoublePrefix() {
+        // 수집기는 GitHub 이 준 제목만 저장하고 표기는 여기서 한 번만 붙인다.
+        Activity merged = pull(ActivityType.PR_MERGED, "1", null);
+        merged.setTitle("fix: DB 노출 포트를 되돌리고");
+
+        String md = DraftTemplate.render(DAY, "배태일", List.of(merged), List.of());
+
+        assertThat(md).contains("PR #1 머지: fix: DB 노출 포트를 되돌리고");
+        assertThat(md).doesNotContain("PR #1 머지: PR #1 머지:");
+    }
+
+    @Test
     @DisplayName("요약이 아직 없으면 제목으로 대신한다")
     void fallsBackToTitle() {
         String md = DraftTemplate.render(DAY, "배태일", List.of(commit("abc1234", null)), List.of());

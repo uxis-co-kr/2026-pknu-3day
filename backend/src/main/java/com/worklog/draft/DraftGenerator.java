@@ -6,6 +6,7 @@ import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.config.ApiException;
 import com.worklog.config.KstDates;
+import com.worklog.notify.NotifyService;
 import com.worklog.vscode.VscodeSession;
 import com.worklog.vscode.VscodeSessionRepository;
 import java.time.LocalDate;
@@ -30,16 +31,19 @@ public class DraftGenerator {
     private final VscodeSessionRepository sessionRepository;
     private final DraftRepository draftRepository;
     private final UserRepository userRepository;
+    private final NotifyService notifyService;
 
     public DraftGenerator(
             ActivityRepository activityRepository,
             VscodeSessionRepository sessionRepository,
             DraftRepository draftRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            NotifyService notifyService) {
         this.activityRepository = activityRepository;
         this.sessionRepository = sessionRepository;
         this.draftRepository = draftRepository;
         this.userRepository = userRepository;
+        this.notifyService = notifyService;
     }
 
     /**
@@ -80,6 +84,8 @@ public class DraftGenerator {
                 saved.getVersion(),
                 activities.size(),
                 sessions.size());
+        // 알림 실패가 초안 생성을 되돌리면 안 된다 (PRD F7).
+        notifyService.notifyDraftCreated(saved);
         return Optional.of(saved);
     }
 

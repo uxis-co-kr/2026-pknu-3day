@@ -39,6 +39,8 @@ public class LlmProperties {
         private String baseUrl;
         private String model;
         private String apiKey;
+        /** 응답 대기 상한. 기본 60초(PRD F2). 느린 모델은 프리셋에서 늘린다. */
+        private int timeoutSeconds = 60;
 
         public String getBaseUrl() {
             return baseUrl;
@@ -62,6 +64,14 @@ public class LlmProperties {
 
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
+        }
+
+        public int getTimeoutSeconds() {
+            return timeoutSeconds;
+        }
+
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            this.timeoutSeconds = timeoutSeconds;
         }
     }
 }

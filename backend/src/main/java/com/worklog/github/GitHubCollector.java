@@ -215,7 +215,9 @@ public class GitHubCollector {
         activity.setRepo(repo);
         activity.setType(type);
         activity.setExternalId(pr.externalId());
-        activity.setTitle(merged ? "PR #%d 머지: %s".formatted(pr.number(), pr.title()) : pr.title());
+        // 제목은 GitHub 이 준 그대로만 저장한다. "PR #N 머지:" 같은 표기는 화면과 초안 템플릿이
+        // type·externalId 를 보고 각자 붙이므로, 여기서 붙이면 두 번 붙는다.
+        activity.setTitle(pr.title());
         activity.setMessage(pr.body());
         activity.setUrl(pr.htmlUrl());
         activity.setBranch(pr.branch());
