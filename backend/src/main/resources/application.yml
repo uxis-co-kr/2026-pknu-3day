@@ -71,6 +71,9 @@ worklog:
 
   notify:
     mattermost-webhook-url: ${MATTERMOST_WEBHOOK_URL:}
+  chat:
+    # Mattermost Outgoing Webhook 이 요청마다 보내는 token. 비우면 아무나 부를 수 있다.
+    mattermost-token: ${MATTERMOST_OUTGOING_TOKEN:}
     # 미커밋 리마인드 (F7-2). 업무 시간에 매시 정각.
     remind-cron: ${WORKLOG_REMIND_CRON:0 0 10-18 * * *}
 
