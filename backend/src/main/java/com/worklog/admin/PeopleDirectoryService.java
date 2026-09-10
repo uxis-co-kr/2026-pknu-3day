@@ -47,8 +47,9 @@ public class PeopleDirectoryService {
 
         Long companySeq = wapleProperties.getCompanySeq();
         List<PeopleDirectoryResponse.EmployeeRow> employees = new ArrayList<>();
-        if (companySeq != null) {
-            for (WapleClient.Employee e : wapleClient.employees(companySeq)) {
+        // 임시 사원 목록은 회사 번호가 없어도 읽는다 (사내 API 가 붙기 전까지).
+        if (companySeq != null || !wapleClient.isConfigured()) {
+            for (WapleClient.Employee e : wapleClient.employees(companySeq == null ? 0L : companySeq)) {
                 User linked = byEmpSeq.get(e.empSeq());
                 employees.add(new PeopleDirectoryResponse.EmployeeRow(
                         e.empSeq(), e.empNm(), linked == null ? null : toRow(linked, activityCounts)));

@@ -58,9 +58,41 @@ public class WapleClient {
         return get("/core/v1/companies", "companies", Company.class);
     }
 
-    /** 재직중 사원 목록. */
+    /**
+     * 재직중 사원 목록.
+     *
+     * <p>사내 API 설정이 없으면 {@code worklog.waple.fallback-employees} 를 쓴다 — 사내망 밖에서
+     * 회원 흐름을 시험하기 위한 <b>임시 수단</b>이다. 진짜 API 가 붙으면 그쪽이 우선한다.
+     */
     public List<Employee> employees(long coSeq) {
+        if (!isConfigured()) {
+            return fallbackEmployees();
+        }
         return get("/core/v1/companies/%d/employees".formatted(coSeq), "employees", Employee.class);
+    }
+
+    /** {@code 9999:조웅식,9998:배태일} 을 사원 목록으로 읽는다. */
+    List<Employee> fallbackEmployees() {
+        String raw = properties.getFallbackEmployees();
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<Employee> parsed = new java.util.ArrayList<>();
+        for (String entry : raw.split(",")) {
+            String[] parts = entry.split(":", 2);
+            if (parts.length != 2) {
+                continue;
+            }
+            try {
+                parsed.add(new Employee(Long.parseLong(parts[0].trim()), parts[1].trim()));
+            } catch (NumberFormatException e) {
+                log.warn("사원 목록 항목을 읽지 못했다: {}", entry);
+            }
+        }
+        if (!parsed.isEmpty()) {
+            log.info("사내 API 설정이 없어 임시 사원 목록 {}건을 쓴다.", parsed.size());
+        }
+        return parsed;
     }
 
     @SuppressWarnings("unchecked")
