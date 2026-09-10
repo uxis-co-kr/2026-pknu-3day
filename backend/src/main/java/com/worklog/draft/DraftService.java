@@ -76,9 +76,8 @@ public class DraftService {
     public DraftDetailResponse updateContent(Long id, Long requesterId, String contentMd) {
         Draft draft = find(id);
         requireOwner(draft, requesterId);
-        if (draft.getStatus() == DraftStatus.CONFIRMED) {
-            throw ApiException.conflict("DRAFT_ALREADY_CONFIRMED", "확정된 초안은 수정할 수 없습니다.");
-        }
+        // 완료(확정) 버튼을 없앴다 (9/10 결정). 잠글 상태가 없으므로 언제든 고칠 수 있다.
+        // 자동 생성이 덮는 것은 user_edited 가 막는다 (V6).
         draft.setContentMd(contentMd);
         // 한 번이라도 저장했으면 사람이 쓴 일지다. 스케줄러가 덮지 않는다 (V6).
         draft.setUserEdited(true);

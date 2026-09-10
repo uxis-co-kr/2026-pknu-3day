@@ -77,15 +77,6 @@ class DraftServiceTest {
     }
 
     @Test
-    @DisplayName("확정된 초안은 수정할 수 없다 — 409")
-    void confirmedIsReadOnly() {
-        draft(DraftStatus.CONFIRMED);
-        assertThatThrownBy(() -> service.updateContent(7L, OWNER, "x"))
-                .isInstanceOf(ApiException.class)
-                .hasFieldOrPropertyWithValue("code", "DRAFT_ALREADY_CONFIRMED");
-    }
-
-    @Test
     @DisplayName("확정하면 상태와 확정 시각이 남는다")
     void confirms() {
         draft(DraftStatus.DRAFT);

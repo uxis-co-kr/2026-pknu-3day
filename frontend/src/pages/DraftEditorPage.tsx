@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import EvidencePanel from '@/components/draft/EvidencePanel'
 import MarkdownPreview from '@/components/draft/MarkdownPreview'
-import { DraftStatusBadge } from '@/components/common/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { useConfirmDraft, useDraft, useGenerateDraft, useNotifyDraft, useSaveDraft } from '@/api/hooks'
+import { useDraft, useGenerateDraft, useNotifyDraft, useSaveDraft } from '@/api/hooks'
 import { ApiError } from '@/api/apiClient'
 import { formatTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
@@ -21,7 +20,6 @@ export default function DraftEditorPage() {
 
   const { data: draft, isLoading } = useDraft(Number.isFinite(draftId) ? draftId : undefined)
   const save = useSaveDraft()
-  const confirm = useConfirmDraft()
   const notify = useNotifyDraft()
   const regenerate = useGenerateDraft()
 
@@ -29,12 +27,11 @@ export default function DraftEditorPage() {
   const [content, setContent] = useState('')
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const confirmed = draft?.status === 'CONFIRMED'
 
   useEffect(() => {
     if (!draft) return
     setContent(draft.contentMd)
-    // 완료한 일지는 읽기 전용이므로 미리보기로 연다 (아트보드 4).
+    // 완료 개념을 없앴다 (9/10 결정). 늘 편집 탭으로 연다.
     setTab(draft.status === 'CONFIRMED' ? 'preview' : 'edit')
   }, [draft])
 
@@ -89,7 +86,7 @@ export default function DraftEditorPage() {
   const sourceActivities = draft.sourceActivities ?? []
   const sourceSessions = draft.sourceSessions ?? []
   const author = sourceActivities[0]?.user?.name
-  const busy = save.isPending || confirm.isPending || notify.isPending || regenerate.isPending
+  const busy = save.isPending || notify.isPending || regenerate.isPending
 
   return (
     <div className="grid h-[795px] grid-cols-[672px_1fr] gap-4">
@@ -98,12 +95,9 @@ export default function DraftEditorPage() {
           <h1 className="text-[15px] font-semibold">
             {draft.workDate} 업무 일지{author ? ` — ${author}` : ''}
           </h1>
-          <DraftStatusBadge status={draft.status} />
           <span className="text-[12px] text-muted-foreground">
             v{draft.version} ·{' '}
-            {confirmed && draft.confirmedAt
-              ? `완료 ${draft.workDate} ${formatTime(draft.confirmedAt)}`
-              : `마지막 저장 ${formatTime(draft.updatedAt)}`}
+            {`마지막 저장 ${formatTime(draft.updatedAt)}`}
           </span>
           {message && (
             <span
@@ -134,7 +128,7 @@ export default function DraftEditorPage() {
               <Textarea
                 ref={textareaRef}
                 value={content}
-                readOnly={confirmed}
+                
                 onChange={(e) => setContent(e.target.value)}
                 className="h-full resize-none text-[13px] leading-6 read-only:bg-muted/30"
               />
@@ -149,34 +143,33 @@ export default function DraftEditorPage() {
         <div className="flex h-[59px] shrink-0 items-center justify-between border-t px-5">
           <Button
             variant="outline" size="sm" className="h-[34px] gap-1.5"
-            disabled={confirmed || busy}
+            disabled={busy}
             onClick={() => void run(async () => {
               const next = await regenerate.mutateAsync({ date: draft.workDate, userId: draft.userId })
               if (next && 'id' in next) navigate(`/drafts/${next.id}`)
-            }, '재생성했습니다')}
+            }, 'AI 가 다시 썼습니다')}
           >
-            <RefreshCw /> 재생성
+            <Sparkles /> AI 생성
           </Button>
 
           <div className="flex items-center gap-2">
             <Button
-              variant="outline" size="sm" className="h-[34px]"
-              disabled={confirmed || !dirty || busy}
+              size="sm" className="h-[34px]"
+              disabled={!dirty || busy}
               onClick={() => void run(() => save.mutateAsync({ id: draft.id, contentMd: content }), '저장했습니다')}
             >
               저장
             </Button>
             <Button
-              size="sm" className="h-[34px] disabled:opacity-100"
-              variant={confirmed ? 'outline' : 'default'}
-              disabled={confirmed || busy}
-              onClick={() => void run(() => confirm.mutateAsync({ id: draft.id }), '완료로 표시했습니다')}
-            >
-              {confirmed ? '✓ 완료' : '완료'}
-            </Button>
-            <Button
               variant="outline" size="sm" className="h-[34px]"
-              disabled={!confirmed || busy}
+              disabled={busy || !draft.userEdited || dirty}
+              title={
+                !draft.userEdited
+                  ? '한 번 저장한 뒤에 보낼 수 있습니다'
+                  : dirty
+                    ? '먼저 저장해 주세요'
+                    : undefined
+              }
               onClick={() => void run(() => notify.mutateAsync({ id: draft.id }), 'Mattermost로 보냈습니다')}
             >
               Mattermost 전송

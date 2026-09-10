@@ -19,7 +19,7 @@ import type {
 
 /**
  * VITE_USE_MOCK=true 일 때 apiClient 가 부르는 가짜 서버.
- * 실서버와 같은 경로·같은 응답 모양으로만 답한다. 저장·확정처럼 화면이 되돌려 받아야 하는
+ * 실서버와 같은 경로·같은 응답 모양으로만 답한다. 저장처럼 화면이 되돌려 받아야 하는
  * 변경은 메모리에 남겨서, 목업 상태에서도 편집 흐름을 그대로 눌러볼 수 있게 한다.
  */
 
@@ -207,9 +207,7 @@ const routes: [string, string, Handler][] = [
   ['PATCH', '/drafts/:id', (p, _q, body) => {
     const d = db.details.find((x) => x.id === Number(p.id))
     if (!d) throw notFound('초안')
-    if (d.status === 'CONFIRMED') {
-      throw new MockHttpError(409, 'DRAFT_ALREADY_CONFIRMED', '확정된 초안은 수정할 수 없습니다.')
-    }
+    // 완료(확정) 버튼을 없앴다 (9/10 결정). 잠글 상태가 없으므로 언제든 고칠 수 있다.
     d.userEdited = true
     d.contentMd = (body as { contentMd: string }).contentMd
     d.updatedAt = now()
@@ -230,10 +228,10 @@ const routes: [string, string, Handler][] = [
   ['POST', '/drafts/:id/notify', (p) => {
     const d = db.details.find((x) => x.id === Number(p.id))
     if (!d) throw notFound('초안')
-    // 디자인 브리프 3.3 — Mattermost 전송은 확정 후에만. 화면은 버튼을 잠가 막지만
-    // 규칙 자체는 서버가 지켜야 한다. 2026-09-09 기준 실서버는 이 검사가 없어 담당자 2에게 알렸다.
-    if (d.status !== 'CONFIRMED') {
-      throw new MockHttpError(409, 'DRAFT_NOT_CONFIRMED', '확정한 뒤에 보낼 수 있습니다.')
+    // 전송 조건은 "사람이 한 번이라도 저장했는가" 다 (9/10 결정). 자동 생성 그대로를
+    // 채널에 흘리지 않기 위한 문턱이다.
+    if (!d.userEdited) {
+      throw new MockHttpError(409, 'DRAFT_NOT_EDITED', '한 번 저장한 뒤에 보낼 수 있습니다.')
     }
     return { sent: true }
   }],
