@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { ApiError } from '@/api/apiClient'
 import AdminGuard from './AdminGuard'
-import { useGlobalNotify, useSaveGlobalNotify, useTestWebhook } from './api'
+import { useChatBotStatus, useGlobalNotify, useSaveGlobalNotify, useTestWebhook } from './api'
 
 export default function AdminNotifyPage() {
   const { data, isLoading, error } = useGlobalNotify()
@@ -126,25 +126,30 @@ export default function AdminNotifyPage() {
 }
 
 /**
- * 채널에서 "OOO의 오늘 업무일지 요약해줘" 라고 물으면 답하는 기능의 설정 안내.
+ * 채널에서 "OOO의 오늘 업무일지 요약해줘" 라고 물으면 답하는 봇의 상태와 설정 안내.
  *
- * 방향이 반대다 — 위의 웹훅은 우리가 Mattermost 로 보내고, 이것은 Mattermost 가 우리를
- * 부른다(Outgoing Webhook). 그래서 서버 쪽 설정은 없고, Mattermost 에 우리 주소를 알려
- * 주기만 하면 된다. 관리자가 복사할 주소를 여기서 보여 준다.
+ * 방향이 알림과 반대다 — 알림은 우리가 Mattermost 로 보내고, 이것은 우리가 Mattermost 에
+ * 회원으로 로그인해 채널을 읽고 답을 쓴다. Outgoing Webhook 은 Mattermost 관리자가 켜 줘야
+ * 해서, 일반 회원 계정 하나면 되는 이 방식을 기본으로 한다.
  */
 function ChatQueryGuide() {
-  // 화면을 연 주소가 곧 사내에서 닿는 주소다. /api 는 프록시가 백엔드로 넘긴다.
-  const callbackUrl = `${window.location.origin}/api/chat/mattermost`
-  const [copied, setCopied] = useState(false)
+  const { data: bot } = useChatBotStatus()
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(callbackUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* 클립보드가 막힌 환경이면 그냥 직접 긁어 복사하면 된다 */
-    }
+  const state = !bot
+    ? null
+    : !bot.enabled
+      ? { tone: 'muted', text: '꺼짐 — 서버 .env 에 봇 계정이 없습니다' }
+      : !bot.connected
+        ? { tone: 'bad', text: `로그인 안 됨 — ${bot.baseUrl} 에 ${'계정으로 들어가지 못했습니다. 아이디·비밀번호를 확인해 주세요'}` }
+        : bot.channels.length === 0
+          ? { tone: 'warn', text: `@${bot.botUsername} 로 로그인됨 — 아직 들어가 있는 채널이 없습니다. 답할 채널에 이 계정을 초대해 주세요` }
+          : { tone: 'good', text: `@${bot.botUsername} 로 로그인됨 — 읽는 채널: ${bot.channels.join(', ')}` }
+
+  const toneClass: Record<string, string> = {
+    good: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    warn: 'border-amber-200 bg-amber-50 text-amber-800',
+    bad: 'border-destructive/30 bg-destructive/5 text-destructive',
+    muted: 'border bg-muted/40 text-muted-foreground',
   }
 
   return (
@@ -162,26 +167,19 @@ function ChatQueryGuide() {
           </p>
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Mattermost 에 알려 줄 주소</Label>
-          <div className="flex gap-2">
-            <Input readOnly value={callbackUrl} className="font-mono text-[12px]" onFocus={(e) => e.target.select()} />
-            <Button size="sm" variant="outline" onClick={() => void copy()}>
-              {copied ? '복사됨' : '복사'}
-            </Button>
-          </div>
-        </div>
+        {state && (
+          <p className={`rounded border p-2.5 text-[13px] ${toneClass[state.tone]}`}>{state.text}</p>
+        )}
 
         <ol className="list-decimal space-y-1 pl-5 text-[13px] text-muted-foreground">
-          <li>Mattermost 메인 메뉴 → 통합 → <b>Outgoing Webhooks</b> → 추가</li>
-          <li>채널: 답을 받을 채널 · 트리거 단어: 비워 둠(채널을 골랐으면 그 채널의 모든 글이 옵니다) · Callback URL: 위 주소</li>
-          <li>만들어지면 나오는 <b>token</b> 을 서버 <code className="rounded bg-muted px-1">.env</code> 의{' '}
-            <code className="rounded bg-muted px-1">MATTERMOST_OUTGOING_TOKEN</code> 에 넣고 재시작 — 비워 두면 누구나 부를 수 있습니다</li>
+          <li>Mattermost 에 봇으로 쓸 <b>회원 계정</b>을 하나 만듭니다 (사이드바 "회원 초대"). 본인 계정으로 시험해도 됩니다</li>
+          <li>서버 <code className="rounded bg-muted px-1">backend/.env</code> 에{' '}
+            <code className="rounded bg-muted px-1">MATTERMOST_BOT_LOGIN_ID</code> ·{' '}
+            <code className="rounded bg-muted px-1">MATTERMOST_BOT_PASSWORD</code> 를 적고 재시작</li>
+          <li>답을 받을 채널에 그 계정을 <b>초대</b>합니다 — 들어가 있는 채널만 읽습니다</li>
         </ol>
         <p className="text-xs text-muted-foreground">
-          위 주소가 <code className="rounded bg-muted px-1">192.168.</code> 같은 사내 주소이면 Mattermost 가 기본으로
-          막습니다. 시스템 콘솔 → 환경 → 웹 서버 → <b>신뢰할 수 없는 내부 연결 허용</b>에 이 서버의 IP 를
-          적어야 합니다.
+          서버를 다시 띄운 뒤에 올라온 글에만 답합니다. 봇이 쓴 글과 시스템 메시지는 무시합니다.
         </p>
       </CardContent>
     </Card>

@@ -3,6 +3,7 @@ package com.worklog.admin;
 import com.worklog.activity.ActivityRepository;
 import com.worklog.activity.SummaryStatus;
 import com.worklog.admin.dto.PeopleDirectoryResponse;
+import com.worklog.chat.MattermostBot;
 import com.worklog.auth.AuthenticatedUser;
 import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
@@ -51,6 +52,7 @@ public class AdminController {
     private final RepoRepository repoRepository;
     private final GitHubCollector collector;
     private final SummaryService summaryService;
+    private final MattermostBot mattermostBot;
 
     public AdminController(
             PeopleDirectoryService directoryService,
@@ -61,7 +63,8 @@ public class AdminController {
             ActivityRepository activityRepository,
             RepoRepository repoRepository,
             GitHubCollector collector,
-            SummaryService summaryService) {
+            SummaryService summaryService,
+            MattermostBot mattermostBot) {
         this.directoryService = directoryService;
         this.notifySettingRepository = notifySettingRepository;
         this.llmSettingService = llmSettingService;
@@ -71,9 +74,16 @@ public class AdminController {
         this.repoRepository = repoRepository;
         this.collector = collector;
         this.summaryService = summaryService;
+        this.mattermostBot = mattermostBot;
     }
 
     /** 콘솔 첫 화면이 무엇을 보여 줄 수 있는지 알려 준다. */
+    /** 채널 질의 응답 봇의 상태 — 켜졌는지, 로그인됐는지, 어느 채널을 보는지. */
+    @GetMapping("/chat/status")
+    public java.util.Map<String, Object> chatStatus() {
+        return mattermostBot.status();
+    }
+
     @GetMapping("/overview")
     @Transactional(readOnly = true)
     public OverviewResponse overview(@AuthenticationPrincipal AuthenticatedUser principal) {

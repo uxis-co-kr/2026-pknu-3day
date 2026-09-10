@@ -54,6 +54,8 @@ public class MattermostChatController {
     }
 
     private ResponseEntity<?> handle(String token, String text, String userName, String channel) {
+        // 연결이 되는지부터 알아야 한다 — Mattermost 가 사내 주소를 막으면 여기까지 오지 않는다.
+        log.info("Mattermost 요청 도착 — {}@{}: {}", userName, channel, text);
         if (!expectedToken.isEmpty() && !expectedToken.equals(token)) {
             log.warn("Mattermost token 불일치 (채널 {}).", channel);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

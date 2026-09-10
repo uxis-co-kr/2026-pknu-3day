@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/apiClient'
-import type { AdminLlmSettings, AdminOverview, GlobalNotifySettings, PeopleDirectory } from './types'
+import type {
+  AdminLlmSettings,
+  AdminOverview,
+  ChatBotStatus,
+  GlobalNotifySettings,
+  PeopleDirectory,
+} from './types'
 
 /** 관리자 콘솔 쿼리 키. 일반 화면 키와 섞이지 않게 admin 으로 시작한다. */
 export const adminQk = {
@@ -93,3 +99,11 @@ export const useRunSummaries = () => {
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.overview }),
   })
 }
+
+/** 봇 상태는 몇 초마다 다시 본다 — 계정을 넣고 재시작하면 화면이 따라 바뀐다. */
+export const useChatBotStatus = () =>
+  useQuery({
+    queryKey: ['admin', 'chat', 'status'],
+    queryFn: () => api.get<ChatBotStatus>('/admin/chat/status'),
+    refetchInterval: 5000,
+  })

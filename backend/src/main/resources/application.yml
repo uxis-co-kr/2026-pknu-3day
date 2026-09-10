@@ -71,11 +71,18 @@ worklog:
 
   notify:
     mattermost-webhook-url: ${MATTERMOST_WEBHOOK_URL:}
-  chat:
-    # Mattermost Outgoing Webhook 이 요청마다 보내는 token. 비우면 아무나 부를 수 있다.
-    mattermost-token: ${MATTERMOST_OUTGOING_TOKEN:}
     # 미커밋 리마인드 (F7-2). 업무 시간에 매시 정각.
     remind-cron: ${WORKLOG_REMIND_CRON:0 0 10-18 * * *}
+  # 채널에서 "OOO의 오늘 업무일지 요약해줘" 로 물으면 답하기. 두 길이 있다.
+  chat:
+    # (1) Outgoing Webhook — Mattermost 관리자가 켜 줘야 한다. 요청마다 오는 token.
+    mattermost-token: ${MATTERMOST_OUTGOING_TOKEN:}
+    # (2) 봇 계정 — 일반 회원 계정 하나로 된다. 우리가 로그인해 채널을 읽고 답을 쓴다.
+    bot:
+      base-url: ${MATTERMOST_BASE_URL:}
+      login-id: ${MATTERMOST_BOT_LOGIN_ID:}
+      password: ${MATTERMOST_BOT_PASSWORD:}
+      poll-interval-ms: ${MATTERMOST_BOT_POLL_MS:3000}
 
   # PRD F2. 구현체는 OpenAiCompatProvider 하나이고, 모델은 프리셋으로만 추가한다.
   llm:

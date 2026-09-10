@@ -95,3 +95,16 @@ export interface AdminLlmSettings {
   overridden: boolean
   available: string[]
 }
+
+/** `GET /admin/chat/status` — 채널에서 물어보면 답하는 봇의 상태. */
+export interface ChatBotStatus {
+  /** .env 에 봇 계정이 적혀 있는지 */
+  enabled: boolean
+  /** Mattermost 로그인이 된 상태인지 */
+  connected: boolean
+  botUsername: string | null
+  /** 봇이 들어가 있어 읽고 있는 채널 이름들 */
+  channels: string[]
+  baseUrl: string
+  checkedAt: string
+}
