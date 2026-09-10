@@ -112,6 +112,20 @@ class WorkLogAnswerServiceTest {
     }
 
     @Test
+    @DisplayName("'조웅식 업무요약' 처럼 느슨한 말도 이름이 있으면 답한다")
+    void weakIntentWithNameAnswers() {
+        assertThat(service.answer("조웅식 업무요약")).isPresent();
+        assertThat(service.answer("조웅식 오늘 뭐함")).isPresent();
+    }
+
+    @Test
+    @DisplayName("느슨한 말에 이름이 없으면 끼어들지 않는다 — '회의 요약 올립니다'")
+    void weakIntentWithoutNameStaysQuiet() {
+        assertThat(service.answer("회의 요약 올립니다")).isEmpty();
+        assertThat(service.answer("오늘 업무 정리해서 공유해요")).isEmpty();
+    }
+
+    @Test
     @DisplayName("활동이 없으면 그렇게 말한다")
     void nothingRecorded() {
         String answer = service.answer("조웅식 오늘 업무일지").orElseThrow();

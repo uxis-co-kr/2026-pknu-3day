@@ -13,12 +13,15 @@ class WorkLogQueryParserTest {
     private static final List<String> NAMES = List.of("조웅식", "배태일", "ungsikJo", "김민", "김민수");
 
     @Test
-    @DisplayName("업무 일지를 묻는 말만 받는다")
+    @DisplayName("분명한 말(업무일지)과 느슨한 말(요약·뭐함)을 구분하고, 무관한 말은 거른다")
     void intent() {
-        assertThat(WorkLogQueryParser.asksForWorkLog("조웅식의 오늘 업무일지를 요약해서 보내줘")).isTrue();
-        assertThat(WorkLogQueryParser.asksForWorkLog("배태일 어제 뭐했어?")).isTrue();
-        assertThat(WorkLogQueryParser.asksForWorkLog("점심 뭐 먹을까요")).isFalse();
-        assertThat(WorkLogQueryParser.asksForWorkLog(null)).isFalse();
+        assertThat(WorkLogQueryParser.intentOf("조웅식의 오늘 업무일지를 요약해서 보내줘")).isEqualTo(WorkLogQueryParser.Intent.STRONG);
+        assertThat(WorkLogQueryParser.intentOf("조웅식 업무요약")).isEqualTo(WorkLogQueryParser.Intent.WEAK);
+        assertThat(WorkLogQueryParser.intentOf("배태일 어제 뭐했어?")).isEqualTo(WorkLogQueryParser.Intent.WEAK);
+        assertThat(WorkLogQueryParser.intentOf("조웅식 오늘 뭐함")).isEqualTo(WorkLogQueryParser.Intent.WEAK);
+        assertThat(WorkLogQueryParser.intentOf("점심 뭐 먹을까요")).isEqualTo(WorkLogQueryParser.Intent.NONE);
+        assertThat(WorkLogQueryParser.intentOf("지금 연결된건가")).isEqualTo(WorkLogQueryParser.Intent.NONE);
+        assertThat(WorkLogQueryParser.intentOf(null)).isEqualTo(WorkLogQueryParser.Intent.NONE);
     }
 
     @Test

@@ -64,7 +64,8 @@ public class WorkLogAnswerService {
      */
     @Transactional(readOnly = true)
     public Optional<String> answer(String text) {
-        if (!WorkLogQueryParser.asksForWorkLog(text)) {
+        WorkLogQueryParser.Intent intent = WorkLogQueryParser.intentOf(text);
+        if (intent == WorkLogQueryParser.Intent.NONE) {
             return Optional.empty();
         }
         LocalDate date = WorkLogQueryParser.dateIn(text);
@@ -72,7 +73,10 @@ public class WorkLogAnswerService {
 
         Optional<String> name = WorkLogQueryParser.personIn(text, people.keySet());
         if (name.isEmpty()) {
-            return Optional.of(unknownPerson(people));
+            // "회의 요약 올립니다" 에 끼어들지 않는다. 분명히 일지를 물은 경우에만 쓰는 법을 알려 준다.
+            return intent == WorkLogQueryParser.Intent.STRONG
+                    ? Optional.of(unknownPerson(people))
+                    : Optional.empty();
         }
         Person person = people.get(name.get());
         if (person.user() == null) {
