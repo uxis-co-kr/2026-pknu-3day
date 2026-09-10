@@ -54,6 +54,7 @@ public class VscodeSessionService {
         session.setUncommittedFiles(orEmpty(request.uncommittedFiles()));
         session.setTodos(orEmpty(request.todos()));
         session.setEditTimeline(orEmpty(request.editTimeline()));
+        session.setAiSessions(orEmpty(request.aiSessions()));
         session.setLastCommitAt(request.lastCommitAt());
         // 계획 메모는 명령 팔레트로 한 번 적으면 그날 내내 유지되어야 한다. VS Code 를 다시 켜면
         // 확장이 메모를 잃고 null 로 보내는데, 그때 서버에 남은 메모까지 지우지는 않는다.

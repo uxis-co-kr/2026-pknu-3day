@@ -91,6 +91,27 @@ async function promptForApiKey(): Promise<void> {
 }
 
 /**
+ * 계획을 어느 폴더에 적을지 고른다.
+ *
+ * <p>폴더가 하나면 묻지 않는다. 여럿일 때 묻지 않으면 계획 하나가 모든 폴더에 붙어,
+ * 회사 일 계획이 개인 프로젝트 세션에 실려 간다.
+ */
+async function pickFolder(): Promise<string | undefined> {
+  const folders = vscode.workspace.workspaceFolders ?? []
+  if (folders.length === 0) {
+    void vscode.window.showWarningMessage('WorkLog: 열린 폴더가 없습니다.')
+    return undefined
+  }
+  if (folders.length === 1) return folders[0].uri.fsPath
+
+  const picked = await vscode.window.showQuickPick(
+    folders.map((f) => ({ label: f.name, description: f.uri.fsPath })),
+    { title: '어느 폴더의 계획입니까?' },
+  )
+  return picked?.description
+}
+
+/**
  * 저장할 때마다 git 을 부르면 연속 저장에서 낭비가 크다. 1초 안의 저장은 한 번으로 묶는다.
  */
 let treeRefreshTimer: NodeJS.Timeout | undefined
@@ -117,7 +138,14 @@ export function activate(context: vscode.ExtensionContext): void {
   renderStatusBar()
 
   tree = new WorkLogTreeProvider(collector)
-  context.subscriptions.push(vscode.window.registerTreeDataProvider('worklog.session', tree))
+  const view = vscode.window.createTreeView('worklog.session', { treeDataProvider: tree })
+  context.subscriptions.push(
+    view,
+    // 사이드바를 열 때 낡은 숫자를 그대로 보여 주지 않는다.
+    view.onDidChangeVisibility((e) => {
+      if (e.visible) void tree.refresh()
+    }),
+  )
   void tree.refresh()
 
   context.subscriptions.push(
@@ -132,11 +160,28 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('worklog.refresh', () => tree.refresh()),
   )
 
+  // 커밋·푸시는 대개 터미널이나 소스 제어 패널에서 한다. 파일 저장만 보고 있으면 그때
+  // 미커밋·미푸시 숫자가 낡은 채로 남아 실제와 달라 보인다.
+  const gitWatcher = vscode.workspace.createFileSystemWatcher('**/.git/{HEAD,index,refs/**}')
+  context.subscriptions.push(
+    gitWatcher,
+    gitWatcher.onDidChange(scheduleTreeRefresh),
+    gitWatcher.onDidCreate(scheduleTreeRefresh),
+    gitWatcher.onDidDelete(scheduleTreeRefresh),
+  )
+
+  // 창을 비웠다 돌아오면 그 사이 밖에서 무슨 일이 있었을 수 있다.
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (state.focused) scheduleTreeRefresh()
+    }),
+  )
+
   // 사이드바에서 계획 한 줄을 지운다. 잘못 적은 메모가 그날 내내 남지 않게.
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.removePlan', (node?: { note?: string }) => {
+    vscode.commands.registerCommand('worklog.removePlan', (node?: { note?: string; folder?: string }) => {
       if (!node?.note) return
-      collector.removePlanNote(node.note)
+      collector.removePlanNote(node.note, node.folder)
       log(`계획 삭제: ${node.note}`)
       void tree.refresh()
     }),
@@ -144,17 +189,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.recordPlan', async () => {
-      const count = collector.planNotes.length
+      const folder = await pickFolder()
+      if (!folder) return
+
+      const count = collector.planNotesOf(folder).length
       const note = await vscode.window.showInputBox({
         title: 'WorkLog: 계획 추가',
         prompt: count === 0
-          ? '오늘 무엇을 할 계획인지 한 줄로 적으세요. 초안의 "계획 / TODO" 에 들어갑니다.'
+          ? '오늘 무엇을 할 계획인지 한 줄로 적으세요. 업무 일지의 "계획 / TODO" 에 들어갑니다.'
           : `이미 ${count}건 적었습니다. 덧붙일 계획을 적으세요.`,
         placeHolder: '예) 오후에 출석 중복 검증 로직 마무리',
       })
       if (note !== undefined && note.trim()) {
-        collector.addPlanNote(note)
-        log(`계획 추가: ${note.trim()} (총 ${collector.planNotes.length}건)`)
+        collector.addPlanNote(note, folder)
+        log(`계획 추가 (${folder}): ${note.trim()}`)
         void tree.refresh()
       }
     }),

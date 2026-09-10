@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import GithubLinkCard from '@/components/settings/GithubLinkCard'
@@ -9,16 +9,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import {
-  useApiKeys, useIssueApiKey, useLlmSettings, useNotifySettings, useRevokeApiKey,
-  useUpdateLlmSettings, useUpdateNotifySettings,
-} from '@/api/hooks'
+import { useApiKeys, useIssueApiKey, useRevokeApiKey } from '@/api/hooks'
 import { formatRelative } from '@/lib/date'
-import { cn } from '@/lib/utils'
 import type { IssuedApiKey } from '@/types/api'
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -40,18 +33,12 @@ export default function SettingsPage() {
   const keys = useApiKeys()
   const issue = useIssueApiKey()
   const revoke = useRevokeApiKey()
-  const notify = useNotifySettings()
-  const saveNotify = useUpdateNotifySettings()
-  const llm = useLlmSettings()
-  const saveLlm = useUpdateLlmSettings()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [issued, setIssued] = useState<IssuedApiKey | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const [webhook, setWebhook] = useState('')
-  useEffect(() => setWebhook(notify.data?.mattermostWebhookUrl ?? ''), [notify.data])
 
   function openDialog() {
     setLabel('')
@@ -62,16 +49,8 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <Section title="깃허브 연동" description="연결해야 커밋·PR 이 내 이름으로 모입니다. 연결하지 않으면 활동이 미가입 계정으로 남습니다.">
+      <Section title="깃허브 연동">
         <GithubLinkCard />
-      </Section>
-
-      <Section title="비밀번호">
-        <PasswordPage />
-      </Section>
-
-      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">
-        <RepoSection />
       </Section>
 
       <Section title="API 연동 (API Key)" description="VS Code 확장과 외부 연동에서 씁니다. 평문 키는 발급 직후 한 번만 보여 줍니다.">
@@ -113,63 +92,18 @@ export default function SettingsPage() {
         <Button size="sm" className="mt-4 h-[34px]" onClick={openDialog}>새 키 발급</Button>
       </Section>
 
-      <Section title="Mattermost">
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="webhook" className="text-[12px]">Webhook URL</Label>
-            <Input
-              id="webhook" value={webhook} onChange={(e) => setWebhook(e.target.value)}
-              placeholder="https://mattermost.example.com/hooks/..."
-              className="h-[34px] max-w-[560px] text-[13px]"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <Switch
-              id="remind"
-              checked={notify.data?.remindUncommitted ?? false}
-              onCheckedChange={(v) =>
-                saveNotify.mutate({ mattermostWebhookUrl: webhook || null, remindUncommitted: v })}
-            />
-            <Label htmlFor="remind" className="text-[13px] font-normal">미커밋 리마인드 받기</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline" size="sm" className="h-[34px]"
-              disabled={saveNotify.isPending}
-              onClick={() => saveNotify.mutate({
-                mattermostWebhookUrl: webhook || null,
-                remindUncommitted: notify.data?.remindUncommitted ?? true,
-              })}
-            >
-              저장
-            </Button>
-            <Button variant="outline" size="sm" className="h-[34px]" disabled={!webhook}>테스트 전송</Button>
-          </div>
-        </div>
+      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">
+        <RepoSection />
       </Section>
 
-      <Section title="LLM 모델" description="커밋 요약과 초안 생성에 쓰는 모델입니다.">
-        <RadioGroup
-          value={llm.data?.provider}
-          onValueChange={(v) => saveLlm.mutate({ provider: v as 'gemma4' | 'qwen3' })}
-          className="space-y-3"
-        >
-          {(llm.data?.presets ?? []).map((p) => (
-            <div key={p.id} className="flex items-center gap-3">
-              <RadioGroupItem value={p.id} id={p.id} />
-              <Label htmlFor={p.id} className="flex items-center gap-2 text-[13px] font-normal">
-                <span className="font-medium">{p.id}</span>
-                <span className="text-muted-foreground">{p.model}</span>
-                {p.id === 'gemma4' && <span className="text-[12px] text-muted-foreground">(기본)</span>}
-              </Label>
-              <span
-                className={cn('size-2 rounded-full', p.connected ? 'bg-status-confirmed' : 'bg-muted-foreground/40')}
-                title={p.connected ? '연결됨' : '연결 안 됨'}
-              />
-            </div>
-          ))}
-        </RadioGroup>
+      <Section title="비밀번호">
+        <PasswordPage />
       </Section>
+
+      {/*
+        * Mattermost 웹훅과 LLM 모델은 **관리자만** 바꾼다 (9/10 결정). 관리자 콘솔에 있고,
+        * 서버도 /settings/notify · /settings/llm 을 ADMIN 으로 잠근다.
+        */}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[440px]">

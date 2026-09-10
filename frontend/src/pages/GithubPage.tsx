@@ -1,16 +1,17 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
 import ActivityDetailRow from '@/components/activity/ActivityDetailRow'
+import Pagination from '@/components/common/Pagination'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
-import { DraftStatusBadge } from '@/components/common/StatusBadge'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useActivities, useDailyStats, useDrafts, useGenerateDraft, useMe, useRepos } from '@/api/hooks'
+import { useActivities, useMe, useRepos } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { cn } from '@/lib/utils'
 import type { ActivityType } from '@/types/api'
+
+/** 한 페이지에 보여 줄 활동 수. */
+const PER_PAGE = 10
 
 const TYPE_TABS: { key: ActivityType; label: string }[] = [
   { key: 'COMMIT', label: '커밋' },
@@ -26,82 +27,86 @@ const TYPE_TABS: { key: ActivityType; label: string }[] = [
  */
 export default function GithubPage() {
   const { date } = useSelectedDate()
-  const navigate = useNavigate()
 
   const { data: me } = useMe()
-  const stats = useDailyStats(date)
   const activities = useActivities({ date, userId: me?.id })
-  const drafts = useDrafts({ date, userId: me?.id })
   const repos = useRepos()
-  const generate = useGenerateDraft()
 
   const [repoFilter, setRepoFilter] = useState('all')
   const [types, setTypes] = useState<ActivityType[]>(TYPE_TABS.map((t) => t.key))
+  const [page, setPage] = useState(0)
 
-  // 서버는 최신순으로 주는데 타임라인은 시간순이다 (아트보드 2: 10:12 → 16:30).
+  // 최신이 위로 온다 (9/10 결정). 방금 한 일을 찾으려고 아래로 스크롤하지 않게.
   const mine = [...(activities.data?.items ?? [])]
     .filter((a) => a.user?.id === me?.id)
-    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
 
-  const shown = mine.filter((a) =>
-    types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter)))
+  const shown = useMemo(
+    () => mine.filter((a) =>
+      types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activities.data, types, repoFilter],
+  )
 
-  /** 요약 카드는 팀 총계가 아니라 내 것이다. */
-  const myStat = stats.data?.byUser.find((u) => u.userId === me?.id)
-  const draft = drafts.data?.[0]
+  // 필터를 바꾸면 있던 페이지가 사라질 수 있다. 범위를 벗어나면 마지막 페이지로 당긴다.
+  const pageCount = Math.max(1, Math.ceil(shown.length / PER_PAGE))
+  const current = Math.min(page, pageCount - 1)
+  const rows = shown.slice(current * PER_PAGE, (current + 1) * PER_PAGE)
 
-  async function onGenerate() {
-    if (!me) return
-    const created = await generate.mutateAsync({ date, userId: me.id })
-    if (created && 'id' in created) navigate(`/drafts/${created.id}`)
+  /**
+   * 요약은 내 활동에서 직접 센다.
+   *
+   * <p>전에는 /stats/daily 의 byUser 에서 내 몫을 골라 썼는데, 그 응답에는 팀 전원의 숫자가
+   * 함께 실려 온다. 화면에 안 그려도 브라우저까지는 오는 것이라 아예 부르지 않는다
+   * (9/10 결정 — 일반 로그인은 내 것만 본다).
+   */
+  const myStat = {
+    commits: mine.filter((a) => a.type === 'COMMIT').length,
+    prs: mine.filter((a) => a.type === 'PR_OPENED').length,
+    merges: mine.filter((a) => a.type === 'PR_MERGED').length,
   }
+
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <DayFilters
+          repos={repos.data ?? []}
+          repoFilter={repoFilter}
+          onRepo={(v) => { setRepoFilter(v); setPage(0) }}
+        />
+      </div>
+
       <div className="grid grid-cols-3 gap-3">
-        {stats.isLoading ? (
+        {activities.isLoading ? (
           TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="내 커밋" value={myStat?.commits ?? 0} hint={`팀 전체 ${stats.data?.commits ?? 0}`} />
-            <SummaryCard label="내 PR" value={myStat?.prs ?? 0} hint={`팀 전체 ${stats.data?.prs ?? 0}`} />
-            <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
+            <SummaryCard label="커밋" value={myStat.commits} hint={mine.length === 0 ? '—' : `${shown.length}건 표시 중`} />
+            <SummaryCard label="PR" value={myStat.prs} hint="내가 연 PR" />
+            <SummaryCard label="머지" value={myStat.merges} hint="머지된 내 PR" />
           </>
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter}>
-          <div className="flex h-[34px] overflow-hidden rounded-md border">
-            {TYPE_TABS.map((t, i) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])}
-                className={cn(
-                  'px-3 text-[13px] transition-colors',
-                  i > 0 && 'border-l',
-                  types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </DayFilters>
-
-        <div className="flex items-center gap-3">
-          {draft && <DraftStatusBadge status={draft.status} />}
-          {draft ? (
-            <Button variant="outline" size="sm" className="h-[34px]" onClick={() => navigate(`/drafts/${draft.id}`)}>
-              초안 열기
-            </Button>
-          ) : (
-            <Button size="sm" className="h-[34px]" disabled={generate.isPending} onClick={() => void onGenerate()}>
-              초안 생성
-            </Button>
-          )}
-        </div>
+      <div className="flex h-[34px] w-fit overflow-hidden rounded-md border">
+        {TYPE_TABS.map((t, i) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => {
+              setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
+              setPage(0)
+            }}
+            className={cn(
+              'px-3 text-[13px] transition-colors',
+              i > 0 && 'border-l',
+              types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <Card className="overflow-hidden rounded-lg shadow-none">
@@ -110,7 +115,15 @@ export default function GithubPage() {
         ) : shown.length === 0 ? (
           <EmptyHint hasAny={mine.length > 0} />
         ) : (
-          shown.map((a) => <ActivityDetailRow key={a.id} activity={a} />)
+          <>
+            {rows.map((a) => <ActivityDetailRow key={a.id} activity={a} />)}
+            <Pagination
+              page={current}
+              pageCount={pageCount}
+              total={shown.length}
+              onChange={setPage}
+            />
+          </>
         )}
       </Card>
     </div>

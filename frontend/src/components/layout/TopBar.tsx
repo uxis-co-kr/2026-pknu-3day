@@ -1,6 +1,5 @@
-import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import UserAvatar from '@/components/common/UserAvatar'
-import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,32 +10,18 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { auth } from '@/api/apiClient'
 import { useMe } from '@/api/hooks'
-import { useSelectedDate } from '@/hooks/useSelectedDate'
-import { formatDateLabel } from '@/lib/date'
 
 /**
- * 상단 바 — 날짜 선택기(좌우 화살표로 하루씩) + 현재 사용자 아바타.
+ * 상단 바 — 로고 줄과 내 계정.
  *
- * 아바타를 누르면 사용자 이름과 로그아웃이 나온다. 디자인 브리프 2. 에는 아바타만 있고
- * 로그아웃 수단이 없는데, 그러면 한 기기에서 사람을 바꿀 방법이 화면에 없다 (BACKLOG §3-3).
+ * <p>날짜 선택기는 깃허브 내역·VS 내역의 필터 줄로 내려갔다 (9/10 결정). 날짜와 무관한
+ * 화면에서도 늘 떠 있어 자리만 차지했기 때문이다.
  */
 export default function TopBar() {
-  const { date, prev, next } = useSelectedDate()
   const { data: me } = useMe()
 
   return (
-    <header className="flex h-[57px] shrink-0 items-center justify-between border-b bg-background px-6">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="size-[30px]" onClick={prev} aria-label="하루 전">
-          <ChevronLeft />
-        </Button>
-        <div className="flex h-[30px] min-w-[160px] items-center justify-center rounded-md border px-3 text-[13px] font-medium tabular-nums">
-          {formatDateLabel(date)}
-        </div>
-        <Button variant="outline" size="icon" className="size-[30px]" onClick={next} aria-label="하루 뒤">
-          <ChevronRight />
-        </Button>
-      </div>
+    <header className="flex h-[57px] shrink-0 items-center justify-end border-b bg-background px-6">
 
       <DropdownMenu>
         <DropdownMenuTrigger

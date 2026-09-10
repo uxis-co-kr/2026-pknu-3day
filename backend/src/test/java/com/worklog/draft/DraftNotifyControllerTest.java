@@ -33,7 +33,19 @@ class DraftNotifyControllerTest {
         controller = new DraftNotifyController(draftRepository, notifyService);
     }
 
+    /**
+     * 완료(확정) 버튼을 없앤 뒤로 전송 조건은 "사람이 한 번이라도 저장했는가" 다 (9/10 결정).
+     * 자동 생성 그대로를 채널에 흘리지 않기 위한 문턱이다.
+     */
+    private Draft givenDraft(boolean userEdited) {
+        return givenDraft(DraftStatus.DRAFT, userEdited);
+    }
+
     private Draft givenDraft(DraftStatus status) {
+        return givenDraft(status, status == DraftStatus.CONFIRMED);
+    }
+
+    private Draft givenDraft(DraftStatus status, boolean userEdited) {
         User user = new User();
         user.setId(1L);
         user.setLogin("UngsikJo");
@@ -43,15 +55,16 @@ class DraftNotifyControllerTest {
         draft.setUser(user);
         draft.setWorkDate(LocalDate.of(2026, 9, 10));
         draft.setStatus(status);
+        draft.setUserEdited(userEdited);
         draft.setContentMd("# 업무 일지");
         when(draftRepository.findById(DRAFT_ID)).thenReturn(Optional.of(draft));
         return draft;
     }
 
     @Test
-    @DisplayName("확정한 초안은 전송된다")
+    @DisplayName("저장한 적 있는 일지는 전송된다")
     void sendsConfirmedDraft() {
-        Draft draft = givenDraft(DraftStatus.CONFIRMED);
+        Draft draft = givenDraft(true);
         when(notifyService.notifyDraftContent(draft)).thenReturn(true);
 
         var response = controller.notifyDraft(DRAFT_ID);
@@ -61,37 +74,37 @@ class DraftNotifyControllerTest {
     }
 
     @Test
-    @DisplayName("확정하지 않은 초안은 409 로 막고 전송 자체를 시도하지 않는다")
+    @DisplayName("한 번도 저장하지 않은 일지는 409 로 막고 전송 자체를 시도하지 않는다")
     void rejectsUnconfirmedDraft() {
-        givenDraft(DraftStatus.DRAFT);
+        givenDraft(false);
 
         assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> {
                     ApiException api = (ApiException) e;
                     assertThat(api.getStatus()).isEqualTo(HttpStatus.CONFLICT);
-                    assertThat(api.getCode()).isEqualTo("DRAFT_NOT_CONFIRMED");
+                    assertThat(api.getCode()).isEqualTo("DRAFT_NOT_EDITED");
                 });
         verify(notifyService, never()).notifyDraftContent(any());
     }
 
     @Test
-    @DisplayName("확정 검사가 전송 실패보다 먼저다 — webhook 미설정 503 에 가려지면 안 된다")
+    @DisplayName("저장 검사가 전송 실패보다 먼저다 — webhook 미설정 503 에 가려지면 안 된다")
     void confirmCheckComesBeforeSendFailure() {
-        givenDraft(DraftStatus.DRAFT);
+        givenDraft(false);
         // webhook 이 없어 전송이 실패하는 상황을 만들어도
         when(notifyService.notifyDraftContent(any())).thenReturn(false);
 
         assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
                 .isInstanceOf(ApiException.class)
                 // 503 NOTIFY_FAILED 가 아니라 409 가 나와야 한다
-                .satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo("DRAFT_NOT_CONFIRMED"));
+                .satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo("DRAFT_NOT_EDITED"));
     }
 
     @Test
-    @DisplayName("확정본인데 webhook 이 없으면 503")
+    @DisplayName("저장한 일지인데 webhook 이 없으면 503")
     void reportsSendFailure() {
-        Draft draft = givenDraft(DraftStatus.CONFIRMED);
+        Draft draft = givenDraft(true);
         when(notifyService.notifyDraftContent(draft)).thenReturn(false);
 
         assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))

@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
+import { collectAiSessions } from './aiSessions'
 import * as git from './git'
 import { log } from './log'
 import type { EditTimelineEntry, SessionPayload, TodoItem, UncommittedFile } from './types'
@@ -27,7 +28,8 @@ interface PersistedState {
   /** 어느 날짜의 기록인지. 날이 바뀌면 통째로 버린다. */
   date: string
   saves: Record<string, Save>
-  plans: string[]
+  /** 폴더 절대 경로 → 그 폴더의 계획. 폴더마다 하는 일이 다르다. */
+  plans: Record<string, string[]>
 }
 
 const STATE_KEY = 'worklog.session.v1'
@@ -54,8 +56,13 @@ export class Collector {
   /** 파일 저장 이벤트. 키는 절대 경로 — 폴더별로 나눠 담으려면 상대 경로로는 부족하다. */
   private readonly saves = new Map<string, Save>()
 
-  /** 하루에 여러 번 적을 수 있다. 적은 순서대로 쌓인다. */
-  private plans: string[] = []
+  /**
+   * 폴더별 계획. 하루에 여러 번 적을 수 있고 적은 순서대로 쌓인다.
+   *
+   * <p>예전에는 계획 하나를 모든 폴더가 나눠 썼다. 그래서 다른 폴더를 열어도 같은 계획이
+   * 붙었다 — 회사 일 계획이 개인 프로젝트 세션에 실려 갔다.
+   */
+  private plans = new Map<string, string[]>()
 
   /** 마지막으로 되살리거나 비운 날짜. 자정을 넘기면 초기화하는 기준이다. */
   private stateDate = todayKst()
@@ -107,24 +114,42 @@ export class Collector {
     this.persist()
   }
 
-  /** 계획 메모를 하나 더한다. 같은 문구를 두 번 적으면 무시한다. */
-  addPlanNote(note: string): void {
+  /**
+   * 계획 메모를 하나 더한다. 같은 문구를 두 번 적으면 무시한다.
+   *
+   * @param folder 어느 폴더의 계획인지. 폴더가 하나뿐이면 생략할 수 있다.
+   */
+  addPlanNote(note: string, folder?: string): void {
     this.rolloverIfNeeded()
+    const key = folder ?? this.soleFolder()
     const trimmed = note.trim()
-    if (!trimmed || this.plans.includes(trimmed)) return
-    this.plans.push(trimmed)
+    if (!key || !trimmed) return
+    const list = this.plans.get(key) ?? []
+    if (list.includes(trimmed)) return
+    this.plans.set(key, [...list, trimmed])
     this.persist()
   }
 
-  removePlanNote(note: string): void {
-    const i = this.plans.indexOf(note)
+  removePlanNote(note: string, folder?: string): void {
+    const key = folder ?? this.soleFolder()
+    if (!key) return
+    const list = this.plans.get(key) ?? []
+    const i = list.indexOf(note)
     if (i < 0) return
-    this.plans.splice(i, 1)
+    this.plans.set(key, list.filter((_, at) => at !== i))
     this.persist()
   }
 
-  get planNotes(): string[] {
-    return [...this.plans]
+  /** 그 폴더의 계획. 폴더를 주지 않으면 폴더가 하나일 때만 답한다. */
+  planNotesOf(folder?: string): string[] {
+    const key = folder ?? this.soleFolder()
+    return key ? [...(this.plans.get(key) ?? [])] : []
+  }
+
+  /** 워크스페이스에 git 폴더가 하나뿐이면 그 경로. 여럿이면 undefined. */
+  private soleFolder(): string | undefined {
+    const folders = vscode.workspace.workspaceFolders ?? []
+    return folders.length === 1 ? folders[0].uri.fsPath : undefined
   }
 
   get uncommittedCount(): number {
@@ -158,18 +183,23 @@ export class Collector {
 
       const uncommittedFiles = await this.buildFiles(cwd, changed, collectDiff)
       const todos = await this.scanTodos(cwd, changed)
+      const workDate = todayKst()
+      const aiSessions = await collectAiSessions(cwd, workDate)
       total += uncommittedFiles.length
+
+      const plans = this.plans.get(cwd) ?? []
 
       const payload: SessionPayload = {
         remoteUrl,
         branch,
-        workDate: todayKst(),
+        workDate,
         uncommittedFiles,
         todos,
         // 서버 계약은 문자열 한 칸이다 (PRD 7). 여러 줄로 담아 보낸다.
-        planNote: this.plans.length > 0 ? this.plans.join('\n') : undefined,
+        planNote: plans.length > 0 ? plans.join('\n') : undefined,
         editTimeline: this.timelineFor(cwd),
         lastCommitAt,
+        aiSessions,
       }
       this.locals.set(payload, { cwd, unpushed })
       if (unpushed) unpushedTotal = (unpushedTotal ?? 0) + unpushed.length
@@ -241,7 +271,7 @@ export class Collector {
     log(`업무 일자가 ${this.stateDate} → ${today} 로 바뀌어 저장 기록과 계획을 비웁니다`)
     this.stateDate = today
     this.saves.clear()
-    this.plans = []
+    this.plans.clear()
     this.persist()
   }
 
@@ -249,7 +279,7 @@ export class Collector {
     void this.store?.update(STATE_KEY, {
       date: this.stateDate,
       saves: Object.fromEntries(this.saves),
-      plans: this.plans,
+      plans: Object.fromEntries(this.plans),
     } satisfies PersistedState)
   }
 
@@ -261,8 +291,12 @@ export class Collector {
       return
     }
     for (const [fsPath, save] of Object.entries(saved.saves ?? {})) this.saves.set(fsPath, save)
-    this.plans = [...(saved.plans ?? [])]
-    log(`저장 기록 ${this.saves.size}건, 계획 ${this.plans.length}건을 되살렸습니다`)
+    for (const [folder, list] of Object.entries(saved.plans ?? {})) {
+      // 예전 판은 계획을 배열 하나로 저장했다. 그때 것은 폴더를 알 수 없어 버린다.
+      if (Array.isArray(list)) this.plans.set(folder, [...list])
+    }
+    const planCount = [...this.plans.values()].reduce((n, l) => n + l.length, 0)
+    log(`저장 기록 ${this.saves.size}건, 계획 ${planCount}건을 되살렸습니다`)
   }
 
   /** 이 폴더 안에서 저장된 파일만, git 기준 상대 경로로 바꿔 담는다 (PRD F6-5). */

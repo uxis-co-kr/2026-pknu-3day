@@ -46,7 +46,7 @@ const { Collector } = require(path.join(outDir, 'collector.js'))
 
 async function main() {
   const collector = new Collector()
-  if (planNote) collector.addPlanNote(planNote)
+  if (planNote) collector.addPlanNote(planNote, target)
 
   const payloads = await collector.collect(!flags.has('--no-diff'))
 
@@ -78,6 +78,13 @@ async function main() {
       console.log(`\n미푸시 ${unpushed.length}개  (서버로는 보내지 않는다 — 화면 표시용)`)
       for (const c of unpushed.slice(0, 10)) console.log(`  ${c.sha}  ${c.subject}`)
       if (unpushed.length > 10) console.log(`  … 외 ${unpushed.length - 10}개`)
+    }
+
+    const ai = p.aiSessions ?? []
+    console.log(`\nAI 대화 ${ai.length}세션`)
+    for (const s of ai.slice(0, 3)) {
+      console.log(`  ${s.firstAt.slice(11, 16)}–${s.lastAt.slice(11, 16)}  프롬프트 ${s.promptCount}개`)
+      for (const q of s.prompts.slice(0, 3)) console.log(`    · ${q.slice(0, 70)}`)
     }
 
     console.log(`\nTODO ${p.todos.length}개`)

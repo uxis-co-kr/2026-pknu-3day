@@ -2,6 +2,7 @@ package com.worklog.auth;
 
 import com.worklog.activity.ActivityRepository;
 import com.worklog.auth.crypto.AesEncryptor;
+import com.worklog.config.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +60,59 @@ public class UserService {
             log.info("{} 의 기존 활동 {}건을 사용자에 연결했다.", saved.getLogin(), linked);
         }
         return saved;
+    }
+
+    /**
+     * 이미 로그인한 계정에 GitHub 을 붙인다 (설정 > 깃허브 연동).
+     *
+     * <p>사원 번호로 로그인한 사람이 쓰는 경로다. {@link #upsertFromGitHub} 는 GitHub 을
+     * <b>정체성</b>으로 보고 계정을 만들거나 찾는데, 여기서는 정체성이 이미 있다. GitHub 은
+     * 그 계정에 붙는 <b>연동 수단</b>이다 (TODO_0910 §1-1).
+     *
+     * @throws ApiException 그 GitHub 계정이 이미 다른 사람에게 붙어 있으면. 한 GitHub 이
+     *     두 계정에 붙으면 활동이 어느 쪽 것인지 정할 수 없다.
+     */
+    @Transactional
+    public User linkGitHub(Long userId, GitHubOAuthClient.GitHubUserDto dto, String accessToken) {
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+
+        userRepository.findByGithubId(dto.id()).ifPresent(owner -> {
+            if (!owner.getId().equals(userId)) {
+                throw ApiException.conflict(
+                        "GITHUB_ALREADY_LINKED",
+                        "이 GitHub 계정은 이미 다른 사용자에 연결돼 있습니다.");
+            }
+        });
+
+        user.setGithubId(dto.id());
+        user.setLogin(dto.login());
+        if (user.getName() == null || user.getName().isBlank()) {
+            user.setName(dto.name());
+        }
+        user.setAvatarUrl(dto.avatar_url());
+        // 수집기가 이 토큰으로 리포에 접근한다. 평문 저장 금지 (PRD 11).
+        user.setGithubTokenEnc(encryptor.encrypt(accessToken));
+        applyAdminRole(user);
+        User saved = userRepository.save(user);
+
+        // 연결 전에 수집된 활동을 이어 붙인다 — 재수집으로는 고쳐지지 않는 자리다 (PRD F1-5).
+        int linked = activityRepository.linkExistingActivities(saved.getId(), saved.getLogin());
+        if (linked > 0) {
+            log.info("{} 의 기존 활동 {}건을 사용자에 연결했다.", saved.getLogin(), linked);
+        }
+        return saved;
+    }
+
+    /** 연동을 끊는다. 토큰만 지우고 활동 연결은 그대로 둔다 — 지난 기록까지 사라지면 안 된다. */
+    @Transactional
+    public void unlinkGitHub(Long userId) {
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setGithubTokenEnc(null);
+            user.setGithubId(null);
+            userRepository.save(user);
+        });
     }
 
     /**

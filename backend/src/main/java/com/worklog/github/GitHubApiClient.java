@@ -30,6 +30,8 @@ public class GitHubApiClient {
     private static final int PER_PAGE = 100;
     /** 한 번의 동기화에서 훑을 페이지 상한 — rate limit 방어 (PRD 11). */
     private static final int MAX_PAGES = 10;
+    /** 내 리포는 최근 순으로 앞쪽 몇 페이지만 본다. */
+    private static final int MY_REPO_PAGES = 3;
 
     private final RestClient restClient = RestClient.builder().baseUrl(API_BASE).build();
 
@@ -49,6 +51,46 @@ public class GitHubApiClient {
             }
             throw githubFailure(e);
         }
+    }
+
+    /**
+     * 내 GitHub 에서 접근 가능한 리포 (9/10 "전체 등록").
+     *
+     * <p>{@code sort=pushed} 라 최근에 손댄 것이 먼저 온다. 계정에 리포가 수백 개여도 앞쪽
+     * 몇 페이지면 그날 일한 리포는 다 들어온다.
+     *
+     * <p>아카이브된 리포는 뺀다 — 더 이상 커밋이 생기지 않는데 수집 대상만 늘린다.
+     */
+    public List<GitHubRepoDto> listMyRepos(String token) {
+        List<GitHubRepoDto> all = new ArrayList<>();
+        for (int page = 1; page <= MY_REPO_PAGES; page++) {
+            final int currentPage = page;
+            List<GitHubRepoDto> batch;
+            try {
+                batch = restClient
+                        .get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/user/repos")
+                                .queryParam("affiliation", "owner,collaborator,organization_member")
+                                .queryParam("sort", "pushed")
+                                .queryParam("per_page", PER_PAGE)
+                                .queryParam("page", currentPage)
+                                .build())
+                        .headers(h -> headers(h, token))
+                        .retrieve()
+                        .body(new org.springframework.core.ParameterizedTypeReference<>() {});
+            } catch (RestClientResponseException e) {
+                throw githubFailure(e);
+            }
+            if (batch == null || batch.isEmpty()) {
+                break;
+            }
+            batch.stream().filter(r -> !Boolean.TRUE.equals(r.archived())).forEach(all::add);
+            if (batch.size() < PER_PAGE) {
+                break;
+            }
+        }
+        return all;
     }
 
     /**

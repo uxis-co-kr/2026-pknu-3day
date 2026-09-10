@@ -30,9 +30,8 @@ export default function LoginPage() {
     try {
       const res = await login.mutateAsync({ loginId: loginId.trim(), password })
       auth.signIn(res.token, res.mustChangePassword)
-      // 비밀번호를 아직 안 바꿨으면 그 화면부터. RequireAuth 가 다른 경로를 막는다.
-      if (res.mustChangePassword) navigate('/password', { replace: true })
-      else navigate(res.role === 'ADMIN' ? '/admin' : '/github', { replace: true })
+      // 비밀번호 변경은 강제하지 않는다 (9/10 결정). 설정에서 안내만 한다.
+      navigate(res.role === 'ADMIN' ? '/admin' : '/github', { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '로그인에 실패했습니다.')
     }

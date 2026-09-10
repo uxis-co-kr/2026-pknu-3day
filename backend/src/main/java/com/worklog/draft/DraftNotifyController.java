@@ -40,11 +40,13 @@ public class DraftNotifyController {
                 .findById(id)
                 .orElseThrow(() -> ApiException.notFound("DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다."));
 
-        if (draft.getStatus() != DraftStatus.CONFIRMED) {
+        // 완료 버튼을 없앴다 (9/10 결정). 예전에는 확정본만 나갈 수 있었는데, 이제 잠그는
+        // 상태가 없다. 대신 **사람이 한 번이라도 저장한 일지**만 내보낸다 — 자동 생성 그대로를
+        // 채널에 흘리지 않기 위해서다 (V6 user_edited).
+        if (!draft.isUserEdited()) {
             throw ApiException.conflict(
-                    "DRAFT_NOT_CONFIRMED", "확정한 뒤에 전송할 수 있습니다.");
+                    "DRAFT_NOT_EDITED", "한 번 저장한 뒤에 전송할 수 있습니다.");
         }
-
         if (!notifyService.notifyDraftContent(draft)) {
             // 설정이 없거나 전송에 실패한 경우. 화면이 "설정하세요"를 띄울 수 있게 구분해 알린다.
             throw new ApiException(

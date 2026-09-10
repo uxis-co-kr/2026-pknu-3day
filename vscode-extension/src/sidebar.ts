@@ -2,7 +2,7 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import type { Collector } from './collector'
 import type { UnpushedCommit } from './git'
-import type { SessionPayload, TodoItem, UncommittedFile } from './types'
+import type { AiSessionSummary, SessionPayload, TodoItem, UncommittedFile } from './types'
 
 /**
  * 사이드바 뷰 — 지금 무엇이 서버로 갈지 보여 준다 (PRD X3, BACKLOG 1-14).
@@ -61,17 +61,18 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
       const cwd = this.collector.folderOf(p)
       const name = repoName(p.remoteUrl)
 
-      const notes = this.collector.planNotes
+      const notes = this.collector.planNotesOf(cwd)
       const children: Node[] = [
         group(
           `계획 ${notes.length}건`,
           'note',
-          notes.map((n) => planNode(n)),
+          notes.map((n) => planNode(n, cwd)),
           notes.length > 0,
         ),
       ]
       children.push(group(`미커밋 ${p.uncommittedFiles.length}개`, 'diff', p.uncommittedFiles.map((f) => fileNode(f, cwd))))
       children.push(unpushedGroup(this.collector.unpushedOf(p)))
+      children.push(aiGroup(p.aiSessions))
       children.push(group(`TODO ${p.todos.length}개`, 'checklist', p.todos.map((t) => todoNode(t, cwd))))
       children.push(
         group(
@@ -145,12 +146,31 @@ function unpushedGroup(commits: UnpushedCommit[] | undefined): Node {
   )
 }
 
-/** 계획 한 줄. 우클릭으로 지울 수 있게 contextValue 와 note 를 달아 둔다. */
-function planNode(note: string): Node & { note: string } {
-  const node = leaf(note, 'circle-small-filled') as Node & { note: string }
+/** 계획 한 줄. 우클릭으로 지울 수 있게 contextValue·note·folder 를 달아 둔다. */
+function planNode(note: string, folder: string | undefined): Node & { note: string; folder?: string } {
+  const node = leaf(note, 'circle-small-filled') as Node & { note: string; folder?: string }
   node.item.contextValue = 'worklog.plan'
   node.note = note
+  node.folder = folder
   return node
+}
+
+/**
+ * 이 폴더에서 오간 AI 대화.
+ *
+ * <p>커밋에도 미커밋 변경에도 남지 않는 작업이다 — 무엇을 어떻게 할지 묻고 정한 과정.
+ */
+function aiGroup(sessions: AiSessionSummary[]): Node {
+  return group(
+    `AI 대화 ${sessions.length}세션`,
+    'comment-discussion',
+    sessions.map((s) =>
+      group(
+        `${time(s.firstAt)}–${time(s.lastAt)}`,
+        'comment',
+        s.prompts.map((p) => leaf(p, 'quote')),
+      )),
+  )
 }
 
 /** 파일 노드는 누르면 열린다. 새 파일은 diff 대신 본문이 가므로 표시를 나눈다. */

@@ -59,7 +59,6 @@ const useGithubMutation = <T,>(fn: () => Promise<T>) => {
   })
 }
 
-export const useLinkGithub = () => useGithubMutation(() => api.post<GithubLink>('/me/github', {}))
 export const useUnlinkGithub = () => useGithubMutation(() => api.delete<null>('/me/github'))
 
 export const useActivities = (f: ActivityFilter) =>
@@ -115,6 +114,15 @@ function useDraftMutation<TVars>(fn: (v: TVars) => Promise<Draft | { sent: boole
   })
 }
 
+/** 활동이 없어 AI 생성을 쓸 수 없을 때 빈 일지를 만든다 (9/10). */
+export const useCreateBlankDraft = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (date: string) => api.post<Draft>(`/drafts/blank?date=${date}`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['drafts'] }),
+  })
+}
+
 export const useSaveDraft = () =>
   useDraftMutation(({ id, contentMd }: { id: number; contentMd: string }) =>
     api.patch<Draft>(`/drafts/${id}`, { contentMd }))
@@ -148,6 +156,15 @@ function useReposMutation<TVars, TData>(fn: (v: TVars) => Promise<TData>) {
 export const useRegisterRepo = () => useReposMutation((fullName: string) => api.post<Repo>('/repos', { fullName }))
 export const useDeleteRepo = () => useReposMutation((id: number) => api.delete<null>(`/repos/${id}`))
 export const useSyncRepo = () => useReposMutation((id: number) => api.post<null>(`/repos/${id}/sync`))
+
+/** 내 GitHub 리포를 한 번에 등록하고 바로 수집을 건다 (9/10 "전체 등록"). */
+export const useImportRepos = () =>
+  useReposMutation(() => api.post<{ count: number; repos: string[] }>('/repos/import', {}))
+
+/** 내 리포를 한 번에 동기화한다. full 이면 최근 며칠을 다시 훑는다. */
+export const useSyncAllRepos = () =>
+  useReposMutation((full: boolean) =>
+    api.post<{ count: number; repos: string[] }>(`/repos/sync-all?full=${full}`, {}))
 
 function useApiKeyMutation<TVars, TData>(fn: (v: TVars) => Promise<TData>) {
   const qc = useQueryClient()

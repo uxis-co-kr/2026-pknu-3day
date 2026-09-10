@@ -47,7 +47,7 @@ worklog:
   waple:
     base-url: ${WAPLE_API_BASE_URL:}
     api-key: ${WAPLE_API_KEY:}
-    # 회사가 둘인데 이름이 같다. 실제 사원이 있는 쪽은 29 (9/10 확인).
+    # 회사가 둘인데 이름이 같다. 사원 목록이 겹치지 않으며 실제 회사는 29 다 (9/10 확인).
     company-seq: ${WAPLE_COMPANY_SEQ:29}
     # 사내 API 가 없을 때 쓰는 임시 사원 목록 (형식: 9999:이름,9998:이름).
     # 진짜 API 가 붙으면 쓰이지 않는다. 연동이 끝나면 이 줄과 함께 지운다.

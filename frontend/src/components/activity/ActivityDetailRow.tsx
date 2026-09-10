@@ -2,12 +2,30 @@ import { useState } from 'react'
 import { ChevronRight, ExternalLink } from 'lucide-react'
 import ActivityTypeIcon from '@/components/common/ActivityTypeIcon'
 import DiffStat from '@/components/common/DiffStat'
+import MarkdownPreview from '@/components/draft/MarkdownPreview'
 import { SummaryStatusBadge } from '@/components/common/StatusBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActivityDetail } from '@/api/hooks'
 import { formatTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
 import type { Activity } from '@/types/api'
+
+/**
+ * 한 줄 미리보기용 — 마크다운 기호를 벗긴다.
+ *
+ * <p>접힌 줄은 높이가 한 줄이라 마크다운을 그릴 수 없다. 그렇다고 원문을 두면 `**` 가
+ * 글자로 보인다. 펼치면 제대로 그려진다.
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|\s)[*_]([^*_]+)[*_]/g, '$1$2')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 /** 서버는 GitHub 이 준 제목만 저장한다. 표기는 읽는 쪽이 type 과 externalId 로 붙인다. */
 function title(a: Activity): string {
@@ -68,7 +86,8 @@ export default function ActivityDetailRow({ activity }: { activity: Activity }) 
           )}
           {activity.summaryStatus === 'FAILED' && <SummaryStatusBadge status="FAILED" />}
           {activity.summaryStatus === 'DONE' && activity.summary && !open && (
-            <span className="truncate text-[12px] text-muted-foreground">{activity.summary}</span>
+            // 한 줄짜리 자리라 마크다운을 그릴 수 없다. 기호만 벗겨 글자로 보이지 않게 한다.
+            <span className="truncate text-[12px] text-muted-foreground">{stripMarkdown(activity.summary)}</span>
           )}
         </span>
 
@@ -80,16 +99,16 @@ export default function ActivityDetailRow({ activity }: { activity: Activity }) 
           {activity.summary && (
             <div>
               <p className="mb-0.5 text-[11px] font-medium text-muted-foreground">요약</p>
-              <p className="text-[13px] leading-relaxed">{activity.summary}</p>
+              {/* LLM 이 목록·굵게 같은 서식을 쓴다. 그대로 두면 별표가 글자로 보인다. */}
+              <MarkdownPreview source={activity.summary} />
             </div>
           )}
           {detail.isLoading && <Skeleton className="h-4 w-64" />}
           {message && message !== activity.title && (
             <div>
               <p className="mb-0.5 text-[11px] font-medium text-muted-foreground">커밋 메시지</p>
-              <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-foreground/80">
-                {message}
-              </pre>
+              {/* 커밋 메시지에 **강조**·목록이 흔하다. pre 로 두면 기호가 글자로 보인다. */}
+              <MarkdownPreview source={message} />
             </div>
           )}
           <p className="text-[11px] text-muted-foreground/70">

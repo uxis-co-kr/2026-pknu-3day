@@ -1,17 +1,17 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Clock, FileDiff, ListTodo, NotebookPen } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import DiffStat from '@/components/common/DiffStat'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { DraftStatusBadge } from '@/components/common/StatusBadge'
-import { Button } from '@/components/ui/button'
-import { useDailyStats, useDrafts, useGenerateDraft, useMe, useRepos, useSessions } from '@/api/hooks'
+import { useMe, useRepos, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatRelative, formatTime } from '@/lib/date'
 import type { VscodeSession } from '@/types/api'
+
+/** 미커밋 리마인드(F7-2)와 같은 기준. 화면 문구도 "6시간 이상" 이다. */
+const STALE_AFTER_MS = 6 * 60 * 60 * 1000
 
 /**
  * VS 내역 — VS Code 확장이 보낸 **내** 작업.
@@ -21,60 +21,51 @@ import type { VscodeSession } from '@/types/api'
  */
 export default function VscodePage() {
   const { date } = useSelectedDate()
-  const navigate = useNavigate()
 
   const { data: me } = useMe()
-  const stats = useDailyStats(date)
   const sessions = useSessions({ date, userId: me?.id })
-  const drafts = useDrafts({ date, userId: me?.id })
   const repos = useRepos()
-  const generate = useGenerateDraft()
 
   const [repoFilter, setRepoFilter] = useState('all')
 
-  const shown = (sessions.data ?? []).filter((s) =>
-    s.userId === me?.id && (repoFilter === 'all' || s.repo?.id === Number(repoFilter)))
+  const shown = (sessions.data ?? [])
+    .filter((s) => s.userId === me?.id && (repoFilter === 'all' || s.repo?.id === Number(repoFilter)))
+    // 최신 보고가 위로 (9/10 결정).
+    .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt))
 
-  const draft = drafts.data?.[0]
   const files = shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)
+  /**
+   * 6시간 넘게 커밋하지 않은 내 세션. /stats/daily 의 staleSessions 는 팀 전체를 세므로
+   * 여기서 직접 센다 — 내 화면에 남의 숫자가 섞이면 안 된다.
+   *
+   * <p>기준 시각은 렌더마다 바뀌면 안 되므로 세션 목록이 바뀔 때만 다시 잡는다.
+   */
+  const stale = useMemo(() => {
+    const threshold = Date.now() - STALE_AFTER_MS
+    return shown.filter((x) => !x.lastCommitAt || new Date(x.lastCommitAt).getTime() < threshold).length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions.data, repoFilter, me?.id])
 
-  async function onGenerate() {
-    if (!me) return
-    const created = await generate.mutateAsync({ date, userId: me.id })
-    if (created && 'id' in created) navigate(`/drafts/${created.id}`)
-  }
 
-  const s = stats.data
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
+      </div>
+
       <div className="grid grid-cols-3 gap-3">
-        {stats.isLoading || !s ? (
+        {sessions.isLoading ? (
           [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="내 세션" value={shown.length} hint={`팀 전체 ${s.sessions}`} />
+            {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
+            <SummaryCard label="세션" value={shown.length} hint={shown.length > 0 ? '오늘 보고한 저장소' : '—'} />
             <SummaryCard label="미커밋 파일" value={files} hint={files > 0 ? '커밋 전 작업입니다' : '—'} />
-            <SummaryCard label="6시간 이상 미커밋" value={s.staleSessions}
-              hint={s.staleSessions > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={s.staleSessions > 0} />
+            <SummaryCard label="6시간 이상 미커밋" value={stale}
+              hint={stale > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={stale > 0} />
           </>
         )}
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
-        <div className="flex items-center gap-3">
-          {draft && <DraftStatusBadge status={draft.status} />}
-          {draft ? (
-            <Button variant="outline" size="sm" className="h-[34px]" onClick={() => navigate(`/drafts/${draft.id}`)}>
-              초안 열기
-            </Button>
-          ) : (
-            <Button size="sm" className="h-[34px]" disabled={generate.isPending} onClick={() => void onGenerate()}>
-              초안 생성
-            </Button>
-          )}
-        </div>
       </div>
 
       <Card className="overflow-hidden rounded-lg shadow-none">
@@ -134,6 +125,19 @@ function SessionDetail({ session }: { session: VscodeSession }) {
 
         <Group label="계획" count={plans.length} Icon={NotebookPen}>
           {plans.map((p) => <p key={p} className="truncate italic">{p}</p>)}
+        </Group>
+
+        <Group label="AI 대화" count={session.aiSessions?.length ?? 0} Icon={MessagesSquare}>
+          {(session.aiSessions ?? []).map((a) => (
+            <div key={a.id}>
+              <p className="tabular-nums text-muted-foreground/70">
+                {formatTime(a.firstAt)}–{formatTime(a.lastAt)} · {a.promptCount}개
+              </p>
+              {a.prompts.slice(0, 3).map((q) => (
+                <p key={q} className="truncate pl-2">· {q}</p>
+              ))}
+            </div>
+          ))}
         </Group>
 
         <Group label="저장 이벤트" count={session.editTimeline.length} Icon={Clock}>

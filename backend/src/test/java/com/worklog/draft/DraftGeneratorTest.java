@@ -53,7 +53,24 @@ class DraftGeneratorTest {
         when(sessionRepository.findByUserIdAndWorkDate(anyLong(), any())).thenReturn(List.of());
 
         generator = new DraftGenerator(
-                activityRepository, sessionRepository, draftRepository, userRepository, notifyService);
+                activityRepository,
+                sessionRepository,
+                draftRepository,
+                userRepository,
+                notifyService,
+                templateWriter());
+    }
+
+    /**
+     * 본문 작성은 {@link WorklogWriter} 의 몫이라 여기서는 템플릿으로 고정한다.
+     * 이 테스트가 보는 것은 버전 증가·건너뛰기 같은 생성 규칙이다.
+     */
+    private static WorklogWriter templateWriter() {
+        WorklogWriter writer = mock(WorklogWriter.class);
+        when(writer.write(anyLong(), any(), any(), any(), any()))
+                .thenAnswer(i -> DraftTemplate.render(
+                        i.getArgument(1), i.getArgument(2), i.getArgument(3), i.getArgument(4)));
+        return writer;
     }
 
     private static Activity commit(Long id, String summary) {
@@ -167,7 +184,12 @@ class DraftGeneratorTest {
         givenActivities(commit(101L, "요약"));
 
         DraftGenerator g = new DraftGenerator(
-                activityRepository, sessionRepository, draftRepository, userRepository, notifyService);
+                activityRepository,
+                sessionRepository,
+                draftRepository,
+                userRepository,
+                notifyService,
+                templateWriter());
 
         assertThat(g.generate(USER_ID, DAY).orElseThrow().getContentMd())
                 .contains("업무 일지 — taeil");

@@ -1,0 +1,14 @@
+날짜: {workDate}
+작성자: {name}
+
+[GitHub 활동]
+{activities}
+
+[VS Code 작업 — 커밋하지 않은 것]
+{sessions}
+
+[오늘 계획으로 적어 둔 것]
+{plans}
+
+[AI 와 나눈 대화 — 무엇을 시켰는지]
+{aiPrompts}
