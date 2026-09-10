@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, ChevronLeft, ChevronRight, PenLine, Sparkles } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import AutoBadge from '@/components/common/AutoBadge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import DraftWorkspace from '@/components/draft/DraftWorkspace'
-import {
-  useActivities, useCreateBlankDraft, useDraftRange, useDrafts, useGenerateDraft, useMe, useSessions,
-} from '@/api/hooks'
+import { useActivities, useDraftRange, useDrafts, useGenerateDraft, useMe, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatDateLabel, formatTime } from '@/lib/date'
 
@@ -44,7 +42,6 @@ export default function DraftsPage() {
   const activities = useActivities({ date, userId: me?.id })
   const sessions = useSessions({ date, userId: me?.id })
   const generate = useGenerateDraft()
-  const blank = useCreateBlankDraft()
 
   const todayDraft = today.data?.[0]
   // 내 활동에서 직접 센다. /stats/daily 응답에는 팀 전원의 숫자가 실려 온다.
@@ -72,24 +69,16 @@ export default function DraftsPage() {
             <p className="mt-0.5 text-[12px] text-muted-foreground">
               {material > 0
                 ? `아직 일지가 없습니다. 근거 ${material}건을 모아 AI 가 초안을 써 줍니다`
-                : '이 날짜에는 커밋도 VS 기록도 없어 AI 가 쓸 재료가 없습니다. 직접 작성할 수는 있습니다'}
+                : '이 날짜에는 커밋도 VS 기록도 없어 AI 가 쓸 재료가 없습니다'}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {/* 재료가 없다고 일지를 못 쓰게 할 이유는 없다 — 회의만 한 날도 일지는 필요하다. */}
-            <Button variant="outline" size="sm" className="h-[34px] gap-1.5"
-              disabled={blank.isPending} onClick={() => blank.mutate(date)}>
-              <PenLine className="size-3.5" />
-              {blank.isPending ? '만드는 중…' : '직접 작성'}
-            </Button>
-            <Button size="sm" className="h-[34px] gap-1.5"
-              disabled={generate.isPending || material === 0}
-              title={material === 0 ? '그날 커밋이나 VS 기록이 있어야 AI 가 쓸 수 있습니다' : undefined}
-              onClick={() => void onGenerate()}>
-              <Sparkles className="size-3.5" />
-              {generate.isPending ? 'AI 가 쓰는 중…' : 'AI 생성'}
-            </Button>
-          </div>
+          <Button size="sm" className="h-[34px] shrink-0 gap-1.5"
+            disabled={generate.isPending || material === 0}
+            title={material === 0 ? '그날 커밋이나 VS 기록이 있어야 AI 가 쓸 수 있습니다' : undefined}
+            onClick={() => void onGenerate()}>
+            <Sparkles className="size-3.5" />
+            {generate.isPending ? 'AI 가 쓰는 중…' : 'AI 생성'}
+          </Button>
         </Card>
       )}
 
