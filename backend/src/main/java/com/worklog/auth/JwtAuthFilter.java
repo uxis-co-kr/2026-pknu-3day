@@ -48,7 +48,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 var auth = new UsernamePasswordAuthenticationToken(
                         user,
                         null,
-                        List.of(new SimpleGrantedAuthority(AuthMethod.JWT.authority())));
+                        List.of(
+                                new SimpleGrantedAuthority(AuthMethod.JWT.authority()),
+                                new SimpleGrantedAuthority(user.role().authority())));
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (JwtException e) {

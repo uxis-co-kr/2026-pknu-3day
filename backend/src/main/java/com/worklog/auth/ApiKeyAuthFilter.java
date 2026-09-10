@@ -37,7 +37,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         if (key != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             apiKeyService.authenticate(key).ifPresent(user -> {
                 var auth = new UsernamePasswordAuthenticationToken(
-                        user, null, List.of(new SimpleGrantedAuthority(AuthMethod.API_KEY.authority())));
+                        user,
+                        null,
+                        List.of(
+                                new SimpleGrantedAuthority(AuthMethod.API_KEY.authority()),
+                                new SimpleGrantedAuthority(user.role().authority())));
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             });

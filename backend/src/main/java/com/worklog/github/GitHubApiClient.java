@@ -1,6 +1,7 @@
 package com.worklog.github;
 
 import com.worklog.config.ApiException;
+import com.worklog.github.dto.GitHubBranchDto;
 import com.worklog.github.dto.GitHubCommitDto;
 import com.worklog.github.dto.GitHubPullRequestDto;
 import com.worklog.github.dto.GitHubRepoDto;
@@ -50,8 +51,58 @@ public class GitHubApiClient {
         }
     }
 
-    /** since 이후의 커밋 목록. 목록 응답에는 files/stats 가 없다. */
+    /**
+     * 브랜치 목록. 한 리포의 모든 브랜치를 봐야 작업 브랜치의 커밋도 수집할 수 있다.
+     *
+     * <p>{@code sha} 없이 커밋을 조회하면 GitHub 은 <b>기본 브랜치만</b> 돌려준다. 그래서
+     * 머지 전 작업 브랜치의 커밋이 업무 일지에서 통째로 빠졌다 (TODO_0910 §3-4).
+     */
+    public List<GitHubBranchDto> listBranches(String owner, String name, String token) {
+        List<GitHubBranchDto> all = new ArrayList<>();
+        for (int page = 1; page <= MAX_PAGES; page++) {
+            final int currentPage = page;
+            List<GitHubBranchDto> batch;
+            try {
+                batch = restClient
+                        .get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/repos/{owner}/{name}/branches")
+                                .queryParam("per_page", PER_PAGE)
+                                .queryParam("page", currentPage)
+                                .build(owner, name))
+                        .headers(h -> headers(h, token))
+                        .retrieve()
+                        .body(new org.springframework.core.ParameterizedTypeReference<>() {});
+            } catch (RestClientResponseException e) {
+                // 커밋이 하나도 없는 빈 리포는 409 를 낸다.
+                if (e.getStatusCode().value() == 409) {
+                    return List.of();
+                }
+                throw githubFailure(e);
+            }
+            if (batch == null || batch.isEmpty()) {
+                break;
+            }
+            all.addAll(batch);
+            if (batch.size() < PER_PAGE) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    /** 기본 브랜치의 커밋 목록. */
     public List<GitHubCommitDto> listCommits(String owner, String name, OffsetDateTime since, String token) {
+        return listCommits(owner, name, null, since, token);
+    }
+
+    /**
+     * since 이후의 커밋 목록. 목록 응답에는 files/stats 가 없다.
+     *
+     * @param branch 훑을 브랜치. {@code null} 이면 기본 브랜치다 (GitHub 기본 동작).
+     */
+    public List<GitHubCommitDto> listCommits(
+            String owner, String name, String branch, OffsetDateTime since, String token) {
         List<GitHubCommitDto> all = new ArrayList<>();
         for (int page = 1; page <= MAX_PAGES; page++) {
             final int currentPage = page;
@@ -59,12 +110,18 @@ public class GitHubApiClient {
             try {
                 batch = restClient
                         .get()
-                        .uri(uriBuilder -> uriBuilder
-                                .path("/repos/{owner}/{name}/commits")
-                                .queryParam("since", DateTimeFormatter.ISO_INSTANT.format(since))
-                                .queryParam("per_page", PER_PAGE)
-                                .queryParam("page", currentPage)
-                                .build(owner, name))
+                        .uri(uriBuilder -> {
+                            uriBuilder
+                                    .path("/repos/{owner}/{name}/commits")
+                                    .queryParam("since", DateTimeFormatter.ISO_INSTANT.format(since))
+                                    .queryParam("per_page", PER_PAGE)
+                                    .queryParam("page", currentPage);
+                            // sha 가 없으면 GitHub 은 기본 브랜치를 준다.
+                            if (branch != null) {
+                                uriBuilder.queryParam("sha", branch);
+                            }
+                            return uriBuilder.build(owner, name);
+                        })
                         .headers(h -> headers(h, token))
                         .retrieve()
                         .body(new org.springframework.core.ParameterizedTypeReference<>() {});

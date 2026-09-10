@@ -10,4 +10,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 커밋 author login → 가입 사용자 매핑 (PRD F1-5). */
     Optional<User> findByLogin(String login);
+
+    /** 관리자 콘솔 — 사원 번호로 이미 연결된 계정이 있는지 (TODO_0910 §1-3). */
+    java.util.List<User> findByEmpSeq(Long empSeq);
 }

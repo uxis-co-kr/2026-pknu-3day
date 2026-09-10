@@ -73,7 +73,8 @@ public class ApiKeyService {
         return apiKeyRepository.findByKeyHash(hash(plainKey.trim())).map(apiKey -> {
             apiKey.setLastUsedAt(OffsetDateTime.now());
             User user = apiKey.getUser();
-            return new AuthenticatedUser(user.getId(), user.getLogin(), AuthMethod.API_KEY);
+            return new AuthenticatedUser(
+                    user.getId(), user.getLogin(), AuthMethod.API_KEY, user.getRole());
         });
     }
 

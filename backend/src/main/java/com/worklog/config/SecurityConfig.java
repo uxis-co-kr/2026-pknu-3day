@@ -3,6 +3,7 @@ package com.worklog.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.worklog.auth.ApiKeyAuthFilter;
 import com.worklog.auth.AuthMethod;
+import com.worklog.auth.UserRole;
 import com.worklog.auth.JwtAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -68,6 +69,9 @@ public class SecurityConfig {
                         .hasAuthority(AuthMethod.API_KEY.authority())
                         .requestMatchers("/external/**")
                         .hasAuthority(AuthMethod.API_KEY.authority())
+                        // 관리자 콘솔 (TODO_0910 §1-3). 로그인만으로는 들어갈 수 없다.
+                        .requestMatchers("/admin/**")
+                        .hasAuthority(UserRole.ADMIN.authority())
                         .anyRequest()
                         .hasAnyAuthority(AuthMethod.JWT.authority(), AuthMethod.API_KEY.authority()))
                 .exceptionHandling(e -> e.authenticationEntryPoint(authenticationEntryPoint())

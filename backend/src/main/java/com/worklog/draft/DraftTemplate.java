@@ -84,7 +84,11 @@ public final class DraftTemplate {
                 .flatMap(s -> {
                     List<String> lines = new java.util.ArrayList<>();
                     if (s.getPlanNote() != null && !s.getPlanNote().isBlank()) {
-                        lines.add(s.getPlanNote().strip());
+                        // 확장이 계획을 여러 건 받게 되면서 줄바꿈으로 이어 보낸다. 줄마다 불릿이 돼야 한다.
+                        s.getPlanNote().lines()
+                                .map(String::strip)
+                                .filter(line -> !line.isEmpty())
+                                .forEach(lines::add);
                     }
                     List<TodoItem> todos = s.getTodos();
                     if (todos != null) {

@@ -2,6 +2,7 @@ package com.worklog.notify;
 
 import com.worklog.auth.User;
 import com.worklog.draft.Draft;
+import com.worklog.vscode.VscodeSession;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -54,6 +55,37 @@ public class NotifyService {
                         draftLink(draft),
                         previewOf(draft.getContentMd()));
         return send(user.getId(), text);
+    }
+
+    /**
+     * 이벤트 2 — 미커밋 리마인드 (PRD F7).
+     *
+     * <p>{@code notify_settings.remind_uncommitted} 가 꺼진 사용자는 보내지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public boolean notifyUncommitted(VscodeSession session, java.time.OffsetDateTime now) {
+        Long userId = session.getUser() == null ? null : session.getUser().getId();
+        if (!remindEnabled(userId)) {
+            log.debug("사용자 {} 는 미커밋 리마인드를 껐다.", userId);
+            return false;
+        }
+        String repo = session.getRepo() != null ? session.getRepo().getFullName() : session.getRemoteUrl();
+        int files = session.getUncommittedFiles() == null ? 0 : session.getUncommittedFiles().size();
+
+        String text = "⚠️ %s@%s에 미커밋 변경 %d파일이 %d시간째 있습니다."
+                .formatted(repo, session.getBranch(), files, RemindPolicy.hoursSinceLastCommit(session, now));
+        return send(userId, text);
+    }
+
+    /** 기본값은 켜짐. 설정 행이 없으면 보낸다. */
+    boolean remindEnabled(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        return settingRepository
+                .findByUserId(userId)
+                .map(NotifySetting::getRemindUncommitted)
+                .orElse(true);
     }
 
     /** 이벤트 3 — 사용자가 "Mattermost 전송"을 눌렀을 때 전체 Markdown 게시 (PRD F7). */

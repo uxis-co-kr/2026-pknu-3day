@@ -32,6 +32,7 @@ public class JwtService {
 
     private static final String ISSUER = "worklog";
     private static final String LOGIN_CLAIM = "login";
+    private static final String ROLE_CLAIM = "role";
 
     private final JwtEncoder encoder;
     private final JwtDecoder decoder;
@@ -62,6 +63,7 @@ public class JwtService {
                 .expiresAt(now.plus(ttl))
                 .subject(String.valueOf(user.getId()))
                 .claim(LOGIN_CLAIM, user.getLogin())
+                .claim(ROLE_CLAIM, user.getRole().name())
                 .build();
         return encoder
                 .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
@@ -76,7 +78,22 @@ public class JwtService {
     public AuthenticatedUser verify(String token) {
         Jwt jwt = decoder.decode(token);
         return new AuthenticatedUser(
-                Long.valueOf(jwt.getSubject()), jwt.getClaimAsString(LOGIN_CLAIM), AuthMethod.JWT);
+                Long.valueOf(jwt.getSubject()),
+                jwt.getClaimAsString(LOGIN_CLAIM),
+                AuthMethod.JWT,
+                // role 클레임이 없는 예전 토큰은 일반 회원으로 본다.
+                parseRole(jwt.getClaimAsString(ROLE_CLAIM)));
+    }
+
+    private static UserRole parseRole(String value) {
+        if (value == null) {
+            return UserRole.MEMBER;
+        }
+        try {
+            return UserRole.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return UserRole.MEMBER;
+        }
     }
 
     /**
