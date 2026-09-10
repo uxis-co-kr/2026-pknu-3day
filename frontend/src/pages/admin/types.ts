@@ -1,0 +1,71 @@
+/**
+ * 관리자 콘솔 전용 타입 (TODO_0910 §1-3).
+ *
+ * 공용 `types/api.ts` 를 건드리지 않고 여기 둔다 — 담당자 1 이 같은 파일에서
+ * 메뉴 재구성을 하고 있어 충돌을 피한다.
+ */
+
+export interface AdminOverview {
+  adminLogin: string
+  accountCount: number
+  employeeCount: number
+  unclaimedContributorCount: number
+  wapleConfigured: boolean
+  globalWebhookConfigured: boolean
+  llmProvider: string
+}
+
+/** 우리 서비스 계정. 사원과 이어졌는지, GitHub 이 붙었는지가 핵심이다. */
+export interface AdminAccount {
+  userId: number
+  login: string
+  name: string | null
+  avatarUrl: string | null
+  role: 'MEMBER' | 'ADMIN'
+  /** 수집기가 이 사람 권한으로 리포를 읽을 수 있는지 */
+  githubLinked: boolean
+  empSeq: number | null
+  activityCount: number
+  joinedAt: string
+}
+
+/** 사내 회원(와플) 사원. account 가 null 이면 아직 서비스를 쓰지 않는 사람이다. */
+export interface AdminEmployee {
+  empSeq: number
+  empNm: string
+  account: AdminAccount | null
+}
+
+/** 커밋은 있는데 로그인한 적이 없는 GitHub 계정 (BACKLOG §3-4). */
+export interface UnclaimedContributor {
+  externalLogin: string
+  activityCount: number
+  lastSeenAt: string | null
+}
+
+export interface PeopleDirectory {
+  wapleConfigured: boolean
+  companySeq: number | null
+  employees: AdminEmployee[]
+  unlinkedAccounts: AdminAccount[]
+  unclaimedContributors: UnclaimedContributor[]
+}
+
+export interface GlobalNotifySettings {
+  mattermostWebhookUrl: string | null
+  remindUncommitted: boolean | null
+}
+
+/**
+ * `/settings/llm` 응답 (PRD 7.).
+ *
+ * 공용 `types/api.ts` 의 LlmSettings 는 이 API 가 생기기 전에 만들어져 `available`·`model` 이
+ * 없다. 공용 타입을 고치면 담당자 1 의 설정 화면까지 영향을 받으므로 콘솔 전용으로 둔다.
+ */
+export interface AdminLlmSettings {
+  provider: string
+  model: string | null
+  /** 사용자가 직접 고른 값인지. false 면 전역 설정을 보여 주는 중이다. */
+  overridden: boolean
+  available: string[]
+}

@@ -12,6 +12,15 @@ import SettingsPage from '@/pages/SettingsPage'
 const DraftEditorPage = lazy(() => import('@/pages/DraftEditorPage'))
 const PeoplePage = lazy(() => import('@/pages/PeoplePage'))
 
+// 관리자 콘솔 (TODO_0910 1-3, 담당자 2). 서비스 화면과 레이아웃이 다르고
+// 관리자만 들어가므로 통째로 떼어 낸다.
+const AdminShell = lazy(() => import('@/pages/admin/AdminShell'))
+const AdminOverviewPage = lazy(() => import('@/pages/admin/AdminOverviewPage'))
+const AdminPeoplePage = lazy(() => import('@/pages/admin/AdminPeoplePage'))
+const AdminActivityPage = lazy(() => import('@/pages/admin/AdminActivityPage'))
+const AdminLlmPage = lazy(() => import('@/pages/admin/AdminLlmPage'))
+const AdminNotifyPage = lazy(() => import('@/pages/admin/AdminNotifyPage'))
+
 /**
  * 디자인 브리프 3. 의 6개 화면. 여기에 없는 페이지는 추가하지 않는다.
  *
@@ -33,6 +42,15 @@ export default function App() {
           <Route path="/people" element={<PeoplePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
+
+          {/* 관리자 콘솔 — AppLayout 을 쓰지 않는 별도 화면 (TODO_0910 1-3) */}
+          <Route path="/admin" element={<AdminShell />}>
+            <Route index element={<AdminOverviewPage />} />
+            <Route path="people" element={<AdminPeoplePage />} />
+            <Route path="activity" element={<AdminActivityPage />} />
+            <Route path="llm" element={<AdminLlmPage />} />
+            <Route path="notify" element={<AdminNotifyPage />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
