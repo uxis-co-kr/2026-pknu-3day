@@ -79,11 +79,27 @@ public class UserService {
                 .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
 
         userRepository.findByGithubId(dto.id()).ifPresent(owner -> {
-            if (!owner.getId().equals(userId)) {
+            if (owner.getId().equals(userId)) {
+                return;
+            }
+            // 로그인 수단이 있는 계정이면 진짜 다른 사람이다. 넘겨받지 않는다.
+            if (owner.getLoginId() != null || owner.getPasswordHash() != null) {
                 throw ApiException.conflict(
                         "GITHUB_ALREADY_LINKED",
                         "이 GitHub 계정은 이미 다른 사용자에 연결돼 있습니다.");
             }
+            // GitHub 로그인이 곧 회원가입이던 시절의 껍데기 계정이다. 이제 아무도 그 계정으로
+            // 들어갈 수 없으니, OAuth 로 소유를 증명한 이 사람에게 넘긴다 (TODO_0910 §1-1).
+            int moved = activityRepository.reassignActivities(owner.getId(), userId);
+            owner.setGithubId(null);
+            owner.setGithubTokenEnc(null);
+            userRepository.save(owner);
+            log.info(
+                    "GitHub {} 를 옛 계정 {} 에서 사용자 {} 로 넘긴다 — 활동 {}건 이관.",
+                    dto.login(),
+                    owner.getId(),
+                    userId,
+                    moved);
         });
 
         user.setGithubId(dto.id());

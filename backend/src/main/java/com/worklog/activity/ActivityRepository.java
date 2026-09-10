@@ -84,6 +84,16 @@ public interface ActivityRepository
             + " where a.user is null and lower(a.externalLogin) = lower(:login)")
     int linkExistingActivities(@Param("userId") Long userId, @Param("login") String login);
 
+    /**
+     * 활동을 다른 사용자에게 넘긴다.
+     *
+     * <p>GitHub 로그인이 곧 회원가입이던 시절에 만들어진 계정에 활동이 묶여 있다. 그 사람이
+     * 사원 번호로 로그인해 같은 GitHub 을 연결하면, 활동도 따라와야 한다 (TODO_0910 §1-1).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Activity a set a.user.id = :toUserId where a.user.id = :fromUserId")
+    int reassignActivities(@Param("fromUserId") Long fromUserId, @Param("toUserId") Long toUserId);
+
     /** 관리자 콘솔 — (사용자, 리포)별 활동 수. 사원 행을 펼쳤을 때 리포마다 보여 준다. */
     @Query("select a.user.id, a.repo.id, count(a) from Activity a"
             + " where a.user is not null group by a.user.id, a.repo.id")

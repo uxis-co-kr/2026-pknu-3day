@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import UserAvatar from '@/components/common/UserAvatar'
 import { Button } from '@/components/ui/button'
@@ -5,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { auth } from '@/api/apiClient'
 import { useGithubLink, useMe, useUnlinkGithub } from '@/api/hooks'
 import { formatDateLabel } from '@/lib/date'
+import { cn } from '@/lib/utils'
 
 /**
  * 설정 > 깃허브 연동 (9/10 회의).
@@ -12,16 +15,55 @@ import { formatDateLabel } from '@/lib/date'
  * <p>GitHub 은 더 이상 로그인 수단이 아니다. 사원번호로 로그인한 **내 계정에 붙이는** 것이다.
  * 실서버에서는 GitHub OAuth 로 넘어갔다 돌아오지만, 목업은 바로 붙은 것으로 친다.
  */
+/** 콜백이 `?github=` 로 알려 주는 결과. 코드 그대로 보여 주면 읽을 수 없다. */
+const RESULT: Record<string, { text: string; failed: boolean }> = {
+  linked: { text: 'GitHub 을 연결했습니다.', failed: false },
+  GITHUB_ALREADY_LINKED: {
+    text: '이 GitHub 계정은 이미 다른 사용자에 연결돼 있습니다. 관리자에게 문의해 주세요.',
+    failed: true,
+  },
+  USER_NOT_FOUND: { text: '계정을 찾을 수 없습니다. 다시 로그인해 주세요.', failed: true },
+}
+
 export default function GithubLinkCard() {
   const link = useGithubLink()
   const { data: me } = useMe()
   const disconnect = useUnlinkGithub()
 
+  /**
+   * OAuth 는 브라우저가 넘어갔다 돌아오는 흐름이라 결과를 주소로 받는다.
+   * 아무 말도 없으면 눌렀는데 아무 일도 안 난 것처럼 보인다.
+   */
+  const [params, setParams] = useSearchParams()
+  const result = params.get('github')
+  useEffect(() => {
+    if (!result) return
+    // 한 번 보여 주고 주소를 정리한다 — 새로고침할 때마다 다시 뜨면 안 된다.
+    const next = new URLSearchParams(params)
+    next.delete('github')
+    setParams(next, { replace: true })
+  }, [result, params, setParams])
+
+  const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null)
+  useEffect(() => {
+    if (result) {
+      setNotice(RESULT[result] ?? { text: `연결에 실패했습니다 (${result})`, failed: true })
+    }
+  }, [result])
+
   if (link.isLoading) return <Skeleton className="h-10 w-full" />
+
+  const banner = notice && (
+    <p className={cn('mb-3 text-[13px]', notice.failed ? 'text-status-failed' : 'text-primary')}>
+      {notice.text}
+    </p>
+  )
 
   const data = link.data
   if (!data?.linked) {
     return (
+      <div>
+      {banner}
       <div className="flex items-center justify-between gap-4">
         <p className="text-[13px] text-muted-foreground">
           아직 연결하지 않았습니다. 연결해야 리포를 등록하고 활동을 가져올 수 있습니다.
@@ -34,10 +76,13 @@ export default function GithubLinkCard() {
           GitHub 연결
         </Button>
       </div>
+      </div>
     )
   }
 
   return (
+    <div>
+    {banner}
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5">
         <UserAvatar login={data.login ?? undefined} avatarUrl={data.avatarUrl} />
@@ -61,6 +106,7 @@ export default function GithubLinkCard() {
           연결 해제
         </Button>
       </div>
+    </div>
     </div>
   )
 }
