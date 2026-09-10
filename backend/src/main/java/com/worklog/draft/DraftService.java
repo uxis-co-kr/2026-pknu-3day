@@ -80,6 +80,8 @@ public class DraftService {
             throw ApiException.conflict("DRAFT_ALREADY_CONFIRMED", "확정된 초안은 수정할 수 없습니다.");
         }
         draft.setContentMd(contentMd);
+        // 한 번이라도 저장했으면 사람이 쓴 일지다. 스케줄러가 덮지 않는다 (V6).
+        draft.setUserEdited(true);
         return toDetail(drafts.save(draft));
     }
 

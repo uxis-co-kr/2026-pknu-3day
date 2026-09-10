@@ -19,6 +19,9 @@ public interface DraftRepository extends JpaRepository<Draft, Long> {
 
     boolean existsByUserIdAndWorkDateAndStatus(Long userId, LocalDate workDate, DraftStatus status);
 
+    /** 그날 사용자가 저장한 적 있는 일지가 있는지 (V6). 스케줄러가 건너뛰는 기준이다. */
+    boolean existsByUserIdAndWorkDateAndUserEditedTrue(Long userId, LocalDate workDate);
+
     /** 같은 (사용자, 날짜) 의 최신 버전. */
     Optional<Draft> findFirstByUserIdAndWorkDateOrderByVersionDesc(Long userId, LocalDate workDate);
 

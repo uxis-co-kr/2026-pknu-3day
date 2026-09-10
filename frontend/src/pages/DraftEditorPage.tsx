@@ -34,7 +34,7 @@ export default function DraftEditorPage() {
   useEffect(() => {
     if (!draft) return
     setContent(draft.contentMd)
-    // 확정본은 읽기 전용이므로 미리보기로 연다 (아트보드 4).
+    // 완료한 일지는 읽기 전용이므로 미리보기로 연다 (아트보드 4).
     setTab(draft.status === 'CONFIRMED' ? 'preview' : 'edit')
   }, [draft])
 
@@ -102,7 +102,7 @@ export default function DraftEditorPage() {
           <span className="text-[12px] text-muted-foreground">
             v{draft.version} ·{' '}
             {confirmed && draft.confirmedAt
-              ? `확정 ${draft.workDate} ${formatTime(draft.confirmedAt)}`
+              ? `완료 ${draft.workDate} ${formatTime(draft.confirmedAt)}`
               : `마지막 저장 ${formatTime(draft.updatedAt)}`}
           </span>
           {message && (
@@ -170,9 +170,9 @@ export default function DraftEditorPage() {
               size="sm" className="h-[34px] disabled:opacity-100"
               variant={confirmed ? 'outline' : 'default'}
               disabled={confirmed || busy}
-              onClick={() => void run(() => confirm.mutateAsync({ id: draft.id }), '확정했습니다')}
+              onClick={() => void run(() => confirm.mutateAsync({ id: draft.id }), '완료로 표시했습니다')}
             >
-              {confirmed ? '✓ 확정됨' : '확정'}
+              {confirmed ? '✓ 완료' : '완료'}
             </Button>
             <Button
               variant="outline" size="sm" className="h-[34px]"

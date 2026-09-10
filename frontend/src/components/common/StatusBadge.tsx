@@ -3,7 +3,9 @@ import type { DraftStatus, SummaryStatus, SyncStatus } from '@/types/api'
 
 /**
  * 의미색은 여기서만 쓴다 (디자인 브리프 2.).
- * DRAFT 회색 · CONFIRMED 초록 · FAILED 빨강 · 미커밋 주황.
+ * DRAFT 회색 · CONFIRMED(=완료) 초록 · FAILED 빨강 · 미커밋 주황.
+ *
+ * <p>화면 문구는 "완료" 다 (9/10 결정). 서버 상태값은 CONFIRMED 그대로다.
  */
 const base = 'inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium leading-[15px]'
 
@@ -18,7 +20,7 @@ export function DraftStatusBadge({ status, className }: { status: DraftStatus; c
         className,
       )}
     >
-      {status}
+      {status === 'CONFIRMED' ? '완료' : '작성 중'}
     </span>
   )
 }

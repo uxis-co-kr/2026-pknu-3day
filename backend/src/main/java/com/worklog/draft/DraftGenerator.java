@@ -115,7 +115,12 @@ public class DraftGenerator {
         for (Long userId : userIds) {
             if (draftRepository.existsByUserIdAndWorkDateAndStatus(
                     userId, workDate, DraftStatus.CONFIRMED)) {
-                log.info("사용자 {} 의 {} 초안은 이미 확정돼 있어 건너뛴다.", userId, workDate);
+                log.info("사용자 {} 의 {} 일지는 이미 완료돼 있어 건너뛴다.", userId, workDate);
+                continue;
+            }
+            // 저장만 하고 완료하지 않았어도 사람이 쓴 것이다. 자동 생성이 뒤로 밀면 안 된다 (V6).
+            if (draftRepository.existsByUserIdAndWorkDateAndUserEditedTrue(userId, workDate)) {
+                log.info("사용자 {} 의 {} 일지는 직접 저장한 내용이 있어 건너뛴다.", userId, workDate);
                 continue;
             }
             if (generate(userId, workDate, true).isPresent()) {
