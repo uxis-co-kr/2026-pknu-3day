@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import GithubLinkCard from '@/components/settings/GithubLinkCard'
+import PasswordPage from '@/pages/PasswordPage'
 import RepoSection from '@/components/settings/RepoSection'
 import { Card } from '@/components/ui/card'
 import {
@@ -60,11 +62,12 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <Section title="깃허브 연동" description="내 계정에 GitHub 을 연결합니다. 연결해야 커밋·PR 이 내 이름으로 모입니다.">
-        <p className="text-[13px] text-muted-foreground">
-          사원번호 로그인으로 바뀌면서 GitHub 은 로그인 수단이 아니라 연동 수단이 됩니다.
-          연동 API 가 준비되면 여기에 버튼이 생깁니다 (TODO_0910 §1-1).
-        </p>
+      <Section title="깃허브 연동" description="연결해야 커밋·PR 이 내 이름으로 모입니다. 연결하지 않으면 활동이 미가입 계정으로 남습니다.">
+        <GithubLinkCard />
+      </Section>
+
+      <Section title="비밀번호">
+        <PasswordPage />
       </Section>
 
       <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">

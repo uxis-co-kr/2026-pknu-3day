@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, qs } from './apiClient'
 import type {
-  Activity, ActivityDetail, ApiKey, DailyStats, Draft, DraftSummary, GeneratedDraft, IssuedApiKey,
-  LlmSettings, Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
+  Activity, ActivityDetail, ApiKey, DailyStats, Draft, DraftSummary, GeneratedDraft, GithubLink, IssuedApiKey,
+  LlmSettings, LoginRequest, LoginResponse, Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
 } from '@/types/api'
 
 /** 쿼리 키는 여기서만 만든다. 무효화할 때 경로를 헷갈리지 않기 위해서다. */
@@ -19,6 +19,7 @@ export const qk = {
   apiKeys: ['api-keys'] as const,
   notify: ['settings', 'notify'] as const,
   llm: ['settings', 'llm'] as const,
+  github: ['me', 'github'] as const,
 }
 
 export interface DayFilter { date: string; userId?: number }
@@ -27,6 +28,36 @@ export interface DraftFilter extends DayFilter { status?: string }
 export interface PeopleFilter { from: string; to: string; userId?: number; granularity?: 'day' | 'week' }
 
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api.get<Me>('/me') })
+
+/** 사원번호 로그인 (9/10 회의). 관리자도 같은 경로를 쓰고 role 로 갈린다. */
+export const useLogin = () =>
+  useMutation({ mutationFn: (req: LoginRequest) => api.post<LoginResponse>('/auth/login', req) })
+
+export const useChangePassword = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (req: { currentPassword: string; newPassword: string }) =>
+      api.post<null>('/me/password', req),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.me }),
+  })
+}
+
+export const useGithubLink = () =>
+  useQuery({ queryKey: qk.github, queryFn: () => api.get<GithubLink>('/me/github') })
+
+const useGithubMutation = <T,>(fn: () => Promise<T>) => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.github })
+      void qc.invalidateQueries({ queryKey: qk.me })
+    },
+  })
+}
+
+export const useLinkGithub = () => useGithubMutation(() => api.post<GithubLink>('/me/github', {}))
+export const useUnlinkGithub = () => useGithubMutation(() => api.delete<null>('/me/github'))
 
 export const useActivities = (f: ActivityFilter) =>
   useQuery({ queryKey: qk.activities(f), queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`) })

@@ -13,8 +13,8 @@ import statsDailyJson from '@/mocks/stats-daily.json'
 import statsPeopleJson from '@/mocks/stats-people.json'
 import sessionsJson from '@/mocks/vscode-sessions.json'
 import type {
-  Activity, ApiKey, DailyStats, Draft, DraftSummary, IssuedApiKey, LlmSettings,
-  Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
+  Activity, ApiKey, DailyStats, Draft, DraftSummary, GithubLink, IssuedApiKey, LlmSettings,
+  LoginRequest, LoginResponse, Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
 } from '@/types/api'
 
 /**
@@ -37,6 +37,15 @@ const db = {
   llm: clone(llmJson) as LlmSettings,
   statsDaily: clone(statsDailyJson) as DailyStats,
   statsPeople: clone(statsPeopleJson) as PeopleStats,
+  /**
+   * 사원번호 로그인 목업 (9/10 회의). 서버가 붙기 전까지 화면 흐름을 눌러볼 수 있게 한다.
+   * 비밀번호를 바꾸지 않은 계정은 아이디와 비밀번호가 같다.
+   */
+  accounts: [
+    { loginId: '0004', password: '0004', name: '배태일', role: 'MEMBER', mustChangePassword: true },
+    { loginId: 'admin', password: 'admin', name: '관리자', role: 'ADMIN', mustChangePassword: true },
+  ] as { loginId: string; password: string; name: string; role: 'MEMBER' | 'ADMIN'; mustChangePassword: boolean }[],
+  github: { linked: false, login: null, avatarUrl: null, linkedAt: null } as GithubLink,
 }
 
 let nextId = 100
@@ -86,6 +95,49 @@ type Handler = (params: Record<string, string>, query: URLSearchParams, body: un
 
 const routes: [string, string, Handler][] = [
   ['GET', '/me', () => db.me],
+
+  ['POST', '/auth/login', (_p, _q, body) => {
+    const { loginId, password } = body as LoginRequest
+    const found = db.accounts.find((a) => a.loginId === loginId && a.password === password)
+    if (!found) throw new MockHttpError(401, 'INVALID_CREDENTIALS', '사원번호 또는 비밀번호가 올바르지 않습니다.')
+    db.me = { ...db.me, name: found.name, loginId: found.loginId, role: found.role, mustChangePassword: found.mustChangePassword }
+    return {
+      token: `mock-${found.role.toLowerCase()}-token`,
+      mustChangePassword: found.mustChangePassword,
+      role: found.role,
+    } satisfies LoginResponse
+  }],
+
+  ['POST', '/me/password', (_p, _q, body) => {
+    const { currentPassword, newPassword } = body as { currentPassword: string; newPassword: string }
+    const acc = db.accounts.find((a) => a.loginId === db.me.loginId)
+    if (!acc || acc.password !== currentPassword) {
+      throw new MockHttpError(400, 'WRONG_PASSWORD', '현재 비밀번호가 올바르지 않습니다.')
+    }
+    if (newPassword.length < 4) throw new MockHttpError(400, 'WEAK_PASSWORD', '비밀번호는 4자 이상이어야 합니다.')
+    if (newPassword === acc.loginId) {
+      throw new MockHttpError(400, 'WEAK_PASSWORD', '사원번호와 같은 비밀번호는 쓸 수 없습니다.')
+    }
+    acc.password = newPassword
+    acc.mustChangePassword = false
+    db.me = { ...db.me, mustChangePassword: false }
+    return null
+  }],
+
+  ['GET', '/me/github', () => db.github],
+
+  ['POST', '/me/github', () => {
+    // 실서버에서는 GitHub OAuth 로 넘어갔다 돌아온다. 목업은 바로 붙은 것으로 친다.
+    db.github = { linked: true, login: 'Ae-Ti', avatarUrl: null, linkedAt: new Date().toISOString() }
+    db.me = { ...db.me, login: 'Ae-Ti' }
+    return db.github
+  }],
+
+  ['DELETE', '/me/github', () => {
+    db.github = { linked: false, login: null, avatarUrl: null, linkedAt: null }
+    db.me = { ...db.me, login: '' }
+    return null
+  }],
 
   ['GET', '/activities', (_p, q) => {
     const date = q.get('date')

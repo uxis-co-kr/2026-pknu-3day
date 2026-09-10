@@ -11,12 +11,42 @@ export type SyncStatus = 'OK' | 'SYNCING' | 'FAILED'
 
 export interface Me {
   id: number
+  /** GitHub 로그인. 연동하지 않았으면 빈 문자열이다 (사원번호 로그인으로 바뀐 뒤). */
   login: string
   name: string | null
   avatarUrl: string | null
+  /** 사원번호 네 자리. 회원 조회 API 의 empSeq 를 채운 값 (9/10 회의). */
+  loginId?: string
+  role?: 'MEMBER' | 'ADMIN'
+  mustChangePassword?: boolean
 }
 
 export interface UserRef extends Me {}
+
+/**
+ * `POST /auth/login` — 사원번호와 비밀번호로 로그인한다 (9/10 회의).
+ * 관리자 콘솔도 같은 경로를 쓰고 `role` 로 갈린다.
+ */
+export interface LoginRequest {
+  /** 사원번호 네 자리 (예: 0042). 관리자는 admin */
+  loginId: string
+  password: string
+}
+
+export interface LoginResponse {
+  token: string
+  /** true 면 비밀번호를 바꾸기 전까지 다른 화면으로 갈 수 없다. */
+  mustChangePassword: boolean
+  role: 'MEMBER' | 'ADMIN'
+}
+
+/** `GET /me/github` — 내 계정에 붙은 GitHub. 붙이지 않았으면 linked=false. */
+export interface GithubLink {
+  linked: boolean
+  login: string | null
+  avatarUrl: string | null
+  linkedAt: string | null
+}
 
 export interface RepoRef {
   id: number

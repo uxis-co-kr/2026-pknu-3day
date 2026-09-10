@@ -5,6 +5,7 @@ import RequireAuth from '@/components/layout/RequireAuth'
 import AuthDonePage from '@/pages/AuthDonePage'
 import LoginPage from '@/pages/LoginPage'
 import GithubPage from '@/pages/GithubPage'
+import PasswordPage from '@/pages/PasswordPage'
 import SettingsPage from '@/pages/SettingsPage'
 import VscodePage from '@/pages/VscodePage'
 
@@ -13,6 +14,7 @@ const DraftEditorPage = lazy(() => import('@/pages/DraftEditorPage'))
 const DraftsPage = lazy(() => import('@/pages/DraftsPage'))
 // 메뉴에서는 빠졌지만 경로는 남긴다 — 관리자 콘솔의 "팀원 전체 내역" 이 이 화면을 재사용한다.
 const PeoplePage = lazy(() => import('@/pages/PeoplePage'))
+const AdminPage = lazy(() => import('@/pages/AdminPage'))
 
 /**
  * 9/10 회의에서 정한 메뉴 넷 — 깃허브 내역 · VS 내역 · 초안 작성 · 설정.
@@ -29,12 +31,15 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/done" element={<AuthDonePage />} />
         <Route element={<RequireAuth />}>
+          {/* 비밀번호 변경 강제 화면은 사이드바 없이 단독으로 뜬다. */}
+          <Route path="/password" element={<PasswordPage />} />
             <Route element={<AppLayout />}>
           <Route path="/github" element={<GithubPage />} />
           <Route path="/vscode" element={<VscodePage />} />
           <Route path="/drafts" element={<DraftsPage />} />
           <Route path="/drafts/:id" element={<DraftEditorPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           {/* 옛 경로 → 새 자리 */}
           <Route path="/" element={<Navigate to="/github" replace />} />
           <Route path="/repos" element={<Navigate to="/settings" replace />} />
