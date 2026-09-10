@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import AutoBadge from '@/components/common/AutoBadge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import DraftWorkspace from '@/components/draft/DraftWorkspace'
-import { useActivities, useDraftRange, useDrafts, useGenerateDraft, useMe, useSessions } from '@/api/hooks'
+import { useActivities, useDraftRange, useDrafts, useMe, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatDateLabel, formatTime } from '@/lib/date'
 
@@ -41,7 +41,6 @@ export default function DraftsPage() {
   const today = useDrafts({ date, userId: me?.id })
   const activities = useActivities({ date, userId: me?.id })
   const sessions = useSessions({ date, userId: me?.id })
-  const generate = useGenerateDraft()
 
   const todayDraft = today.data?.[0]
   // 내 활동에서 직접 센다. /stats/daily 응답에는 팀 전원의 숫자가 실려 온다.
@@ -53,34 +52,22 @@ export default function DraftsPage() {
   const past = (list.data ?? []).filter((d) => d.workDate !== date)
   const thisMonth = new Date().toISOString().slice(0, 7)
 
-  async function onGenerate() {
-    if (!me) return
-    await generate.mutateAsync({ date, userId: me.id })
-  }
 
   return (
     <div className="space-y-4">
-      {todayDraft ? (
-        <DraftWorkspace draftId={todayDraft.id} />
-      ) : (
-        <Card className="flex items-center justify-between gap-4 rounded-lg p-4 shadow-none">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">{formatDateLabel(date)}</p>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {material > 0
-                ? `아직 일지가 없습니다. 근거 ${material}건을 모아 AI 가 초안을 써 줍니다`
-                : '이 날짜에는 커밋도 VS 기록도 없어 AI 가 쓸 재료가 없습니다'}
-            </p>
-          </div>
-          <Button size="sm" className="h-[34px] shrink-0 gap-1.5"
-            disabled={generate.isPending || material === 0}
-            title={material === 0 ? '그날 커밋이나 VS 기록이 있어야 AI 가 쓸 수 있습니다' : undefined}
-            onClick={() => void onGenerate()}>
-            <Sparkles className="size-3.5" />
-            {generate.isPending ? 'AI 가 쓰는 중…' : 'AI 생성'}
-          </Button>
-        </Card>
-      )}
+      {/*
+        * 일지가 없어도 편집기를 띄운다 — 이 화면에 들어온 목적이 쓰는 것이기 때문이다.
+        * 저장하기 전에는 서버에 아무것도 만들지 않는다 (열어만 보고 나간 날에 빈 일지가
+        * 쌓이지 않게).
+        */}
+      <DraftWorkspace
+        draftId={todayDraft?.id}
+        workDate={date}
+        userId={me?.id}
+        displayName={me?.name ?? me?.login}
+        evidence={{ activities: myActivities, sessions: mySessions }}
+        canGenerate={material > 0}
+      />
 
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">

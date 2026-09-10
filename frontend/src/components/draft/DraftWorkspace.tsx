@@ -7,15 +7,22 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { useDraft, useGenerateDraft, useNotifyDraft, useSaveDraft } from '@/api/hooks'
+import { useCreateBlankDraft, useDraft, useGenerateDraft, useNotifyDraft, useSaveDraft } from '@/api/hooks'
 import { ApiError } from '@/api/apiClient'
 import { formatTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
+import type { Activity, VscodeSession } from '@/types/api'
 
 const TAB =
   'h-[30px] rounded-none border-b-2 border-transparent px-3.5 text-[13px] shadow-none'
   + ' data-[state=active]:border-primary data-[state=active]:bg-transparent'
   + ' data-[state=active]:text-primary data-[state=active]:shadow-none'
+
+/** 서버의 DraftTemplate.blank 와 같은 모양. 저장하면 서버가 만든 것과 이어진다. */
+function blankTemplate(workDate: string, displayName?: string | null): string {
+  return `# ${workDate} 업무 일지 — ${displayName ?? ''}\n\n`
+    + '## 완료한 작업\n- \n\n## 진행 중 / 미커밋\n- \n\n## 계획 / TODO\n- \n\n## 메모\n'
+}
 
 /**
  * 업무 일지 작업 화면 — 왼쪽 편집기, 오른쪽 근거.
@@ -23,8 +30,19 @@ const TAB =
  * <p>업무 일지 작성 탭의 "오늘 일지" 와 편집 화면(/drafts/:id)이 **같은 컴포넌트**를 쓴다.
  * 두 곳을 따로 만들었더니 탭 모양·버튼 자리·여백이 조금씩 어긋났다 (9/10 지적).
  */
-export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
-  draftId: number
+export default function DraftWorkspace({
+  draftId, workDate, userId, displayName, evidence, canGenerate = true, onGenerated, onBack,
+}: {
+  /** 없으면 아직 만들어지지 않은 일지다. 빈 편집기를 띄우고, 저장할 때 서버에 만든다. */
+  draftId?: number
+  /** draftId 가 없을 때 필요하다. 있으면 초안이 자기 날짜를 안다. */
+  workDate?: string
+  userId?: number
+  displayName?: string | null
+  /** 일지가 없을 때 근거 패널에 보여 줄 그날의 기록. */
+  evidence?: { activities: Activity[]; sessions: VscodeSession[] }
+  /** 그날 기록이 없으면 AI 가 쓸 재료가 없다. */
+  canGenerate?: boolean
   /** AI 생성으로 새 버전이 생겼을 때. 편집 화면은 그 초안으로 이동한다. */
   onGenerated?: (nextId: number) => void
   /** 주면 머리에 뒤로 가기가 생긴다. 지난 일지를 열었을 때 목록으로 돌아가는 길이다. */
@@ -34,6 +52,7 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
   const save = useSaveDraft()
   const notify = useNotifyDraft()
   const regenerate = useGenerateDraft()
+  const createBlank = useCreateBlankDraft()
 
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [content, setContent] = useState('')
@@ -42,7 +61,9 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
 
   useEffect(() => {
     if (draft) setContent(draft.contentMd)
-  }, [draft])
+    // 아직 일지가 없으면 머리말만 둔 뼈대에서 시작한다. 저장하기 전에는 서버에 아무것도 없다.
+    else if (!draftId && workDate) setContent(blankTemplate(workDate, displayName))
+  }, [draft, draftId, workDate, displayName])
 
   useEffect(() => {
     if (!message) return
@@ -51,7 +72,15 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
     return () => clearTimeout(t)
   }, [message])
 
-  const dirty = draft !== undefined && content !== draft.contentMd
+  const dirty = draft
+    ? content !== draft.contentMd
+    : content.trim() !== blankTemplate(workDate ?? '', displayName).trim()
+
+  /** 일지가 없으면 저장할 때 만든다 — 열어만 보고 나간 날에 빈 일지가 쌓이지 않게. */
+  async function saveContent() {
+    const id = draft?.id ?? (await createBlank.mutateAsync(workDate ?? '')).id
+    await save.mutateAsync({ id, contentMd: content })
+  }
 
   /**
    * 근거 행을 누르면 본문에서 그 줄을 찾아 선택한다.
@@ -92,7 +121,7 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
     }
   }
 
-  if (isLoading || !draft) {
+  if (draftId && (isLoading || !draft)) {
     return (
       <div className="grid grid-cols-[672px_1fr] gap-4">
         <Skeleton className="h-[795px] rounded-lg" />
@@ -101,10 +130,10 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
     )
   }
 
-  const sourceActivities = draft.sourceActivities ?? []
-  const sourceSessions = draft.sourceSessions ?? []
-  const author = sourceActivities[0]?.user?.name
-  const busy = save.isPending || notify.isPending || regenerate.isPending
+  const sourceActivities = draft?.sourceActivities ?? evidence?.activities ?? []
+  const sourceSessions = draft?.sourceSessions ?? evidence?.sessions ?? []
+  const author = draft ? sourceActivities[0]?.user?.name : displayName
+  const busy = save.isPending || notify.isPending || regenerate.isPending || createBlank.isPending
 
   return (
     <div className="grid h-[795px] grid-cols-[672px_1fr] gap-4">
@@ -117,11 +146,12 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
             </Button>
           )}
           <h1 className="text-[15px] font-semibold">
-            {draft.workDate} 업무 일지{author ? ` — ${author}` : ''}
+            {draft?.workDate ?? workDate} 업무 일지{author ? ` — ${author}` : ''}
           </h1>
           <span className="text-[12px] text-muted-foreground">
-            v{draft.version} ·{' '}
-            {dirty ? '저장하지 않은 변경' : `마지막 저장 ${formatTime(draft.updatedAt)}`}
+            {draft
+              ? `v${draft.version} · ${dirty ? '저장하지 않은 변경' : `마지막 저장 ${formatTime(draft.updatedAt)}`}`
+              : '아직 저장하지 않았습니다'}
           </span>
           {message && (
             <span className={cn('text-[12px] font-medium', message.failed ? 'text-status-failed' : 'text-primary')}>
@@ -161,12 +191,18 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
         </Tabs>
 
         <div className="flex h-[59px] shrink-0 items-center justify-between border-t px-5">
+          <div className="flex items-center gap-2">
           <Button
             variant="outline" size="sm" className="h-[34px] gap-1.5"
-            disabled={busy}
-            title="지금까지의 깃허브·VS 기록으로 AI 가 다시 씁니다. 쓴 내용은 새 버전으로 남습니다"
+            disabled={busy || !canGenerate}
+            title={canGenerate
+              ? '지금까지의 깃허브·VS 기록으로 AI 가 다시 씁니다. 쓴 내용은 새 버전으로 남습니다'
+              : undefined}
             onClick={() => void run(async () => {
-              const next = await regenerate.mutateAsync({ date: draft.workDate, userId: draft.userId })
+              const next = await regenerate.mutateAsync({
+                date: draft?.workDate ?? workDate ?? '',
+                userId: draft?.userId ?? userId ?? 0,
+              })
               if (next && 'id' in next) onGenerated?.(next.id)
             }, 'AI 가 다시 썼습니다')}
           >
@@ -175,23 +211,30 @@ export default function DraftWorkspace({ draftId, onGenerated, onBack }: {
               ? <><Loader2 className="animate-spin" /> AI 가 쓰는 중…</>
               : <><Sparkles /> AI 생성</>}
           </Button>
+          {/* 왜 못 누르는지 버튼 옆에 둔다. 잠긴 버튼만 있으면 고장으로 보인다. */}
+          {!canGenerate && (
+            <span className="text-[12px] text-muted-foreground">
+              오늘 커밋도 VS 기록도 없어 AI 가 쓸 재료가 없습니다
+            </span>
+          )}
+          </div>
 
           <div className="flex items-center gap-2">
             <Button
               size="sm" className="h-[34px]"
               disabled={!dirty || busy}
-              onClick={() => void run(() => save.mutateAsync({ id: draft.id, contentMd: content }), '저장했습니다')}
+              onClick={() => void run(saveContent, '저장했습니다')}
             >
               저장
             </Button>
             <Button
               variant="outline" size="sm" className="h-[34px]"
-              disabled={busy || !draft.userEdited || dirty}
+              disabled={busy || !draft?.userEdited || dirty}
               title={
-                !draft.userEdited ? '한 번 저장한 뒤에 보낼 수 있습니다'
+                !draft?.userEdited ? '한 번 저장한 뒤에 보낼 수 있습니다'
                   : dirty ? '먼저 저장해 주세요' : undefined
               }
-              onClick={() => void run(() => notify.mutateAsync({ id: draft.id }), 'Mattermost로 보냈습니다')}
+              onClick={() => draft && void run(() => notify.mutateAsync({ id: draft.id }), 'Mattermost로 보냈습니다')}
             >
               Mattermost 전송
             </Button>
