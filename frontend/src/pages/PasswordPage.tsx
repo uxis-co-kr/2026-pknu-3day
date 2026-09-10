@@ -19,7 +19,8 @@ export default function PasswordPage() {
   const { data: me } = useMe()
   const change = useChangePassword()
 
-  const forced = auth.mustChangePassword
+  // 강제 여부는 서버가 정한다. 브라우저에 남은 표시만 믿으면 바꿀 필요가 없는 계정에도 뜬다.
+  const forced = me ? me.mustChangePassword === true : auth.mustChangePassword
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -86,8 +87,8 @@ export default function PasswordPage() {
             </span>
             <h1 className="mt-6 text-[18px] font-semibold">비밀번호를 바꿔 주세요</h1>
             <p className="mt-2 text-[13px] text-muted-foreground">
-              최초 비밀번호는 사원번호와 같아 다른 사람도 알 수 있습니다.
-              바꾸기 전에는 다른 화면으로 갈 수 없습니다.
+              최초 비밀번호는 사원번호와 같습니다. 새 비밀번호를 정하면
+              이 화면은 다시 나오지 않습니다.
             </p>
           </div>
           <div className="mt-7">{form}</div>
