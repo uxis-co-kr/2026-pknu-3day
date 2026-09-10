@@ -109,7 +109,9 @@ async function askApiKey(reason?: string): Promise<boolean> {
     .getConfiguration('worklog')
     .update('apiKey', key.trim(), vscode.ConfigurationTarget.Global)
   log('API Key 를 새로 저장했습니다.')
-  void vscode.window.showInformationMessage('WorkLog: API Key 를 저장했습니다.')
+  // 저장만 하고 두면 상태바에 옛 오류가 그대로 남는다. 키를 고쳤는데도 실패한 것처럼
+  // 보이므로 바로 한 번 보내 결과를 갱신한다.
+  await vscode.commands.executeCommand('worklog.sendNow')
   return true
 }
 
@@ -128,8 +130,8 @@ async function promptForApiKey(failure: string): Promise<void> {
       : 'WorkLog: API Key 가 설정되지 않아 전송하지 못했습니다.',
     enter,
   )
-  if (picked === enter && (await askApiKey())) {
-    await vscode.commands.executeCommand('worklog.sendNow')
+  if (picked === enter) {
+    await askApiKey()
   }
 }
 
@@ -263,6 +265,10 @@ export function activate(context: vscode.ExtensionContext): void {
       )
       // 사용자가 직접 누른 경우에만 안내한다. 주기·시작 전송까지 알리면 성가시다.
       if (failure === NO_API_KEY || failure === WRONG_API_KEY) await promptForApiKey(failure)
+      else if (!failure) {
+        void vscode.window.showInformationMessage(
+          `WorkLog: 전송했습니다 (미커밋 ${collector.uncommittedCount}파일).`)
+      }
     }),
   )
 
