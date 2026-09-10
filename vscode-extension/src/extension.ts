@@ -10,6 +10,8 @@ let statusBar: vscode.StatusBarItem
 let timer: NodeJS.Timeout | undefined
 /** 전송이 겹치지 않게 한다 — 주기 타이머와 "지금 전송" 이 동시에 들어올 수 있다. */
 let sending = false
+/** 키 확인 때문에 부른 전송인지. 알림을 두 번 띄우지 않기 위한 표시다. */
+let verifying = false
 
 function readConfig() {
   const cfg = vscode.workspace.getConfiguration('worklog')
@@ -110,8 +112,18 @@ async function askApiKey(reason?: string): Promise<boolean> {
     .update('apiKey', key.trim(), vscode.ConfigurationTarget.Global)
   log('API Key 를 새로 저장했습니다.')
   // 저장만 하고 두면 상태바에 옛 오류가 그대로 남는다. 키를 고쳤는데도 실패한 것처럼
-  // 보이므로 바로 한 번 보내 결과를 갱신한다.
-  await vscode.commands.executeCommand('worklog.sendNow')
+  // 보이므로 바로 한 번 보내 결과를 갱신한다. 사용자에게는 "확인" 으로 알린다 —
+  // 키만 넣었는데 "전송했습니다" 가 뜨면 무엇이 나갔는지 몰라 놀란다.
+  verifying = true
+  try {
+    const failure = await send('키 확인')
+    void (failure
+      ? vscode.window.showWarningMessage(`WorkLog: 키를 저장했지만 확인에 실패했습니다 — ${failure}`)
+      : vscode.window.showInformationMessage(
+          `WorkLog: 키를 저장하고 확인했습니다. 오늘 작업 ${collector.uncommittedCount}파일을 보냈습니다.`))
+  } finally {
+    verifying = false
+  }
   return true
 }
 
@@ -265,7 +277,7 @@ export function activate(context: vscode.ExtensionContext): void {
       )
       // 사용자가 직접 누른 경우에만 안내한다. 주기·시작 전송까지 알리면 성가시다.
       if (failure === NO_API_KEY || failure === WRONG_API_KEY) await promptForApiKey(failure)
-      else if (!failure) {
+      else if (!failure && !verifying) {
         void vscode.window.showInformationMessage(
           `WorkLog: 전송했습니다 (미커밋 ${collector.uncommittedCount}파일).`)
       }
