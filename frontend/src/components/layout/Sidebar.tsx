@@ -16,7 +16,7 @@ const item = (active: boolean) =>
 const MENU = [
   { to: '/github', label: '깃허브 내역' },
   { to: '/vscode', label: 'VS 내역' },
-  { to: '/drafts', label: '초안 작성' },
+  { to: '/drafts', label: '업무 일지 작성' },
   { to: '/settings', label: '설정' },
 ]
 

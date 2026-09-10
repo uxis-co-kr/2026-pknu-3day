@@ -184,12 +184,18 @@ const routes: [string, string, Handler][] = [
 
   ['GET', '/drafts', (_p, q) => {
     const date = q.get('date')
+    // 업무 일지 목록은 기간으로 부른다. 서버는 최근 날짜가 먼저 오게 정렬해 준다.
+    const from = q.get('from')
+    const to = q.get('to')
     const userId = q.get('userId')
     const status = q.get('status')
     return db.drafts.filter((d) =>
       (!date || d.workDate === date) &&
+      (!from || d.workDate >= from) &&
+      (!to || d.workDate <= to) &&
       (!userId || d.userId === Number(userId)) &&
       (!status || d.status === status))
+      .sort((x, y) => y.workDate.localeCompare(x.workDate))
   }],
 
   ['GET', '/drafts/:id', (p) => {

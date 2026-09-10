@@ -14,6 +14,7 @@ export const qk = {
   statsPeople: (f: PeopleFilter) => ['stats', 'people', f] as const,
   sessions: (f: DayFilter) => ['vscode-sessions', f] as const,
   drafts: (f: DraftFilter) => ['drafts', f] as const,
+  draftRange: (f: DraftRangeFilter) => ['drafts', 'range', f] as const,
   draft: (id: number) => ['drafts', id] as const,
   repos: ['repos'] as const,
   apiKeys: ['api-keys'] as const,
@@ -25,6 +26,8 @@ export const qk = {
 export interface DayFilter { date: string; userId?: number }
 export interface ActivityFilter extends DayFilter { repoId?: number; type?: string }
 export interface DraftFilter extends DayFilter { status?: string }
+/** 업무 일지 목록 — 하루가 아니라 기간으로 본다. */
+export interface DraftRangeFilter { from: string; to: string; userId?: number; status?: string }
 export interface PeopleFilter { from: string; to: string; userId?: number; granularity?: 'day' | 'week' }
 
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api.get<Me>('/me') })
@@ -81,6 +84,14 @@ export const useSessions = (f: DayFilter) =>
 
 export const useDrafts = (f: DraftFilter) =>
   useQuery({ queryKey: qk.drafts(f), queryFn: () => api.get<DraftSummary[]>(`/drafts${qs({ ...f })}`) })
+
+/** 기간 안의 내 업무 일지. 최근 날짜가 먼저 온다 (서버 정렬). */
+export const useDraftRange = (f: DraftRangeFilter, enabled = true) =>
+  useQuery({
+    queryKey: qk.draftRange(f),
+    queryFn: () => api.get<DraftSummary[]>(`/drafts${qs({ ...f })}`),
+    enabled,
+  })
 
 export const useDraft = (id: number | undefined) =>
   useQuery({ queryKey: qk.draft(id!), queryFn: () => api.get<Draft>(`/drafts/${id}`), enabled: id !== undefined })
