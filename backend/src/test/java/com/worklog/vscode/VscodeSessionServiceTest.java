@@ -53,7 +53,23 @@ class VscodeSessionServiceTest {
                 List.of(new TodoItem("src/api/attendance.ts", 42, "중복 출석 검증")),
                 planNote,
                 List.of(),
+                List.of(new AiSessionSummary(
+                        "sess-1",
+                        "2026-09-09T10:00:00+09:00",
+                        "2026-09-09T11:00:00+09:00",
+                        2,
+                        List.of("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘"))),
                 OffsetDateTime.parse("2026-09-09T12:00:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("확장이 보낸 AI 대화를 그대로 저장한다")
+    void keepsAiSessions() {
+        VscodeSession saved = service.upsert(USER_ID, request("오늘 계획"));
+
+        assertThat(saved.getAiSessions()).hasSize(1);
+        assertThat(saved.getAiSessions().get(0).prompts())
+                .containsExactly("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘");
     }
 
     @Test
@@ -125,7 +141,7 @@ class VscodeSessionServiceTest {
         when(repos.findByFullName("withly/unknown")).thenReturn(Optional.empty());
         SessionRequest unknown = new SessionRequest(
                 "https://github.com/withly/unknown.git", BRANCH, WORK_DATE,
-                List.of(), List.of(), null, List.of(), null);
+                List.of(), List.of(), null, List.of(), List.of(), null);
         assertThat(service.upsert(USER_ID, unknown).getRepo()).isNull();
     }
 }

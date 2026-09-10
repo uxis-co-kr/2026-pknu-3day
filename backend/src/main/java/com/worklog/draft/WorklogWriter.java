@@ -7,6 +7,7 @@ import com.worklog.llm.LlmProviderResolver;
 import com.worklog.llm.LlmRequest;
 import com.worklog.llm.LlmSettingService;
 import com.worklog.llm.PromptLoader;
+import com.worklog.vscode.AiSessionSummary;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
 import com.worklog.vscode.VscodeSession;
@@ -15,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,10 @@ public class WorklogWriter {
     /** 한 번에 넘길 활동 수. 넘치면 프롬프트가 컨텍스트를 넘어선다. */
     private static final int MAX_ACTIVITIES = 60;
     private static final int MAX_TOKENS = 1200;
+    /** 세션 하나에서 가져올 AI 프롬프트 수. */
+    private static final int MAX_AI_PROMPTS_PER_SESSION = 6;
+    /** 전체 AI 프롬프트 상한. */
+    private static final int MAX_AI_PROMPTS = 20;
 
     private final LlmProviderResolver resolver;
     private final LlmSettingService settingService;
@@ -87,6 +93,7 @@ public class WorklogWriter {
         vars.put("activities", activityLines(activities));
         vars.put("sessions", sessionLines(sessions));
         vars.put("plans", planLines(sessions));
+        vars.put("aiPrompts", aiLines(sessions));
 
         return new LlmRequest(
                 prompts.load(PromptLoader.WORKLOG_SYSTEM),
@@ -146,6 +153,25 @@ public class WorklogWriter {
             }
         }
         return sb.toString().strip();
+    }
+
+    /**
+     * AI 와 나눈 대화에서 사용자가 친 말만 (V9).
+     *
+     * <p>커밋에도 미커밋 변경에도 남지 않는 작업의 단서다. 세션마다 앞의 몇 개만 넣는다 —
+     * 전부 넣으면 이 부분이 프롬프트를 차지해 정작 커밋이 밀린다.
+     */
+    private static String aiLines(List<VscodeSession> sessions) {
+        String lines = sessions.stream()
+                .flatMap(s -> s.getAiSessions() == null ? Stream.<AiSessionSummary>of() : s.getAiSessions().stream())
+                .flatMap(a -> a.prompts().stream().limit(MAX_AI_PROMPTS_PER_SESSION))
+                .map(String::strip)
+                .filter(p -> !p.isEmpty())
+                .distinct()
+                .limit(MAX_AI_PROMPTS)
+                .map(p -> "- " + p)
+                .collect(Collectors.joining("\n"));
+        return lines.isEmpty() ? "(없음)" : lines;
     }
 
     private static String planLines(List<VscodeSession> sessions) {

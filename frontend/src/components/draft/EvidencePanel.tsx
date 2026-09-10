@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Clock, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, ListTodo, NotebookPen } from 'lucide-react'
+import { ChevronRight, Clock, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
 import ActivityRow from '@/components/activity/ActivityRow'
 import DiffStat from '@/components/common/DiffStat'
 import { Card } from '@/components/ui/card'
@@ -130,6 +130,16 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
             <span className="min-w-0 flex-1 truncate italic">{p}</span>
           </Row>
         ))}
+      </Category>
+
+      <Category label="AI 대화" count={session.aiSessions?.length ?? 0} Icon={MessagesSquare}>
+        {(session.aiSessions ?? []).flatMap((a) =>
+          a.prompts.map((q) => (
+            <Row key={`${a.id}:${q}`} onClick={() => onJump([q.slice(0, 40)])}>
+              <span className="min-w-0 flex-1 truncate">{q}</span>
+              <span className="shrink-0 text-muted-foreground/70">{formatTime(a.firstAt)}</span>
+            </Row>
+          )))}
       </Category>
 
       {/* 저장 이벤트는 초안 본문에 직접 쓰이지 않는다. 얼마나 손댔는지 가늠하는 값이라 눌러도 이동하지 않는다. */}

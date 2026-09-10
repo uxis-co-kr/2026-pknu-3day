@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock, FileDiff, ListTodo, NotebookPen } from 'lucide-react'
+import { Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import DiffStat from '@/components/common/DiffStat'
@@ -112,6 +112,19 @@ function SessionDetail({ session }: { session: VscodeSession }) {
 
         <Group label="계획" count={plans.length} Icon={NotebookPen}>
           {plans.map((p) => <p key={p} className="truncate italic">{p}</p>)}
+        </Group>
+
+        <Group label="AI 대화" count={session.aiSessions?.length ?? 0} Icon={MessagesSquare}>
+          {(session.aiSessions ?? []).map((a) => (
+            <div key={a.id}>
+              <p className="tabular-nums text-muted-foreground/70">
+                {formatTime(a.firstAt)}–{formatTime(a.lastAt)} · {a.promptCount}개
+              </p>
+              {a.prompts.slice(0, 3).map((q) => (
+                <p key={q} className="truncate pl-2">· {q}</p>
+              ))}
+            </div>
+          ))}
         </Group>
 
         <Group label="저장 이벤트" count={session.editTimeline.length} Icon={Clock}>

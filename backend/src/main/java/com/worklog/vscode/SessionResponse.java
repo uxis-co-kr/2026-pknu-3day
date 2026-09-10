@@ -19,6 +19,8 @@ public record SessionResponse(
         List<TodoItem> todos,
         String planNote,
         List<EditTimelineEntry> editTimeline,
+        /** 그 폴더에서 오간 AI 대화 (V9). 없으면 빈 배열. */
+        List<AiSessionSummary> aiSessions,
         String summary,
         OffsetDateTime lastCommitAt,
         OffsetDateTime reportedAt) {
@@ -37,6 +39,7 @@ public record SessionResponse(
                 s.getTodos(),
                 s.getPlanNote(),
                 s.getEditTimeline(),
+                s.getAiSessions(),
                 s.getSummary(),
                 s.getLastCommitAt(),
                 s.getReportedAt());

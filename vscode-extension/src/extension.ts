@@ -91,6 +91,27 @@ async function promptForApiKey(): Promise<void> {
 }
 
 /**
+ * 계획을 어느 폴더에 적을지 고른다.
+ *
+ * <p>폴더가 하나면 묻지 않는다. 여럿일 때 묻지 않으면 계획 하나가 모든 폴더에 붙어,
+ * 회사 일 계획이 개인 프로젝트 세션에 실려 간다.
+ */
+async function pickFolder(): Promise<string | undefined> {
+  const folders = vscode.workspace.workspaceFolders ?? []
+  if (folders.length === 0) {
+    void vscode.window.showWarningMessage('WorkLog: 열린 폴더가 없습니다.')
+    return undefined
+  }
+  if (folders.length === 1) return folders[0].uri.fsPath
+
+  const picked = await vscode.window.showQuickPick(
+    folders.map((f) => ({ label: f.name, description: f.uri.fsPath })),
+    { title: '어느 폴더의 계획입니까?' },
+  )
+  return picked?.description
+}
+
+/**
  * 저장할 때마다 git 을 부르면 연속 저장에서 낭비가 크다. 1초 안의 저장은 한 번으로 묶는다.
  */
 let treeRefreshTimer: NodeJS.Timeout | undefined
@@ -134,9 +155,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // 사이드바에서 계획 한 줄을 지운다. 잘못 적은 메모가 그날 내내 남지 않게.
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.removePlan', (node?: { note?: string }) => {
+    vscode.commands.registerCommand('worklog.removePlan', (node?: { note?: string; folder?: string }) => {
       if (!node?.note) return
-      collector.removePlanNote(node.note)
+      collector.removePlanNote(node.note, node.folder)
       log(`계획 삭제: ${node.note}`)
       void tree.refresh()
     }),
@@ -144,17 +165,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.recordPlan', async () => {
-      const count = collector.planNotes.length
+      const folder = await pickFolder()
+      if (!folder) return
+
+      const count = collector.planNotesOf(folder).length
       const note = await vscode.window.showInputBox({
         title: 'WorkLog: 계획 추가',
         prompt: count === 0
-          ? '오늘 무엇을 할 계획인지 한 줄로 적으세요. 초안의 "계획 / TODO" 에 들어갑니다.'
+          ? '오늘 무엇을 할 계획인지 한 줄로 적으세요. 업무 일지의 "계획 / TODO" 에 들어갑니다.'
           : `이미 ${count}건 적었습니다. 덧붙일 계획을 적으세요.`,
         placeHolder: '예) 오후에 출석 중복 검증 로직 마무리',
       })
       if (note !== undefined && note.trim()) {
-        collector.addPlanNote(note)
-        log(`계획 추가: ${note.trim()} (총 ${collector.planNotes.length}건)`)
+        collector.addPlanNote(note, folder)
+        log(`계획 추가 (${folder}): ${note.trim()}`)
         void tree.refresh()
       }
     }),

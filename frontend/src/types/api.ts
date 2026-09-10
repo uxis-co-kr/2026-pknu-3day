@@ -119,6 +119,15 @@ export interface EditTimelineEntry {
   saveCount: number
 }
 
+/** 그 폴더에서 오간 AI 대화 한 세션. 사용자가 친 말만 담는다. */
+export interface AiSessionSummary {
+  id: string
+  firstAt: string
+  lastAt: string
+  promptCount: number
+  prompts: string[]
+}
+
 export interface VscodeSession {
   id: number
   userId: number
@@ -130,6 +139,8 @@ export interface VscodeSession {
   todos: TodoItem[]
   planNote: string | null
   editTimeline: EditTimelineEntry[]
+  /** 커밋에도 미커밋 변경에도 남지 않는 작업의 단서. */
+  aiSessions: AiSessionSummary[]
   summary: string | null
   lastCommitAt: string | null
   reportedAt: string

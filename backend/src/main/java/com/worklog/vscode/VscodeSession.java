@@ -78,6 +78,11 @@ public class VscodeSession {
     @Column(name = "edit_timeline", nullable = false, columnDefinition = "jsonb")
     private List<EditTimelineEntry> editTimeline = new ArrayList<>();
 
+    /** 그 폴더에서 오간 AI 대화 (V9). 확장이 보낸다. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ai_sessions", nullable = false, columnDefinition = "jsonb")
+    private List<AiSessionSummary> aiSessions = new ArrayList<>();
+
     @Column(columnDefinition = "text")
     private String summary;
 
