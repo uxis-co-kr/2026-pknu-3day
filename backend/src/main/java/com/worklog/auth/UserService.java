@@ -90,16 +90,19 @@ public class UserService {
             }
             // GitHub 로그인이 곧 회원가입이던 시절의 껍데기 계정이다. 이제 아무도 그 계정으로
             // 들어갈 수 없으니, OAuth 로 소유를 증명한 이 사람에게 넘긴다 (TODO_0910 §1-1).
+            //
+            // 껍데기는 지운다. github_id 만 비우면 `ck_users_has_credential`(github_id 또는
+            // login_id 중 하나는 있어야 한다) 에 걸려 저장 자체가 실패한다. 지우면 활동은
+            // user_id 가 NULL 로 풀리므로, 아래에서 external_login 으로 다시 이어 붙는다.
             int moved = activityRepository.reassignActivities(owner.getId(), userId);
-            owner.setGithubId(null);
-            owner.setGithubTokenEnc(null);
-            userRepository.save(owner);
             log.info(
-                    "GitHub {} 를 옛 계정 {} 에서 사용자 {} 로 넘긴다 — 활동 {}건 이관.",
+                    "GitHub {} 를 옛 계정 {} 에서 사용자 {} 로 넘긴다 — 활동 {}건 이관, 옛 계정 삭제.",
                     dto.login(),
                     owner.getId(),
                     userId,
                     moved);
+            userRepository.delete(owner);
+            userRepository.flush();
         });
 
         user.setGithubId(dto.id());
