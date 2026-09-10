@@ -21,7 +21,7 @@ export default function EvidencePanel({
 }: {
   activities: Activity[]
   sessions: VscodeSession[]
-  onJump: (needle: string) => void
+  onJump: (needles: string[]) => void
 }) {
   const byTime = [...activities].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt))
 
@@ -44,7 +44,8 @@ export default function EvidencePanel({
                       activity={a}
                       dense
                       className="rounded"
-                      onClick={() => onJump(a.sha ?? `#${a.externalId}`)}
+                      // 본문에는 짧은 sha 가 들어간다. 전체 sha 만 찾으면 늘 빗나간다.
+                      onClick={() => onJump(jumpTargets(a))}
                     />
                   ))}
                 </div>
@@ -67,6 +68,24 @@ export default function EvidencePanel({
   )
 }
 
+/**
+ * 본문에서 이 활동을 가리킬 만한 문자열들. 앞의 것부터 찾는다.
+ *
+ * <p>템플릿은 `(commit c37005f)` 처럼 7자 sha 를 쓰고, AI 가 쓴 본문은 표기가 더 자유롭다.
+ * 그래서 짧은 sha → 전체 sha → PR 번호 → 제목 순으로 후보를 준다.
+ */
+function jumpTargets(a: Activity): string[] {
+  const out: string[] = []
+  if (a.sha) {
+    out.push(a.sha.slice(0, 7), a.sha)
+  }
+  if (a.type !== 'COMMIT') {
+    out.push(`#${a.externalId}`, a.externalId)
+  }
+  if (a.title) out.push(a.title)
+  return out
+}
+
 const ACTIVITY_KINDS: { type: ActivityType; label: string; Icon: typeof GitMerge }[] = [
   { type: 'COMMIT', label: '커밋', Icon: GitCommitHorizontal },
   { type: 'PR_OPENED', label: 'PR 열림', Icon: GitPullRequest },
@@ -74,7 +93,7 @@ const ACTIVITY_KINDS: { type: ActivityType; label: string; Icon: typeof GitMerge
 ]
 
 /** 세션 하나를 네 갈래로 펼친다. 서버가 초안에 쓰는 재료와 같은 구분이다. */
-function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: (needle: string) => void }) {
+function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: (needles: string[]) => void }) {
   // 계획 메모는 확장이 여러 건을 줄바꿈으로 이어 보낸다 (서버 계약은 문자열 한 칸).
   const plans = (session.planNote ?? '').split('\n').map((p) => p.trim()).filter(Boolean)
 
@@ -89,7 +108,7 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
 
       <Category label="미커밋 파일" count={session.uncommittedFiles.length} Icon={FileDiff}>
         {session.uncommittedFiles.map((f) => (
-          <Row key={f.path} onClick={() => onJump(f.path)}>
+          <Row key={f.path} onClick={() => onJump([f.path, basename(f.path)])}>
             <span className="min-w-0 flex-1 truncate">{f.path}</span>
             <DiffStat additions={f.additions} deletions={f.deletions} />
           </Row>
@@ -98,7 +117,7 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
 
       <Category label="TODO" count={session.todos.length} Icon={ListTodo}>
         {session.todos.map((t) => (
-          <Row key={`${t.path}:${t.line}`} onClick={() => onJump(t.text)}>
+          <Row key={`${t.path}:${t.line}`} onClick={() => onJump([t.text, `${t.path}:${t.line}`, basename(t.path)])}>
             <span className="min-w-0 flex-1 truncate">{t.text}</span>
             <span className="shrink-0 text-muted-foreground/70">{basename(t.path)}:{t.line}</span>
           </Row>
@@ -107,7 +126,7 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
 
       <Category label="계획" count={plans.length} Icon={NotebookPen}>
         {plans.map((p) => (
-          <Row key={p} onClick={() => onJump(p)}>
+          <Row key={p} onClick={() => onJump([p])}>
             <span className="min-w-0 flex-1 truncate italic">{p}</span>
           </Row>
         ))}

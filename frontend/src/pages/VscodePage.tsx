@@ -26,8 +26,10 @@ export default function VscodePage() {
 
   const [repoFilter, setRepoFilter] = useState('all')
 
-  const shown = (sessions.data ?? []).filter((s) =>
-    s.userId === me?.id && (repoFilter === 'all' || s.repo?.id === Number(repoFilter)))
+  const shown = (sessions.data ?? [])
+    .filter((s) => s.userId === me?.id && (repoFilter === 'all' || s.repo?.id === Number(repoFilter)))
+    // 최신 보고가 위로 (9/10 결정).
+    .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt))
 
   const files = shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)
 

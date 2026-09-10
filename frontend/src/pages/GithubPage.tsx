@@ -37,10 +37,10 @@ export default function GithubPage() {
   const [types, setTypes] = useState<ActivityType[]>(TYPE_TABS.map((t) => t.key))
   const [page, setPage] = useState(0)
 
-  // 서버는 최신순으로 주는데 타임라인은 시간순이다 (아트보드 2: 10:12 → 16:30).
+  // 최신이 위로 온다 (9/10 결정). 방금 한 일을 찾으려고 아래로 스크롤하지 않게.
   const mine = [...(activities.data?.items ?? [])]
     .filter((a) => a.user?.id === me?.id)
-    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
 
   const shown = useMemo(
     () => mine.filter((a) =>
