@@ -42,6 +42,11 @@
         "command": "worklog.removePlan",
         "title": "WorkLog: 계획 삭제",
         "icon": "$(trash)"
+      },
+      {
+        "command": "worklog.setApiKey",
+        "title": "WorkLog: API Key 입력",
+        "icon": "$(key)"
       }
     ],
     "configuration": {
@@ -103,6 +108,11 @@
           "command": "worklog.refresh",
           "when": "view == worklog.session",
           "group": "navigation@3"
+        },
+        {
+          "command": "worklog.setApiKey",
+          "when": "view == worklog.session",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [

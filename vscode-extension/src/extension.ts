@@ -24,14 +24,18 @@ function readConfig() {
 /** 상태바에는 "미커밋 N파일" 또는 오류만 표시한다 (PRD F6). */
 function renderStatusBar(error?: string) {
   if (error) {
+    const keyProblem = error === NO_API_KEY || error === WRONG_API_KEY
     statusBar.text = `$(warning) WorkLog: ${error}`
-    statusBar.tooltip = `${error} — 클릭하면 다시 전송합니다`
+    // 키가 문제면 다시 전송해 봐야 같은 곳에서 막힌다. 바로 키 입력으로 보낸다.
+    statusBar.command = keyProblem ? 'worklog.setApiKey' : 'worklog.sendNow'
+    statusBar.tooltip = keyProblem ? `${error} — 클릭하면 키를 입력합니다` : `${error} — 클릭하면 다시 전송합니다`
     statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
   } else {
     // 미푸시는 셀 수 있을 때만 붙인다. 업스트림이 없는 브랜치에서 0 으로 보이면 거짓말이다.
     const unpushed = collector.unpushedCount
     const tail = unpushed ? ` · 미푸시 ${unpushed}` : ''
     statusBar.text = `$(git-commit) 미커밋 ${collector.uncommittedCount}파일${tail}`
+    statusBar.command = 'worklog.sendNow'
     statusBar.tooltip = 'WorkLog Drafter — 클릭하면 지금 전송'
     statusBar.backgroundColor = undefined
   }
@@ -40,6 +44,8 @@ function renderStatusBar(error?: string) {
 
 /** API Key 가 없을 때 Uploader 가 돌려주는 사유. 첫 실행 안내를 띄우는 조건이다. */
 const NO_API_KEY = 'API Key 미설정'
+/** 서버가 401/403 을 돌려줬을 때 Uploader 가 주는 사유. */
+const WRONG_API_KEY = 'API Key 오류'
 
 async function send(reason: string): Promise<string | undefined> {
   if (sending) {
@@ -76,17 +82,54 @@ async function send(reason: string): Promise<string | undefined> {
 }
 
 /**
- * 설정 화면을 열어 준다. 설치 직후에는 API Key 가 비어 있어 전송이 무조건 실패하는데,
- * 상태바 경고만으로는 무엇을 해야 하는지 알 수 없다 (BACKLOG F-6 사용자 테스트).
+ * 키를 그 자리에서 받아 저장한다.
+ *
+ * <p>예전에는 설정 화면만 열어 줬다. 그러면 대시보드에서 복사한 키를 들고 설정 검색창에
+ * `worklog` 를 치고 칸을 찾아 붙여 넣어야 한다. 키는 발급 직후 한 번만 보이는 값이라
+ * 그 사이에 잃어버리기 쉽다. 입력창을 바로 띄운다.
+ *
+ * @return 저장했으면 true
  */
-async function promptForApiKey(): Promise<void> {
-  const open = '설정 열기'
+async function askApiKey(reason?: string): Promise<boolean> {
+  const current = readConfig().apiKey
+  const key = await vscode.window.showInputBox({
+    title: 'WorkLog: API Key 입력',
+    prompt: reason ?? '대시보드 설정 > API 연동에서 발급한 키를 붙여 넣으세요.',
+    placeHolder: 'wl_...',
+    value: current,
+    password: true,
+    ignoreFocusOut: true, // 대시보드로 창을 옮겨 복사해 오는 동안 닫히면 안 된다
+    validateInput: (v) => (v.trim().length === 0 ? '키를 붙여 넣어 주세요.' : undefined),
+  })
+  if (key === undefined) {
+    return false
+  }
+  // 워크스페이스마다 다른 키를 쓸 이유가 없다. 사용자 설정에 둔다.
+  await vscode.workspace
+    .getConfiguration('worklog')
+    .update('apiKey', key.trim(), vscode.ConfigurationTarget.Global)
+  log('API Key 를 새로 저장했습니다.')
+  void vscode.window.showInformationMessage('WorkLog: API Key 를 저장했습니다.')
+  return true
+}
+
+/**
+ * 전송이 키 때문에 막혔을 때 알린다.
+ *
+ * <p>키가 비어 있는 것과 서버가 거절한 것(발급을 다시 받았거나 계정이 지워졌을 때)을
+ * 나눠 말한다. 둘 다 할 일은 같지만, 왜 막혔는지 모르면 같은 키를 다시 넣어 본다.
+ */
+async function promptForApiKey(failure: string): Promise<void> {
+  const wrong = failure === WRONG_API_KEY
+  const enter = '키 입력'
   const picked = await vscode.window.showWarningMessage(
-    'WorkLog: API Key 가 설정되지 않아 전송하지 못했습니다. 대시보드 설정 화면에서 발급한 키(wl_ 로 시작)를 넣어 주세요.',
-    open,
+    wrong
+      ? 'WorkLog: 서버가 이 API Key 를 받지 않았습니다. 대시보드에서 새로 발급해 주세요.'
+      : 'WorkLog: API Key 가 설정되지 않아 전송하지 못했습니다.',
+    enter,
   )
-  if (picked === open) {
-    await vscode.commands.executeCommand('workbench.action.openSettings', 'worklog.apiKey')
+  if (picked === enter && (await askApiKey())) {
+    await vscode.commands.executeCommand('worklog.sendNow')
   }
 }
 
@@ -160,6 +203,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('worklog.refresh', () => tree.refresh()),
   )
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('worklog.setApiKey', () => askApiKey()),
+  )
+
   // 커밋·푸시는 대개 터미널이나 소스 제어 패널에서 한다. 파일 저장만 보고 있으면 그때
   // 미커밋·미푸시 숫자가 낡은 채로 남아 실제와 달라 보인다.
   const gitWatcher = vscode.workspace.createFileSystemWatcher('**/.git/{HEAD,index,refs/**}')
@@ -215,7 +262,7 @@ export function activate(context: vscode.ExtensionContext): void {
         () => send('지금 전송'),
       )
       // 사용자가 직접 누른 경우에만 안내한다. 주기·시작 전송까지 알리면 성가시다.
-      if (failure === NO_API_KEY) await promptForApiKey()
+      if (failure === NO_API_KEY || failure === WRONG_API_KEY) await promptForApiKey(failure)
     }),
   )
 
