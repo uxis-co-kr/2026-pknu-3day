@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, qs } from './apiClient'
 import type {
-  Activity, ApiKey, DailyStats, Draft, DraftSummary, GeneratedDraft, IssuedApiKey,
+  Activity, ActivityDetail, ApiKey, DailyStats, Draft, DraftSummary, GeneratedDraft, IssuedApiKey,
   LlmSettings, Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
 } from '@/types/api'
 
@@ -9,6 +9,7 @@ import type {
 export const qk = {
   me: ['me'] as const,
   activities: (f: ActivityFilter) => ['activities', f] as const,
+  activity: (id: number) => ['activities', id] as const,
   statsDaily: (date: string) => ['stats', 'daily', date] as const,
   statsPeople: (f: PeopleFilter) => ['stats', 'people', f] as const,
   sessions: (f: DayFilter) => ['vscode-sessions', f] as const,
@@ -29,6 +30,14 @@ export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api.get<Me
 
 export const useActivities = (f: ActivityFilter) =>
   useQuery({ queryKey: qk.activities(f), queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`) })
+
+/** 행을 펼칠 때만 부른다 — 목록에 없는 커밋 메시지가 여기 있다. */
+export const useActivityDetail = (id: number | undefined, enabled: boolean) =>
+  useQuery({
+    queryKey: qk.activity(id ?? 0),
+    queryFn: () => api.get<ActivityDetail>(`/activities/${id}`),
+    enabled: enabled && id !== undefined,
+  })
 
 export const useDailyStats = (date: string) =>
   useQuery({ queryKey: qk.statsDaily(date), queryFn: () => api.get<DailyStats>(`/stats/daily${qs({ date })}`) })

@@ -62,6 +62,13 @@ export interface Page<T> {
   total: number
 }
 
+/** `GET /activities/{id}` — 목록 항목에 커밋 메시지와 diff 본문을 더한다. */
+export interface ActivityDetail extends Activity {
+  message: string | null
+  /** 수집기가 아직 채우지 않아 항상 null 이다 (TODO_0910 §4 F-2). */
+  rawDiff: string | null
+}
+
 export interface UncommittedFile {
   path: string
   additions: number

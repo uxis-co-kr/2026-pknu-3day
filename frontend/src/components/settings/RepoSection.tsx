@@ -11,7 +11,14 @@ import { useDeleteRepo, useRegisterRepo, useRepos, useSyncRepo } from '@/api/hoo
 import { formatRelative } from '@/lib/date'
 
 /** 디자인 브리프 3.4 — 등록·삭제·동기화. 빈 상태는 일러스트 없이 텍스트만. */
-export default function ReposPage() {
+/**
+ * 설정 > 리포지터리 — 등록·삭제·동기화.
+ *
+ * <p>9/10 회의로 독립 메뉴(/repos)에서 설정 안으로 들어왔다. 회의에서 나온
+ * "전체 등록 / 전체 동기화" 는 서버에 해당 엔드포인트가 없어 아직 없다
+ * (TODO_0910 §5-2).
+ */
+export default function RepoSection() {
   const { data: repos, isLoading } = useRepos()
   const register = useRegisterRepo()
   const remove = useDeleteRepo()
