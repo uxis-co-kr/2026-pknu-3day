@@ -72,6 +72,12 @@ public class SecurityConfig {
                         // 관리자 콘솔 (TODO_0910 §1-3). 로그인만으로는 들어갈 수 없다.
                         .requestMatchers("/admin/**")
                         .hasAuthority(UserRole.ADMIN.authority())
+                        // Mattermost 웹훅과 LLM 모델은 관리자만 바꾼다 (9/10 결정).
+                        // 화면에서 뺐더라도 API 를 직접 부르면 그만이므로 서버에서도 막는다.
+                        .requestMatchers("/settings/notify", "/settings/notify/**")
+                        .hasAuthority(UserRole.ADMIN.authority())
+                        .requestMatchers("/settings/llm", "/settings/llm/**")
+                        .hasAuthority(UserRole.ADMIN.authority())
                         .anyRequest()
                         .hasAnyAuthority(AuthMethod.JWT.authority(), AuthMethod.API_KEY.authority()))
                 .exceptionHandling(e -> e.authenticationEntryPoint(authenticationEntryPoint())

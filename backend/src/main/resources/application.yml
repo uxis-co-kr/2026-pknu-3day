@@ -42,7 +42,9 @@ worklog:
   waple:
     base-url: ${WAPLE_API_BASE_URL:}
     api-key: ${WAPLE_API_KEY:}
-    company-seq: ${WAPLE_COMPANY_SEQ:}
+    # coSeq 1 과 29 는 사원 목록이 완전히 다르다 (인원 16 vs 32, 사번 구간이 겹치지 않음).
+    # 29 로 정했다 (9/10 결정). 바꾸려면 WAPLE_COMPANY_SEQ 로 덮어쓴다.
+    company-seq: ${WAPLE_COMPANY_SEQ:29}
 
   # 2-2 / 2-3 (오후 작업)에서 사용
   jwt:
