@@ -57,26 +57,31 @@ public class GitHubOAuthController {
     }
 
     /**
+     * GitHub 인가 주소를 만든다.
+     *
      * @param link 이미 로그인한 계정에 GitHub 을 <b>붙이러</b> 온 것이면 그 사용자 id.
-     *     사원 번호로 로그인한 사람이 설정에서 연동할 때 쓴다. 없으면 GitHub 로그인이다.
+     *     <b>이 값은 반드시 인증된 자리에서 넘겨야 한다</b> — 요청 파라미터로 받으면 누구든
+     *     남의 id 를 적어 자기 GitHub 을 그 계정에 붙일 수 있다.
+     *     {@code POST /me/github/start} 가 토큰에서 꺼내 넘긴다.
      */
-    @GetMapping
-    public void authorize(
-            @RequestParam(required = false) Long link,
-            HttpServletRequest request,
-            HttpServletResponse response)
-            throws IOException {
+    String authorizeUrl(Long link, HttpServletRequest request) {
         requireConfigured();
-
         // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지 state 안에 서명해 넘긴다.
         String state = stateCodec.issue(link);
-
-        String url = AUTHORIZE_URL_PREFIX
+        return AUTHORIZE_URL_PREFIX
                 + "?client_id=" + encode(properties.getClientId())
                 + "&redirect_uri=" + encode(redirectUri(request))
                 + "&scope=" + encode(properties.getScope())
                 + "&state=" + encode(state);
-        response.sendRedirect(url);
+    }
+
+    /**
+     * GitHub 로그인 시작. 연동(link)은 여기서 받지 않는다 — {@code POST /me/github/start} 를 쓴다.
+     */
+    @GetMapping
+    public void authorize(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+        response.sendRedirect(authorizeUrl(null, request));
     }
 
     @GetMapping("/callback")

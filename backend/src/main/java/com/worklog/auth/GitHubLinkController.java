@@ -1,10 +1,12 @@
 package com.worklog.auth;
 
 import com.worklog.config.ApiException;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,10 +22,15 @@ public class GitHubLinkController {
 
     private final UserRepository userRepository;
     private final UserService userService;
+    private final GitHubOAuthController oauthController;
 
-    public GitHubLinkController(UserRepository userRepository, UserService userService) {
+    public GitHubLinkController(
+            UserRepository userRepository,
+            UserService userService,
+            GitHubOAuthController oauthController) {
         this.userRepository = userRepository;
         this.userService = userService;
+        this.oauthController = oauthController;
     }
 
     @GetMapping
@@ -41,10 +48,28 @@ public class GitHubLinkController {
                 linked ? user.getCreatedAt() : null);
     }
 
+    /**
+     * 연동을 시작할 GitHub 주소를 만들어 준다.
+     *
+     * <p>예전에는 화면이 {@code /auth/github?link=<id>} 로 바로 이동했다. 그 경로는 인증
+     * 없이 열려 있어 <b>누구든 남의 id 를 적어 자기 GitHub 을 그 계정에 붙일 수 있었다.</b>
+     * 브라우저 이동이라 헤더를 실을 수 없는 구조 때문이다 (담당자 2 가 짚어 줌).
+     *
+     * <p>이제 <b>인증된 이 경로</b>가 서명된 state 에 자기 id 를 담아 URL 을 돌려주고,
+     * 화면은 그 URL 로 이동만 한다. id 는 요청자의 토큰에서 나오므로 남의 것을 적을 수 없다.
+     */
+    @PostMapping("/start")
+    public StartResponse start(
+            @AuthenticationPrincipal AuthenticatedUser principal, HttpServletRequest request) {
+        return new StartResponse(oauthController.authorizeUrl(principal.id(), request));
+    }
+
     @DeleteMapping
     public void unlink(@AuthenticationPrincipal AuthenticatedUser principal) {
         userService.unlinkGitHub(principal.id());
     }
+
+    public record StartResponse(String url) {}
 
     public record GithubLink(boolean linked, String login, String avatarUrl, OffsetDateTime linkedAt) {}
 }

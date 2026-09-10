@@ -72,6 +72,18 @@ const useGithubMutation = <T,>(fn: () => Promise<T>) => {
 
 export const useUnlinkGithub = () => useGithubMutation(() => api.delete<null>('/me/github'))
 
+/**
+ * 연동을 시작할 GitHub 주소를 받아 그리로 이동한다.
+ *
+ * <p>주소에 사용자 id 를 적어 보내던 것을 없앴다 — 그 경로는 인증 없이 열려 있어 남의 id 를
+ * 적으면 그 계정에 자기 GitHub 이 붙었다. id 는 이제 서버가 토큰에서 꺼낸다.
+ */
+export const useStartGithubLink = () =>
+  useMutation({
+    mutationFn: () => api.post<{ url: string }>('/me/github/start', {}),
+    onSuccess: (r) => window.location.assign(r.url),
+  })
+
 export const useActivities = (f: ActivityFilter) =>
   useQuery({ queryKey: qk.activities(f), queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`), ...LIVE })
 
