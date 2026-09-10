@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import ActivityDetailRow from '@/components/activity/ActivityDetailRow'
+import Pagination from '@/components/common/Pagination'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import { Card } from '@/components/ui/card'
@@ -8,6 +9,9 @@ import { useActivities, useDailyStats, useMe, useRepos } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { cn } from '@/lib/utils'
 import type { ActivityType } from '@/types/api'
+
+/** 한 페이지에 보여 줄 활동 수. */
+const PER_PAGE = 10
 
 const TYPE_TABS: { key: ActivityType; label: string }[] = [
   { key: 'COMMIT', label: '커밋' },
@@ -31,14 +35,24 @@ export default function GithubPage() {
 
   const [repoFilter, setRepoFilter] = useState('all')
   const [types, setTypes] = useState<ActivityType[]>(TYPE_TABS.map((t) => t.key))
+  const [page, setPage] = useState(0)
 
   // 서버는 최신순으로 주는데 타임라인은 시간순이다 (아트보드 2: 10:12 → 16:30).
   const mine = [...(activities.data?.items ?? [])]
     .filter((a) => a.user?.id === me?.id)
     .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
 
-  const shown = mine.filter((a) =>
-    types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter)))
+  const shown = useMemo(
+    () => mine.filter((a) =>
+      types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activities.data, types, repoFilter],
+  )
+
+  // 필터를 바꾸면 있던 페이지가 사라질 수 있다. 범위를 벗어나면 마지막 페이지로 당긴다.
+  const pageCount = Math.max(1, Math.ceil(shown.length / PER_PAGE))
+  const current = Math.min(page, pageCount - 1)
+  const rows = shown.slice(current * PER_PAGE, (current + 1) * PER_PAGE)
 
   /** 요약 카드는 팀 총계가 아니라 내 것이다. */
   const myStat = stats.data?.byUser.find((u) => u.userId === me?.id)
@@ -59,13 +73,20 @@ export default function GithubPage() {
       </div>
 
       <div className="flex items-center gap-3">
-        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter}>
+        <DayFilters
+          repos={repos.data ?? []}
+          repoFilter={repoFilter}
+          onRepo={(v) => { setRepoFilter(v); setPage(0) }}
+        >
           <div className="flex h-[34px] overflow-hidden rounded-md border">
             {TYPE_TABS.map((t, i) => (
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])}
+                onClick={() => {
+                setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
+                setPage(0)
+              }}
                 className={cn(
                   'px-3 text-[13px] transition-colors',
                   i > 0 && 'border-l',
@@ -86,7 +107,15 @@ export default function GithubPage() {
         ) : shown.length === 0 ? (
           <EmptyHint hasAny={mine.length > 0} />
         ) : (
-          shown.map((a) => <ActivityDetailRow key={a.id} activity={a} />)
+          <>
+            {rows.map((a) => <ActivityDetailRow key={a.id} activity={a} />)}
+            <Pagination
+              page={current}
+              pageCount={pageCount}
+              total={shown.length}
+              onChange={setPage}
+            />
+          </>
         )}
       </Card>
     </div>
