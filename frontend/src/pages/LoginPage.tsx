@@ -74,7 +74,7 @@ export default function LoginPage() {
                 id="loginId"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                placeholder={admin ? 'admin' : '0042'}
+                placeholder={admin ? 'admin' : '사원번호 4자리'}
                 autoComplete="username"
                 className="h-10"
               />
@@ -104,21 +104,6 @@ export default function LoginPage() {
             </Button>
           </form>
         </Card>
-
-        {/*
-          * 사원번호 로그인 서버(POST /auth/login)가 아직 없다. 실서버 모드에서 목업 토큰으로
-          * 들어가면 다른 API 가 401 을 돌려주므로, 그때까지 GitHub 로그인 길을 남겨 둔다.
-          * 담당자 2 의 로그인 API 가 붙으면 이 버튼은 지운다 (TODO_0910 §1-1).
-          */}
-        {!admin && (
-          <button
-            type="button"
-            onClick={() => auth.startGithubLogin()}
-            className="w-full rounded-lg border border-dashed bg-background py-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted"
-          >
-            임시 — GitHub 로 로그인 (사원번호 로그인 서버가 붙기 전까지)
-          </button>
-        )}
 
         {/* 회의: "로그인화면 아래에다가 관리자 콘솔" */}
         <button

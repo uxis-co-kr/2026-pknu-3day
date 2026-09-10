@@ -59,18 +59,12 @@ export const auth = {
    * 내 계정에 GitHub 을 붙이러 간다. OAuth 라 fetch 가 아니라 브라우저 이동이다.
    *
    * <p>서버가 콜백에서 `link` 를 보고 새 계정을 만드는 대신 이 계정에 토큰을 붙인다.
+   *
+   * <p>`link` 없이 부르는 GitHub 로그인은 없앴다. 그 길은 GitHub 계정마다 로그인 수단이
+   * 없는 껍데기 계정을 만들어 두는데, 이제 로그인은 사원 번호로만 한다.
    */
   linkGithub(userId: number) {
     window.location.assign(`${API_BASE}/auth/github?link=${userId}`)
-  },
-  /** GitHub 연동은 fetch 가 아니라 브라우저 이동이다 (HANDOFF 1.). 로그인 수단이 아니다. */
-  startGithubLogin() {
-    if (USE_MOCK) {
-      auth.save('mock-token')
-      window.location.assign('/')
-      return
-    }
-    window.location.assign(`${API_BASE}/auth/github`)
   },
   /**
    * 로그아웃 — 토큰을 버리고 로그인 화면으로 보낸다.
