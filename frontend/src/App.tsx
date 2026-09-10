@@ -25,7 +25,7 @@ const AdminLlmPage = lazy(() => import('@/pages/admin/AdminLlmPage'))
 const AdminNotifyPage = lazy(() => import('@/pages/admin/AdminNotifyPage'))
 
 /**
- * 9/10 회의에서 정한 메뉴 넷 — 깃허브 내역 · VS 내역 · 초안 작성 · 설정.
+ * 9/10 회의에서 정한 메뉴 넷 — 깃허브 내역 · VSCode 내역 · 업무 일지 작성 · 설정.
  *
  * <p>이전 경로는 그대로 두지 않고 새 자리로 보낸다. 북마크나 화면 안의 오래된 링크가
  * 빈 화면으로 떨어지지 않게 하기 위해서다.

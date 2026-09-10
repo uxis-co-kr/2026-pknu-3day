@@ -82,9 +82,9 @@ export default function GithubPage() {
           TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="커밋" value={myStat.commits} hint={mine.length === 0 ? '—' : `${shown.length}건 표시 중`} />
-            <SummaryCard label="PR" value={myStat.prs} hint="내가 연 PR" />
-            <SummaryCard label="머지" value={myStat.merges} hint="머지된 내 PR" />
+            <SummaryCard label="커밋" value={myStat.commits} />
+            <SummaryCard label="열린 PR" value={myStat.prs} />
+            <SummaryCard label="머지된 PR" value={myStat.merges} />
           </>
         )}
       </div>
@@ -146,7 +146,7 @@ function EmptyHint({ hasAny }: { hasAny: boolean }) {
       {!hasAny && (
         <p className="mx-auto mt-2 max-w-[440px] text-[12px] leading-relaxed text-muted-foreground/70">
           커밋을 했는데도 비어 있다면, 아직 <strong>기본 브랜치에 머지되지 않았기</strong> 때문일 수 있습니다.
-          수집기는 기본 브랜치의 커밋만 가져옵니다. 작업 중인 내용은 <strong>VS 내역</strong>에서 볼 수 있습니다.
+          수집기는 기본 브랜치의 커밋만 가져옵니다. 작업 중인 내용은 <strong>VSCode 내역</strong>에서 볼 수 있습니다.
         </p>
       )}
     </div>

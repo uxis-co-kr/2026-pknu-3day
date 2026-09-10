@@ -5,6 +5,17 @@ import type {
   LlmSettings, LoginRequest, LoginResponse, Me, NotifySettings, Page, PeopleStats, Repo, VscodeSession,
 } from '@/types/api'
 
+/**
+ * 목록 화면은 30초마다 스스로 다시 부른다 (9/10 결정).
+ *
+ * <p>VS Code 에서 전송하거나 수집기가 돌면 서버 쪽이 바뀌는데, 새로고침해야만 보이면
+ * 화면이 멈춰 있는 것처럼 보인다.
+ *
+ * <p>초안 **상세**({@link useDraft})에는 절대 걸지 않는다. 편집 중에 다시 불러오면
+ * 저장하지 않은 글이 서버 본문으로 덮인다.
+ */
+const LIVE = { refetchInterval: 30_000 } as const
+
 /** 쿼리 키는 여기서만 만든다. 무효화할 때 경로를 헷갈리지 않기 위해서다. */
 export const qk = {
   me: ['me'] as const,
@@ -62,7 +73,7 @@ const useGithubMutation = <T,>(fn: () => Promise<T>) => {
 export const useUnlinkGithub = () => useGithubMutation(() => api.delete<null>('/me/github'))
 
 export const useActivities = (f: ActivityFilter) =>
-  useQuery({ queryKey: qk.activities(f), queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`) })
+  useQuery({ queryKey: qk.activities(f), queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`), ...LIVE })
 
 /** 행을 펼칠 때만 부른다 — 목록에 없는 커밋 메시지가 여기 있다. */
 export const useActivityDetail = (id: number | undefined, enabled: boolean) =>
@@ -79,10 +90,10 @@ export const usePeopleStats = (f: PeopleFilter) =>
   useQuery({ queryKey: qk.statsPeople(f), queryFn: () => api.get<PeopleStats>(`/stats/people${qs({ ...f })}`) })
 
 export const useSessions = (f: DayFilter) =>
-  useQuery({ queryKey: qk.sessions(f), queryFn: () => api.get<VscodeSession[]>(`/vscode/sessions${qs({ ...f })}`) })
+  useQuery({ queryKey: qk.sessions(f), queryFn: () => api.get<VscodeSession[]>(`/vscode/sessions${qs({ ...f })}`), ...LIVE })
 
 export const useDrafts = (f: DraftFilter) =>
-  useQuery({ queryKey: qk.drafts(f), queryFn: () => api.get<DraftSummary[]>(`/drafts${qs({ ...f })}`) })
+  useQuery({ queryKey: qk.drafts(f), queryFn: () => api.get<DraftSummary[]>(`/drafts${qs({ ...f })}`), ...LIVE })
 
 /** 기간 안의 내 업무 일지. 최근 날짜가 먼저 온다 (서버 정렬). */
 export const useDraftRange = (f: DraftRangeFilter, enabled = true) =>
@@ -95,7 +106,7 @@ export const useDraftRange = (f: DraftRangeFilter, enabled = true) =>
 export const useDraft = (id: number | undefined) =>
   useQuery({ queryKey: qk.draft(id!), queryFn: () => api.get<Draft>(`/drafts/${id}`), enabled: id !== undefined })
 
-export const useRepos = () => useQuery({ queryKey: qk.repos, queryFn: () => api.get<Repo[]>('/repos') })
+export const useRepos = () => useQuery({ queryKey: qk.repos, queryFn: () => api.get<Repo[]>('/repos'), ...LIVE })
 export const useApiKeys = () => useQuery({ queryKey: qk.apiKeys, queryFn: () => api.get<ApiKey[]>('/me/api-keys') })
 export const useNotifySettings = () =>
   useQuery({ queryKey: qk.notify, queryFn: () => api.get<NotifySettings>('/settings/notify') })

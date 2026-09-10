@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
@@ -10,11 +10,8 @@ import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatRelative, formatTime } from '@/lib/date'
 import type { VscodeSession } from '@/types/api'
 
-/** 미커밋 리마인드(F7-2)와 같은 기준. 화면 문구도 "6시간 이상" 이다. */
-const STALE_AFTER_MS = 6 * 60 * 60 * 1000
-
 /**
- * VS 내역 — VS Code 확장이 보낸 **내** 작업.
+ * VSCode 내역 — 확장이 보낸 **내** 작업.
  *
  * <p>GitHub 활동과 나란한 **초안의 다른 한 갈래**다 (PRD F3). 커밋 전 작업이라 GitHub 쪽에는
  * 아무 흔적이 없다. 팀원 전체는 관리자 콘솔이 맡는다 (9/10 회의).
@@ -34,17 +31,7 @@ export default function VscodePage() {
     .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt))
 
   const files = shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)
-  /**
-   * 6시간 넘게 커밋하지 않은 내 세션. /stats/daily 의 staleSessions 는 팀 전체를 세므로
-   * 여기서 직접 센다 — 내 화면에 남의 숫자가 섞이면 안 된다.
-   *
-   * <p>기준 시각은 렌더마다 바뀌면 안 되므로 세션 목록이 바뀔 때만 다시 잡는다.
-   */
-  const stale = useMemo(() => {
-    const threshold = Date.now() - STALE_AFTER_MS
-    return shown.filter((x) => !x.lastCommitAt || new Date(x.lastCommitAt).getTime() < threshold).length
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions.data, repoFilter, me?.id])
+  const aiSessions = shown.reduce((n, x) => n + (x.aiSessions?.length ?? 0), 0)
 
 
 
@@ -60,10 +47,9 @@ export default function VscodePage() {
         ) : (
           <>
             {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
-            <SummaryCard label="세션" value={shown.length} hint={shown.length > 0 ? '오늘 보고한 저장소' : '—'} />
-            <SummaryCard label="미커밋 파일" value={files} hint={files > 0 ? '커밋 전 작업입니다' : '—'} />
-            <SummaryCard label="6시간 이상 미커밋" value={stale}
-              hint={stale > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={stale > 0} />
+            <SummaryCard label="저장소" value={shown.length} />
+            <SummaryCard label="미커밋 파일" value={files} />
+            <SummaryCard label="AI 대화 세션" value={aiSessions} />
           </>
         )}
       </div>

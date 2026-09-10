@@ -26,7 +26,7 @@ function shiftMonth(ym: string, by: number): string {
 /**
  * 업무 일지 작성 — 오늘 것은 맨 위에서 **펼쳐 놓고** 바로 쓰고, 지난 것은 아래에서 고른다.
  *
- * <p>일지는 "생성" 을 눌렀을 때만 만들어진다. 서버가 그날의 깃허브 내역과 VS 내역을
+ * <p>일지는 "생성" 을 눌렀을 때만 만들어진다. 서버가 그날의 깃허브 내역과 VSCode 내역을
  * 함께 모아 쓴다 (PRD F3).
  */
 export default function DraftsPage() {
