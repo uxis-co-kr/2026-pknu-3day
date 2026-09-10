@@ -25,10 +25,15 @@ public class LocalAuthController {
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final EmployeeAccountService employeeAccountService;
 
-    public LocalAuthController(UserRepository userRepository, JwtService jwtService) {
+    public LocalAuthController(
+            UserRepository userRepository,
+            JwtService jwtService,
+            EmployeeAccountService employeeAccountService) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
+        this.employeeAccountService = employeeAccountService;
     }
 
     @PostMapping("/auth/login")
@@ -36,6 +41,16 @@ public class LocalAuthController {
     public LoginResponse login(@RequestBody @jakarta.validation.Valid LoginRequest request) {
         String loginId = request.loginId().trim();
         User user = userRepository.findByLoginId(loginId).orElse(null);
+
+        // 계정이 없으면 사원 번호로 처음 들어오는 경우인지 본다 (TODO_0910 §1-1).
+        if (user == null) {
+            user = employeeAccountService
+                    .provisionOnFirstLogin(loginId, request.password())
+                    .orElse(null);
+            if (user != null) {
+                return new LoginResponse(jwtService.issue(user), true, user.getRole().name());
+            }
+        }
 
         // 아이디가 없는 것과 비밀번호가 틀린 것을 구분해 알려주지 않는다.
         if (user == null || !PasswordHasher.matches(request.password(), user.getPasswordHash())) {
