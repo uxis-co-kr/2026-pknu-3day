@@ -99,11 +99,14 @@ export default function AdminPeoplePage() {
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-[13px] font-medium">사내 직원</p>
                   <span className="text-xs text-muted-foreground">
-                    회원 조회 API 기준 {data.employees.length}명
+                    {data.employees.length}명
+                    {!data.wapleConfigured && data.employees.length > 0 && ' · 임시 목록'}
                   </span>
                 </div>
 
-                {!data.wapleConfigured ? (
+                {/* 사내 API 도 없고 임시 목록도 없을 때만 안내를 띄운다.
+                    임시 목록으로라도 채워져 있으면 표를 보여 주는 편이 낫다. */}
+                {!data.wapleConfigured && data.employees.length === 0 ? (
                   <p className="rounded border border-dashed p-4 text-sm text-muted-foreground">
                     회원 조회 API가 설정되지 않아 직원 목록을 불러올 수 없습니다.
                     <br />
@@ -114,6 +117,14 @@ export default function AdminPeoplePage() {
                     이 표가 채워집니다. 아래 목록은 그와 무관하게 동작합니다.
                   </p>
                 ) : (
+                  <>
+                    {!data.wapleConfigured && (
+                      <p className="mb-3 rounded border border-dashed p-2.5 text-[13px] text-muted-foreground">
+                        사내 회원 조회 API가 아직 설정되지 않아{' '}
+                        <code className="rounded bg-muted px-1 text-xs">WAPLE_FALLBACK_EMPLOYEES</code>{' '}
+                        의 임시 목록을 쓰고 있습니다. 실제 API가 붙으면 그쪽으로 자동 전환됩니다.
+                      </p>
+                    )}
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -146,6 +157,7 @@ export default function AdminPeoplePage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </>
                 )}
               </CardContent>
             </Card>

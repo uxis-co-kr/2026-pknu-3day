@@ -77,8 +77,14 @@ export default function AdminOverviewPage() {
               <Stat label="서비스 계정" value={data.accountCount} hint="로그인한 적이 있는 사람" />
               <Stat
                 label="사내 직원"
-                value={data.wapleConfigured ? data.employeeCount : '—'}
-                hint={data.wapleConfigured ? '회원 조회 API 기준' : '회원 조회 API 미설정'}
+                value={data.employeeCount}
+                hint={
+                  data.wapleConfigured
+                    ? '회원 조회 API 기준'
+                    : data.employeeCount > 0
+                      ? '임시 목록 (API 미설정)'
+                      : '회원 조회 API 미설정'
+                }
               />
               <Stat
                 label="로그인 안 한 기여자"
@@ -100,7 +106,11 @@ export default function AdminOverviewPage() {
                   ok={data.wapleConfigured}
                   title="사내 회원 조회 API"
                   okText="직원 목록을 불러올 수 있습니다."
-                  todoText="backend/.env 의 WAPLE_API_BASE_URL · WAPLE_API_KEY 가 비어 있습니다. 직원 목록만 비고 나머지는 정상 동작합니다."
+                  todoText={
+                    data.employeeCount > 0
+                      ? `아직 설정되지 않아 임시 목록(${data.employeeCount}명)을 쓰고 있습니다. 실제 API가 붙으면 자동으로 전환됩니다.`
+                      : 'backend/.env 의 WAPLE_API_BASE_URL · WAPLE_API_KEY 가 비어 있습니다. 직원 목록만 비고 나머지는 정상 동작합니다.'
+                  }
                 />
                 <Readiness
                   ok={data.globalWebhookConfigured}
