@@ -71,6 +71,15 @@ async function main() {
       console.log(`  +${f.additions} −${f.deletions}  ${f.path}${isNew}  diff ${diff}`)
     }
 
+    const unpushed = collector.unpushedOf(p)
+    if (unpushed === undefined) {
+      console.log('\n미푸시 — 셀 수 없음 (업스트림 없음)')
+    } else {
+      console.log(`\n미푸시 ${unpushed.length}개  (서버로는 보내지 않는다 — 화면 표시용)`)
+      for (const c of unpushed.slice(0, 10)) console.log(`  ${c.sha}  ${c.subject}`)
+      if (unpushed.length > 10) console.log(`  … 외 ${unpushed.length - 10}개`)
+    }
+
     console.log(`\nTODO ${p.todos.length}개`)
     for (const t of p.todos.slice(0, 20)) console.log(`  ${t.path}:${t.line}  ${t.text}`)
     if (p.todos.length > 20) console.log(`  … 외 ${p.todos.length - 20}개`)

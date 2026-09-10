@@ -1,6 +1,7 @@
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import type { Collector } from './collector'
+import type { UnpushedCommit } from './git'
 import type { SessionPayload, TodoItem, UncommittedFile } from './types'
 
 /**
@@ -70,6 +71,7 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
         ),
       ]
       children.push(group(`미커밋 ${p.uncommittedFiles.length}개`, 'diff', p.uncommittedFiles.map((f) => fileNode(f, cwd))))
+      children.push(unpushedGroup(this.collector.unpushedOf(p)))
       children.push(group(`TODO ${p.todos.length}개`, 'checklist', p.todos.map((t) => todoNode(t, cwd))))
       children.push(
         group(
@@ -124,6 +126,23 @@ function group(label: string, icon: string, children: Node[], expanded = false):
   const item = new vscode.TreeItem(label, state)
   item.iconPath = new vscode.ThemeIcon(icon)
   return { item, children }
+}
+
+/**
+ * 아직 푸시하지 않은 커밋.
+ *
+ * <p>이 구간은 GitHub 수집기가 보지 못한다 — 원격에 없으니 API 로 안 나온다.
+ * 서버로도 보내지 않는다 (PRD 7 요청 본문에 자리가 없다). 여기서만 보인다.
+ */
+function unpushedGroup(commits: UnpushedCommit[] | undefined): Node {
+  if (commits === undefined) {
+    return leaf('미푸시 — 셀 수 없음', 'cloud', '업스트림이 없습니다. 한 번도 푸시하지 않은 브랜치입니다')
+  }
+  return group(
+    `미푸시 ${commits.length}개`,
+    'cloud-upload',
+    commits.map((c) => leaf(c.subject, 'git-commit', `${c.sha} · ${time(c.at)}`, c.sha)),
+  )
 }
 
 /** 계획 한 줄. 우클릭으로 지울 수 있게 contextValue 와 note 를 달아 둔다. */

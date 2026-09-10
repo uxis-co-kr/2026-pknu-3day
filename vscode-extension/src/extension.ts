@@ -28,7 +28,10 @@ function renderStatusBar(error?: string) {
     statusBar.tooltip = `${error} — 클릭하면 다시 전송합니다`
     statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
   } else {
-    statusBar.text = `$(git-commit) 미커밋 ${collector.uncommittedCount}파일`
+    // 미푸시는 셀 수 있을 때만 붙인다. 업스트림이 없는 브랜치에서 0 으로 보이면 거짓말이다.
+    const unpushed = collector.unpushedCount
+    const tail = unpushed ? ` · 미푸시 ${unpushed}` : ''
+    statusBar.text = `$(git-commit) 미커밋 ${collector.uncommittedCount}파일${tail}`
     statusBar.tooltip = 'WorkLog Drafter — 클릭하면 지금 전송'
     statusBar.backgroundColor = undefined
   }

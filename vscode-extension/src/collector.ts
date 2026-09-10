@@ -32,6 +32,12 @@ interface PersistedState {
 
 const STATE_KEY = 'worklog.session.v1'
 
+/** payload 에 담지 않는, 화면 전용 값. */
+interface LocalInfo {
+  cwd: string
+  unpushed?: git.UnpushedCommit[]
+}
+
 /** {@link vscode.Memento} 와 같은 모양. 테스트·미리보기에서는 주지 않는다. */
 export interface StateStore {
   get<T>(key: string): T | undefined
@@ -64,15 +70,28 @@ export class Collector {
   /** 마지막 수집에서 센 미커밋 파일 수. 상태바가 읽는다. */
   private lastCount = 0
 
+  /** 마지막 수집의 미푸시 커밋 수. 업스트림이 하나도 없으면 undefined. */
+  private lastUnpushed: number | undefined
+
   /**
-   * payload 가 어느 폴더에서 나왔는지. 사이드바가 파일을 열려면 절대 경로가 필요한데,
-   * 그 경로는 서버로 보내는 값이 아니라 payload 에 담을 수 없다.
+   * 서버로 보내지 않지만 화면에는 필요한 값. 폴더 절대 경로는 사이드바가 파일을 열 때
+   * 쓰고, 미푸시 커밋은 PRD 7 의 요청 본문에 자리가 없어 payload 에 담을 수 없다.
    */
-  private readonly folders = new WeakMap<SessionPayload, string>()
+  private readonly locals = new WeakMap<SessionPayload, LocalInfo>()
 
   /** 이 payload 를 만든 워크스페이스 폴더의 절대 경로. */
   folderOf(payload: SessionPayload): string | undefined {
-    return this.folders.get(payload)
+    return this.locals.get(payload)?.cwd
+  }
+
+  /** 아직 푸시하지 않은 커밋. 업스트림이 없으면 undefined (0 과 다르다). */
+  unpushedOf(payload: SessionPayload): git.UnpushedCommit[] | undefined {
+    return this.locals.get(payload)?.unpushed
+  }
+
+  /** 마지막 수집에서 센 미푸시 커밋 수. 셀 수 없으면 undefined. */
+  get unpushedCount(): number | undefined {
+    return this.lastUnpushed
   }
 
   recordSave(fsPath: string, at: Date = new Date()): void {
@@ -118,16 +137,19 @@ export class Collector {
     const folders = vscode.workspace.workspaceFolders ?? []
     const payloads: SessionPayload[] = []
     let total = 0
+    // 업스트림이 있는 저장소가 하나도 없으면 undefined 로 남는다.
+    let unpushedTotal: number | undefined
 
     for (const folder of folders) {
       const cwd = folder.uri.fsPath
       if (!(await git.isRepo(cwd))) continue
 
-      const [branch, remoteUrl, lastCommitAt, changed] = await Promise.all([
+      const [branch, remoteUrl, lastCommitAt, changed, unpushed] = await Promise.all([
         git.currentBranch(cwd),
         git.remoteUrl(cwd),
         git.lastCommitAt(cwd),
         git.changedFiles(cwd),
+        git.unpushedCommits(cwd),
       ])
       if (!branch || !remoteUrl) {
         log(`${folder.name}: 브랜치나 origin 을 읽지 못해 건너뜁니다`)
@@ -149,11 +171,13 @@ export class Collector {
         editTimeline: this.timelineFor(cwd),
         lastCommitAt,
       }
-      this.folders.set(payload, cwd)
+      this.locals.set(payload, { cwd, unpushed })
+      if (unpushed) unpushedTotal = (unpushedTotal ?? 0) + unpushed.length
       payloads.push(payload)
     }
 
     this.lastCount = total
+    this.lastUnpushed = unpushedTotal
     return payloads
   }
 
