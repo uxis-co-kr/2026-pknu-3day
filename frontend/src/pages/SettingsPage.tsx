@@ -49,7 +49,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <Section title="깃허브 연동" description="GitHub 계정을 연결해야 내 커밋·PR 이 내 것으로 잡힙니다. 연결 전에는 서버가 그 커밋을 누가 했는지 알 수 없어 대시보드에 뜨지 않습니다.">
+      <Section title="깃허브 연동">
         <GithubLinkCard />
       </Section>
 
