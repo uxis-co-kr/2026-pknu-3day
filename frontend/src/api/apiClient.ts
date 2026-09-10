@@ -13,13 +13,13 @@ export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
  * 404 를 무조건 목업으로 돌리면 `/drafts/9999` 같은 정상적인 "없음" 까지 가짜 데이터로 덮여
  * 버리므로, 목록을 명시해 두고 엔드포인트가 생길 때마다 지운다.
  *
- * 2026-09-10 기준 미구현: 사원번호 로그인·비밀번호·GitHub 연동 (9/10 회의, 담당자 2).
- * /settings/llm 과 /stats/people 은 담당자 2 가 2-14 로 붙여 목록에서 뺐다.
+ * 2026-09-10 기준 미구현: 없음에 가깝다. /me/github 는 실서버에 붙어 목록에서 뺐다 —
+ * 목업으로 떨어지면 화면만 "연결됨" 이 되고 서버에는 토큰이 없어, 전체 등록이
+ * "GitHub 을 연결해 주세요" 로 막힌다.
  */
 const MOCK_FALLBACK_PATHS = [
   /^\/auth\/login/,
   /^\/me\/password/,
-  /^\/me\/github/,
 ]
 
 function fallsBackToMock(path: string): boolean {
@@ -54,6 +54,14 @@ export const auth = {
   },
   clearMustChangePassword() {
     localStorage.removeItem(MUST_CHANGE_KEY)
+  },
+  /**
+   * 내 계정에 GitHub 을 붙이러 간다. OAuth 라 fetch 가 아니라 브라우저 이동이다.
+   *
+   * <p>서버가 콜백에서 `link` 를 보고 새 계정을 만드는 대신 이 계정에 토큰을 붙인다.
+   */
+  linkGithub(userId: number) {
+    window.location.assign(`${API_BASE}/auth/github?link=${userId}`)
   },
   /** GitHub 연동은 fetch 가 아니라 브라우저 이동이다 (HANDOFF 1.). 로그인 수단이 아니다. */
   startGithubLogin() {

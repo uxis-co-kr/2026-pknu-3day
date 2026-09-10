@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.worklog.activity.ActivityRepository;
+import com.worklog.auth.UserRepository;
 import com.worklog.auth.User;
 import com.worklog.config.ApiException;
 import com.worklog.vscode.VscodeSessionRepository;
@@ -38,7 +40,7 @@ class DraftServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DraftService(drafts, activities, sessions);
+        service = new DraftService(drafts, activities, sessions, mock(UserRepository.class));
         lenient().when(activities.findAllById(anyIterable())).thenReturn(List.of());
         lenient().when(sessions.findAllById(anyIterable())).thenReturn(List.of());
         lenient().when(drafts.save(any(Draft.class))).thenAnswer(i -> i.getArgument(0));

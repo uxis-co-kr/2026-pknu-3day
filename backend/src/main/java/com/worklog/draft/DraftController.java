@@ -57,6 +57,16 @@ public class DraftController {
         return draftService.list(date, userId, status);
     }
 
+    /**
+     * 빈 일지를 만든다 — 그날 활동이 없어 AI 생성을 쓸 수 없을 때의 길이다 (9/10).
+     */
+    @PostMapping("/blank")
+    public DraftDetailResponse createBlank(
+            @AuthenticationPrincipal AuthenticatedUser principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return draftService.createBlank(principal.id(), date);
+    }
+
     @GetMapping("/{id}")
     public DraftDetailResponse detail(@PathVariable Long id) {
         return draftService.detail(id);

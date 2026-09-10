@@ -58,12 +58,22 @@ public class GitHubOAuthController {
         this.frontendUrl = stripTrailingSlash(frontendUrl);
     }
 
+    /**
+     * @param link 이미 로그인한 계정에 GitHub 을 <b>붙이러</b> 온 것이면 그 사용자 id.
+     *     사원 번호로 로그인한 사람이 설정에서 연동할 때 쓴다. 없으면 GitHub 로그인이다.
+     */
     @GetMapping
-    public void authorize(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void authorize(
+            @RequestParam(required = false) Long link,
+            HttpServletRequest request,
+            HttpServletResponse response)
+            throws IOException {
         requireConfigured();
 
         String state = randomState();
         response.addCookie(stateCookie(state, STATE_TTL_SECONDS, request.isSecure()));
+        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지 쿠키로 넘긴다.
+        response.addCookie(linkCookie(link == null ? "" : link.toString(), request.isSecure()));
 
         String url = AUTHORIZE_URL_PREFIX
                 + "?client_id=" + encode(properties.getClientId())
@@ -99,7 +109,25 @@ public class GitHubOAuthController {
 
         String accessToken = client.exchangeCode(
                 code, properties.getClientId(), properties.getClientSecret(), redirectUri(request));
-        User user = userService.upsertFromGitHub(client.fetchUser(accessToken), accessToken);
+        GitHubOAuthClient.GitHubUserDto dto = client.fetchUser(accessToken);
+
+        Long linkTo = readLinkCookie(request);
+        response.addCookie(linkCookie("", request.isSecure()));
+
+        if (linkTo != null) {
+            // 이미 로그인한 계정에 붙이는 경우. 새 계정을 만들지 않는다 (TODO_0910 §1-1).
+            try {
+                User user = userService.linkGitHub(linkTo, dto, accessToken);
+                log.info("GitHub 연동 성공: {} → 사용자 {}", user.getLogin(), user.getId());
+                response.sendRedirect(frontendUrl + "/settings?github=linked");
+            } catch (ApiException e) {
+                log.warn("GitHub 연동 실패: {}", e.getMessage());
+                response.sendRedirect(frontendUrl + "/settings?github=" + encode(e.getCode()));
+            }
+            return;
+        }
+
+        User user = userService.upsertFromGitHub(dto, accessToken);
         String jwt = jwtService.issue(user);
 
         log.info("GitHub 로그인 성공: {} (id={})", user.getLogin(), user.getId());
@@ -129,6 +157,33 @@ public class GitHubOAuthController {
                 + (defaultPort ? "" : ":" + port)
                 + request.getContextPath()
                 + "/auth/github/callback";
+    }
+
+    private static final String LINK_COOKIE = "worklog_oauth_link";
+
+    private Cookie linkCookie(String value, boolean secure) {
+        Cookie cookie = new Cookie(LINK_COOKIE, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(secure);
+        cookie.setPath("/");
+        cookie.setMaxAge(value.isEmpty() ? 0 : STATE_TTL_SECONDS);
+        return cookie;
+    }
+
+    private Long readLinkCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) {
+            return null;
+        }
+        for (Cookie cookie : request.getCookies()) {
+            if (LINK_COOKIE.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                try {
+                    return Long.valueOf(cookie.getValue());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     private String randomState() {

@@ -59,7 +59,6 @@ const useGithubMutation = <T,>(fn: () => Promise<T>) => {
   })
 }
 
-export const useLinkGithub = () => useGithubMutation(() => api.post<GithubLink>('/me/github', {}))
 export const useUnlinkGithub = () => useGithubMutation(() => api.delete<null>('/me/github'))
 
 export const useActivities = (f: ActivityFilter) =>
@@ -112,6 +111,15 @@ function useDraftMutation<TVars>(fn: (v: TVars) => Promise<Draft | { sent: boole
       if (data && 'id' in data) qc.setQueryData(qk.draft(data.id), data)
       void qc.invalidateQueries({ queryKey: ['drafts'] })
     },
+  })
+}
+
+/** 활동이 없어 AI 생성을 쓸 수 없을 때 빈 일지를 만든다 (9/10). */
+export const useCreateBlankDraft = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (date: string) => api.post<Draft>(`/drafts/blank?date=${date}`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['drafts'] }),
   })
 }
 

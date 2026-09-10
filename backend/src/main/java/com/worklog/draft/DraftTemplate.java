@@ -18,6 +18,29 @@ public final class DraftTemplate {
 
     private DraftTemplate() {}
 
+    /**
+     * 활동 기록 없이 직접 쓰는 일지의 뼈대 (9/10).
+     *
+     * <p>머리말만 둔다. 무엇을 채우면 되는지는 보이되, 없는 활동을 지어내지는 않는다.
+     */
+    public static String blank(LocalDate workDate, String displayName) {
+        return """
+                # %s 업무 일지 — %s
+
+                ## 완료한 작업
+                - 
+
+                ## 진행 중 / 미커밋
+                - 
+
+                ## 계획 / TODO
+                - 
+
+                ## 메모
+                """
+                .formatted(workDate, displayName);
+    }
+
     public static String render(
             LocalDate workDate, String displayName, List<Activity> activities, List<VscodeSession> sessions) {
 
