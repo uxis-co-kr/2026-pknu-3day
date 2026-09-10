@@ -94,7 +94,7 @@ public class PeopleStatsService {
 
             items.add(new PeopleStatsResponse.Item(
                     new PeopleStatsResponse.UserSummary(
-                            user.getId(), user.getLogin(), user.getName(), user.getAvatarUrl()),
+                            user.getId(), displayLogin(user), user.getName(), user.getAvatarUrl()),
                     new PeopleStatsResponse.Totals(commits, prs, merges),
                     series));
         }
@@ -104,6 +104,20 @@ public class PeopleStatsService {
             return byCommits != 0 ? byCommits : a.user().login().compareTo(b.user().login());
         });
         return new PeopleStatsResponse(start, end, granularity.wireName(), items);
+    }
+
+    /**
+     * 화면에 보일 로그인. GitHub 을 붙이지 않은 자체 계정(관리자, 사원번호 로그인)은 login 이
+     * 비어 있다 — 그대로 내보내면 정렬에서 NPE 가 나고 화면에는 빈 이름이 뜬다.
+     */
+    private static String displayLogin(User user) {
+        if (user.getLogin() != null && !user.getLogin().isBlank()) {
+            return user.getLogin();
+        }
+        if (user.getLoginId() != null && !user.getLoginId().isBlank()) {
+            return user.getLoginId();
+        }
+        return String.valueOf(user.getId());
     }
 
     private void validate(LocalDate start, LocalDate end) {
