@@ -24,6 +24,9 @@ import org.springframework.web.client.RestClient;
 @Component
 public class MattermostClient {
 
+    /** 봇이 쓴 글에 붙이는 표시 (post.props). */
+    public static final String WORKLOG_PROP = "worklog_bot";
+
     private final RestClient restClient;
 
     public MattermostClient() {
@@ -96,7 +99,9 @@ public class MattermostClient {
                     .uri(baseUrl + "/api/v4/posts")
                     .header("Authorization", "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("channel_id", channelId, "message", message))
+                    // 우리가 쓴 답에는 표시를 남긴다. 봇 계정이 사람 계정과 같을 수 있어서
+                    // "내 글"이 아니라 "이 표시가 있는 글"을 무시해야 한다.
+                    .body(Map.of("channel_id", channelId, "message", message, "props", Map.of(WORKLOG_PROP, true)))
                     .retrieve()
                     .toBodilessEntity();
         } catch (HttpClientErrorException e) {
@@ -132,7 +137,20 @@ public class MattermostClient {
 
     public record MmChannel(String id, String name, String display_name, String type) {}
 
-    public record MmPost(String id, String user_id, String channel_id, String message, long create_at, String type) {}
+    public record MmPost(
+            String id,
+            String user_id,
+            String channel_id,
+            String message,
+            long create_at,
+            String type,
+            Map<String, Object> props) {
+
+        /** 우리 봇이 쓴 답인지. */
+        public boolean fromWorklogBot() {
+            return props != null && Boolean.TRUE.equals(props.get(WORKLOG_PROP));
+        }
+    }
 
     record PostList(List<String> order, Map<String, MmPost> posts) {}
 }

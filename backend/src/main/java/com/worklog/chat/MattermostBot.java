@@ -130,8 +130,8 @@ public class MattermostBot {
             if (!answered.add(post.id())) {
                 continue;
             }
-            if (myUserId.equals(post.user_id())) {
-                continue; // 내가 쓴 글 — 답에 또 답하면 무한 반복이다
+            if (post.fromWorklogBot()) {
+                continue; // 봇이 쓴 답 — 답에 또 답하면 무한 반복이다. 봇 계정이 사람 계정과 같을 수 있어 user_id 로 거르지 않는다
             }
             if (post.type() != null && !post.type().isBlank()) {
                 continue; // system_join_channel 같은 시스템 글

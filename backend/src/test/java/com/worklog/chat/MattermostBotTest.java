@@ -44,19 +44,23 @@ class MattermostBotTest {
     }
 
     private MmPost post(String id, String user, String text, long at) {
-        return new MmPost(id, user, "ch1", text, at, "");
+        return new MmPost(id, user, "ch1", text, at, "", java.util.Map.of());
+    }
+
+    private MmPost botPost(String id, String text, long at) {
+        return new MmPost(id, "bot-id", "ch1", text, at, "", java.util.Map.of(MattermostClient.WORKLOG_PROP, true));
     }
 
     @Test
-    @DisplayName("남이 쓴 질문에 한 번만 답하고, 내가 쓴 글과 잡담에는 답하지 않는다")
+    @DisplayName("질문에 한 번만 답하고, 봇이 쓴 답과 잡담에는 답하지 않는다 — 같은 계정이 물어도 답한다")
     void answersOnceAndIgnoresSelf() {
         long later = System.currentTimeMillis() + 10_000;
         when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
                 .thenReturn(List.of(
-                        post("p1", "someone", "조웅식 오늘 업무일지", later),
-                        post("p2", "bot-id", "조웅식 오늘 업무일지", later + 1),
+                        post("p1", "bot-id", "조웅식 오늘 업무일지", later), // 봇 계정 = 사람 계정인 경우
+                        botPost("p2", "**조웅식 · 업무 일지** …", later + 1),
                         post("p3", "someone", "점심 뭐 먹지", later + 2)))
-                .thenReturn(List.of(post("p1", "someone", "조웅식 오늘 업무일지", later))); // 경계의 글이 다시 온다
+                .thenReturn(List.of(post("p1", "bot-id", "조웅식 오늘 업무일지", later))); // 경계의 글이 다시 온다
 
         bot.poll();
         bot.poll();
