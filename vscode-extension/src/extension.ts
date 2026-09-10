@@ -49,10 +49,25 @@ const NO_API_KEY = 'API Key 미설정'
 /** 서버가 401/403 을 돌려줬을 때 Uploader 가 주는 사유. */
 const WRONG_API_KEY = 'API Key 오류'
 
-async function send(reason: string): Promise<string | undefined> {
+/**
+ * 전송 결과.
+ *
+ * <p>예전에는 셋을 모두 `undefined` 로 돌려줬다 — 보냈을 때, 보낼 것이 없을 때, 이미
+ * 보내는 중일 때. 부르는 쪽에서는 전부 성공으로 보여서, 서버에 닿지도 않았는데
+ * "전송했습니다" 나 "키를 확인했습니다" 라고 말했다.
+ */
+type SendResult =
+  | { kind: 'sent'; files: number }
+  /** 워크스페이스가 git 저장소가 아니거나 origin 이 없다. 서버에 닿지 않았다. */
+  | { kind: 'nothing' }
+  /** 다른 전송이 도는 중이라 건너뛰었다. */
+  | { kind: 'skipped' }
+  | { kind: 'failed'; reason: string }
+
+async function send(reason: string): Promise<SendResult> {
   if (sending) {
     log(`${reason}: 이미 전송 중이라 건너뜁니다`)
-    return undefined
+    return { kind: 'skipped' }
   }
   sending = true
   try {
@@ -62,7 +77,7 @@ async function send(reason: string): Promise<string | undefined> {
 
     if (payloads.length === 0) {
       renderStatusBar()
-      return undefined
+      return { kind: 'nothing' }
     }
     const result = await new Uploader({ serverUrl, apiKey }).send(payloads)
     renderStatusBar(result.ok ? undefined : result.reason)
@@ -72,12 +87,14 @@ async function send(reason: string): Promise<string | undefined> {
         : { kind: 'failed', at: new Date(), reason: result.reason },
     )
     void tree.refresh()
-    return result.ok ? undefined : result.reason
+    return result.ok
+      ? { kind: 'sent', files: collector.uncommittedCount }
+      : { kind: 'failed', reason: result.reason }
   } catch (e) {
     // 여기까지 온 예외는 버그다. 확장을 죽이지는 않는다.
     log(`전송 중 예기치 못한 오류: ${e instanceof Error ? e.stack ?? e.message : String(e)}`)
     renderStatusBar('전송 실패')
-    return '전송 실패'
+    return { kind: 'failed', reason: '전송 실패' }
   } finally {
     sending = false
   }
@@ -116,15 +133,44 @@ async function askApiKey(reason?: string): Promise<boolean> {
   // 키만 넣었는데 "전송했습니다" 가 뜨면 무엇이 나갔는지 몰라 놀란다.
   verifying = true
   try {
-    const failure = await send('키 확인')
-    void (failure
-      ? vscode.window.showWarningMessage(`WorkLog: 키를 저장했지만 확인에 실패했습니다 — ${failure}`)
-      : vscode.window.showInformationMessage(
-          `WorkLog: 키를 저장하고 확인했습니다. 오늘 작업 ${collector.uncommittedCount}파일을 보냈습니다.`))
+    const result = await send('키 확인')
+    if (result.kind === 'sent') {
+      void vscode.window.showInformationMessage(
+        `WorkLog: 키를 저장하고 확인했습니다. 오늘 작업 ${result.files}파일을 보냈습니다.`)
+    } else if (result.kind === 'nothing') {
+      // 서버에 닿지도 않았다. 여기서 "확인했습니다" 라고 하면 거짓말이 된다.
+      void vscode.window.showInformationMessage(
+        'WorkLog: 키를 저장했습니다. 보낼 작업이 없어 아직 확인하지는 못했습니다 —'
+          + ' git 저장소를 열고 다시 전송해 보세요.')
+    } else if (result.kind === 'failed') {
+      void vscode.window.showWarningMessage(
+        `WorkLog: 키를 저장했지만 확인에 실패했습니다 — ${result.reason}`)
+    }
   } finally {
     verifying = false
   }
   return true
+}
+
+/** 사용자가 직접 누른 전송의 결과를 알린다. 무엇이 일어났는지 그대로 말한다. */
+async function tellResult(result: SendResult): Promise<void> {
+  switch (result.kind) {
+    case 'sent':
+      void vscode.window.showInformationMessage(`WorkLog: 전송했습니다 (미커밋 ${result.files}파일).`)
+      return
+    case 'nothing':
+      void vscode.window.showInformationMessage(
+        'WorkLog: 보낼 것이 없습니다. 열린 폴더가 git 저장소가 아니거나 origin 이 없습니다.')
+      return
+    case 'skipped':
+      return // 다른 전송이 도는 중이다. 굳이 알릴 일이 아니다.
+    case 'failed':
+      if (result.reason === NO_API_KEY || result.reason === WRONG_API_KEY) {
+        await promptForApiKey(result.reason)
+        return
+      }
+      void vscode.window.showWarningMessage(`WorkLog: 전송하지 못했습니다 — ${result.reason}`)
+  }
 }
 
 /**
@@ -271,16 +317,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.sendNow', async () => {
-      const failure = await vscode.window.withProgress(
+      const result = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Window, title: 'WorkLog 전송 중…' },
         () => send('지금 전송'),
       )
-      // 사용자가 직접 누른 경우에만 안내한다. 주기·시작 전송까지 알리면 성가시다.
-      if (failure === NO_API_KEY || failure === WRONG_API_KEY) await promptForApiKey(failure)
-      else if (!failure && !verifying) {
-        void vscode.window.showInformationMessage(
-          `WorkLog: 전송했습니다 (미커밋 ${collector.uncommittedCount}파일).`)
+      if (verifying) {
+        return // 키 확인이 부른 전송이다. 알림은 그쪽에서 한다.
       }
+      // 사용자가 직접 누른 경우에만 안내한다. 주기·시작 전송까지 알리면 성가시다.
+      await tellResult(result)
     }),
   )
 
