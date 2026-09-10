@@ -48,9 +48,10 @@ public class AdminAccountInitializer implements ApplicationRunner {
         admin.setName("관리자");
         admin.setRole(UserRole.ADMIN);
         admin.setPasswordHash(PasswordHasher.hash(adminPassword));
-        // 초기 비밀번호는 설정 파일에 적혀 있으므로 비밀이 아니다.
-        admin.setMustChangePassword(true);
+        // 사원번호와 달리 관리자 비밀번호는 설정 파일에만 있어 공개 정보가 아니다.
+        // 그래서 강제 변경을 걸지 않는다 — 설정한 값으로 바로 들어간다.
+        admin.setMustChangePassword(false);
         userRepository.save(admin);
-        log.info("관리자 계정 {} 을 만들었다. 첫 로그인에서 비밀번호를 바꿔야 한다.", adminId);
+        log.info("관리자 계정 {} 을 만들었다.", adminId);
     }
 }
