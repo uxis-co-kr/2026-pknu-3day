@@ -84,6 +84,18 @@ public interface ActivityRepository
             + " where a.user is null and lower(a.externalLogin) = lower(:login)")
     int linkExistingActivities(@Param("userId") Long userId, @Param("login") String login);
 
+    /** 관리자 콘솔 — 사용자별 총 활동 수. */
+    @Query("select a.user.id, count(a) from Activity a where a.user is not null group by a.user.id")
+    List<Object[]> countAllByUser();
+
+    /**
+     * 관리자 콘솔 — 로그인한 적 없는 GitHub 계정별 활동 수와 마지막 활동 시각 (BACKLOG §3-4).
+     */
+    @Query("select a.externalLogin, count(a), max(a.occurredAt) from Activity a"
+            + " where a.user is null and a.externalLogin is not null"
+            + " group by a.externalLogin order by count(a) desc")
+    List<Object[]> countUnclaimedContributors();
+
     /** 아직 어느 사용자에도 붙지 않은 활동 수 — 통계에서 총계와 사용자별 합의 차이를 설명한다. */
     @Query("select a.type, count(a) from Activity a"
             + " where a.user is null and a.occurredAt >= :start and a.occurredAt < :end"

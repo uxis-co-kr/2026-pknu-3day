@@ -33,6 +33,17 @@ server:
 worklog:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
 
+  # 관리자 콘솔에 들어갈 수 있는 GitHub 로그인 (쉼표 구분).
+  # 콘솔에서 서로 권한을 주고받게 하면 첫 관리자를 만들 방법이 없어 설정으로 정한다.
+  admin-logins: ${WORKLOG_ADMIN_LOGINS:}
+
+  # 사내 회원 조회 API (TODO_0910 1-1). 사내망 주소와 키라 backend/.env 에만 둔다.
+  # 설정이 없으면 관리자 콘솔의 직원 목록만 비고 나머지는 그대로 뜬다.
+  waple:
+    base-url: ${WAPLE_API_BASE_URL:}
+    api-key: ${WAPLE_API_KEY:}
+    company-seq: ${WAPLE_COMPANY_SEQ:}
+
   # 2-2 / 2-3 (오후 작업)에서 사용
   jwt:
     secret: ${JWT_SECRET:}
