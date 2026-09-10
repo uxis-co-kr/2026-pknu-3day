@@ -75,11 +75,24 @@ public class RepoService {
         return repoRepository.save(repo);
     }
 
+    /**
+     * 등록자만 삭제할 수 있다.
+     *
+     * <p>{@code activities.repo_id} 가 ON DELETE CASCADE 라 리포를 지우면 그 리포의 활동 기록이
+     * 통째로 사라진다. 화면의 휴지통 아이콘 한 번으로 남의 수집 결과를 날릴 수 있어선 안 된다.
+     *
+     * <p>등록자가 비어 있는 리포(등록자 탈퇴 등)는 아무도 지울 수 없다. 관리자 개념이 생기면 다시 본다.
+     */
     @Transactional
-    public void delete(Long repoId) {
+    public void delete(Long userId, Long repoId) {
         Repo repo = repoRepository
-                .findById(repoId)
+                .findWithRegistrant(repoId)
                 .orElseThrow(() -> ApiException.notFound("REPO_NOT_FOUND", "리포를 찾을 수 없습니다."));
+
+        User registrant = repo.getRegisteredBy();
+        if (registrant == null || !registrant.getId().equals(userId)) {
+            throw ApiException.forbidden("REPO_NOT_OWNED", "등록한 사람만 리포를 삭제할 수 있습니다.");
+        }
         repoRepository.delete(repo);
     }
 
