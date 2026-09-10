@@ -1,0 +1,135 @@
+package com.worklog.chat;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.worklog.chat.MattermostClient.MmChannel;
+import com.worklog.chat.MattermostClient.MmPost;
+import com.worklog.chat.MattermostClient.MmUser;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+class MattermostBotTest {
+
+    private static final String BASE = "http://mm";
+    private MattermostClient client;
+    private WorkLogAnswerService answers;
+    private MattermostBot bot;
+
+    private ChatBotSettingsService settings;
+
+    @BeforeEach
+    void setUp() {
+        settings = mock(ChatBotSettingsService.class);
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db"));
+        client = mock(MattermostClient.class);
+        answers = mock(WorkLogAnswerService.class);
+        bot = new MattermostBot(settings, client, answers);
+
+        when(client.login(eq(BASE), eq("worklog-bot"), eq("pw"))).thenReturn("tok");
+        when(client.me(BASE, "tok")).thenReturn(new MmUser("bot-id", "worklog-bot"));
+        when(client.myChannels(BASE, "tok", "bot-id")).thenReturn(List.of(new MmChannel("ch1", "test", "테스트 채널", "O")));
+        when(answers.answer(anyString())).thenReturn(Optional.empty());
+        when(answers.answer("조웅식 오늘 업무일지")).thenReturn(Optional.of("답"));
+    }
+
+    private MmPost post(String id, String user, String text, long at) {
+        return new MmPost(id, user, "ch1", text, at, "", java.util.Map.of());
+    }
+
+    private MmPost botPost(String id, String text, long at) {
+        return new MmPost(id, "bot-id", "ch1", text, at, "", java.util.Map.of(MattermostClient.WORKLOG_PROP, true));
+    }
+
+    @Test
+    @DisplayName("질문에 한 번만 답하고, 봇이 쓴 답과 잡담에는 답하지 않는다 — 같은 계정이 물어도 답한다")
+    void answersOnceAndIgnoresSelf() {
+        long later = System.currentTimeMillis() + 10_000;
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(
+                        post("p1", "bot-id", "조웅식 오늘 업무일지", later), // 봇 계정 = 사람 계정인 경우
+                        botPost("p2", "**조웅식 · 업무 일지** …", later + 1),
+                        post("p3", "someone", "점심 뭐 먹지", later + 2)))
+                .thenReturn(List.of(post("p1", "bot-id", "조웅식 오늘 업무일지", later))); // 경계의 글이 다시 온다
+
+        bot.poll();
+        bot.poll();
+
+        verify(client, times(1)).createPost(BASE, "tok", "ch1", "답");
+    }
+
+    @Test
+    @DisplayName("세션이 만료되면 다음 주기에 다시 로그인한다")
+    void reloginsAfterUnauthorized() {
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenThrow(new MattermostClient.Unauthorized())
+                .thenReturn(List.of());
+
+        bot.poll(); // 401 → 토큰 버림
+        bot.poll(); // 다시 로그인
+
+        verify(client, times(2)).login(BASE, "worklog-bot", "pw");
+    }
+
+    @Test
+    @DisplayName("계정이 없으면 아무것도 하지 않는다")
+    void disabledWithoutCredentials() {
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective("", "", null, false, null, "none"));
+        bot.poll();
+        verify(client, never()).login(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("읽기를 끈 채널은 보지 않는다 — 상태에는 남아서 다시 켤 수 있다")
+    void skipsUnwatchedChannels() {
+        when(settings.effective()).thenReturn(new ChatBotSettingsService.Effective(
+                BASE, "worklog-bot", "pw", true, java.util.Set.of("other"), "db"));
+
+        bot.poll();
+
+        verify(client, never()).postsSince(any(), any(), eq("ch1"), anyLong());
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> rows =
+                (java.util.List<java.util.Map<String, Object>>) bot.status().get("channels");
+        org.assertj.core.api.Assertions.assertThat(rows).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(rows.get(0)).containsEntry("watching", false);
+    }
+
+    @Test
+    @DisplayName("연결 버튼 — 비밀번호가 틀리면 이유를 담아 400")
+    void connectNowReportsBadCredentials() {
+        when(client.login(any(), any(), any())).thenThrow(new MattermostClient.Unauthorized());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bot.connectNow())
+                .isInstanceOf(com.worklog.config.ApiException.class)
+                .hasMessageContaining("아이디 또는 비밀번호");
+    }
+
+    @Test
+    @DisplayName("설정이 바뀌면 다음 주기에 새 계정으로 다시 로그인한다")
+    void reloginsWhenSettingsChange() {
+        when(client.postsSince(any(), any(), any(), anyLong())).thenReturn(List.of());
+        bot.poll();
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "other-bot", "pw2", true, null, "db"));
+        when(client.login(BASE, "other-bot", "pw2")).thenReturn("tok2");
+        when(client.me(BASE, "tok2")).thenReturn(new MmUser("bot-id", "other-bot"));
+        when(client.myChannels(BASE, "tok2", "bot-id")).thenReturn(List.of());
+
+        bot.poll();
+
+        verify(client).login(BASE, "other-bot", "pw2");
+    }
+}

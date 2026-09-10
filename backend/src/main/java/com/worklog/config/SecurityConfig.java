@@ -63,6 +63,9 @@ public class SecurityConfig {
                 .logout(l -> l.disable())
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/health", "/auth/**")
                         .permitAll()
+                        // Mattermost 가 부른다. JWT 대신 웹훅 token 으로 확인한다 (MattermostChatController).
+                        .requestMatchers(HttpMethod.POST, "/chat/mattermost")
+                        .permitAll()
                         // 확장이 보고하는 경로와 외부 연동은 개인 키로만 열린다 (PRD 7).
                         // 같은 /vscode/sessions 라도 대시보드가 쓰는 GET 은 ★ 라 아래 규칙을 탄다.
                         .requestMatchers(HttpMethod.POST, "/vscode/sessions")

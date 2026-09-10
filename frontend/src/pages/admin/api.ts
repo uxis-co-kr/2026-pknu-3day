@@ -1,9 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/apiClient'
-import type { AdminLlmSettings, AdminOverview, GlobalNotifySettings, PeopleDirectory } from './types'
+import type {
+  AdminLlmSettings,
+  AdminOverview,
+  ChatBotSettings,
+  ChatBotStatus,
+  GlobalNotifySettings,
+  PeopleDirectory,
+} from './types'
 
 /** 관리자 콘솔 쿼리 키. 일반 화면 키와 섞이지 않게 admin 으로 시작한다. */
 export const adminQk = {
+  chatStatus: ['admin', 'chat', 'status'] as const,
+  chatSettings: ['admin', 'chat', 'settings'] as const,
   overview: ['admin', 'overview'] as const,
   people: ['admin', 'people'] as const,
   notify: ['admin', 'settings', 'notify'] as const,
@@ -91,5 +100,49 @@ export const useRunSummaries = () => {
   return useMutation({
     mutationFn: () => api.post<{ summarized: number }>('/admin/summaries/run'),
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.overview }),
+  })
+}
+
+/** 봇 상태는 몇 초마다 다시 본다 — 연결하거나 채널에 초대하면 화면이 따라 바뀐다. */
+export const useChatBotStatus = () =>
+  useQuery({
+    queryKey: adminQk.chatStatus,
+    queryFn: () => api.get<ChatBotStatus>('/admin/chat/status'),
+    refetchInterval: 5000,
+  })
+
+export const useChatBotSettings = () =>
+  useQuery({ queryKey: adminQk.chatSettings, queryFn: () => api.get<ChatBotSettings>('/admin/chat/settings') })
+
+/** 저장하고 바로 로그인해 본다. 실패하면 서버가 이유를 400 으로 돌려준다. */
+export const useConnectChatBot = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (req: { baseUrl: string; loginId: string; password: string | null }) =>
+      api.put<ChatBotStatus>('/admin/chat/settings', req),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: adminQk.chatStatus })
+      void qc.invalidateQueries({ queryKey: adminQk.chatSettings })
+    },
+  })
+}
+
+export const useDisconnectChatBot = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<ChatBotStatus>('/admin/chat/disconnect', {}),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: adminQk.chatStatus })
+      void qc.invalidateQueries({ queryKey: adminQk.chatSettings })
+    },
+  })
+}
+
+export const useSetChannelWatching = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (req: { channelId: string; watching: boolean }) =>
+      api.put<ChatBotStatus>(`/admin/chat/channels/${req.channelId}`, { watching: req.watching }),
+    onSuccess: (status) => qc.setQueryData(adminQk.chatStatus, status),
   })
 }

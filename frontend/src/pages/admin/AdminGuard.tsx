@@ -27,8 +27,8 @@ export default function AdminGuard({
       <div>
         <p className="text-base font-medium">관리자만 볼 수 있는 화면입니다</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          관리자 계정은 서버 설정(<code className="rounded bg-muted px-1">WORKLOG_ADMIN_LOGINS</code>)에서
-          정합니다. 목록에 추가된 뒤 다시 로그인하면 들어올 수 있습니다.
+          로그인 화면 아래의 <b>관리자 콘솔</b>에서 관리자 계정(<code className="rounded bg-muted px-1">admin</code>)으로
+          들어와 주세요. 일반 회원 계정으로는 볼 수 없습니다.
         </p>
       </div>
       <Button asChild variant="outline" size="sm">
