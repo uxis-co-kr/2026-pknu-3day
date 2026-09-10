@@ -38,6 +38,10 @@ export default function VscodePage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
+      </div>
+
       <div className="grid grid-cols-3 gap-3">
         {stats.isLoading || !s ? (
           [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
@@ -49,10 +53,6 @@ export default function VscodePage() {
               hint={s.staleSessions > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={s.staleSessions > 0} />
           </>
         )}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
       </div>
 
       <Card className="overflow-hidden rounded-lg shadow-none">

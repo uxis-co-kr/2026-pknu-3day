@@ -60,18 +60,6 @@ export default function GithubPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        {stats.isLoading ? (
-          TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
-        ) : (
-          <>
-            <SummaryCard label="내 커밋" value={myStat?.commits ?? 0} hint={`팀 전체 ${stats.data?.commits ?? 0}`} />
-            <SummaryCard label="내 PR" value={myStat?.prs ?? 0} hint={`팀 전체 ${stats.data?.prs ?? 0}`} />
-            <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
-          </>
-        )}
-      </div>
-
       <div className="flex items-center gap-3">
         <DayFilters
           repos={repos.data ?? []}
@@ -97,6 +85,18 @@ export default function GithubPage() {
               </button>
             ))}
           </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {stats.isLoading ? (
+          TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
+        ) : (
+          <>
+            <SummaryCard label="내 커밋" value={myStat?.commits ?? 0} hint={`팀 전체 ${stats.data?.commits ?? 0}`} />
+            <SummaryCard label="내 PR" value={myStat?.prs ?? 0} hint={`팀 전체 ${stats.data?.prs ?? 0}`} />
+            <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
+          </>
+        )}
+      </div>
         </DayFilters>
 
       </div>

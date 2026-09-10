@@ -138,7 +138,14 @@ export function activate(context: vscode.ExtensionContext): void {
   renderStatusBar()
 
   tree = new WorkLogTreeProvider(collector)
-  context.subscriptions.push(vscode.window.registerTreeDataProvider('worklog.session', tree))
+  const view = vscode.window.createTreeView('worklog.session', { treeDataProvider: tree })
+  context.subscriptions.push(
+    view,
+    // 사이드바를 열 때 낡은 숫자를 그대로 보여 주지 않는다.
+    view.onDidChangeVisibility((e) => {
+      if (e.visible) void tree.refresh()
+    }),
+  )
   void tree.refresh()
 
   context.subscriptions.push(
@@ -151,6 +158,23 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.refresh', () => tree.refresh()),
+  )
+
+  // 커밋·푸시는 대개 터미널이나 소스 제어 패널에서 한다. 파일 저장만 보고 있으면 그때
+  // 미커밋·미푸시 숫자가 낡은 채로 남아 실제와 달라 보인다.
+  const gitWatcher = vscode.workspace.createFileSystemWatcher('**/.git/{HEAD,index,refs/**}')
+  context.subscriptions.push(
+    gitWatcher,
+    gitWatcher.onDidChange(scheduleTreeRefresh),
+    gitWatcher.onDidCreate(scheduleTreeRefresh),
+    gitWatcher.onDidDelete(scheduleTreeRefresh),
+  )
+
+  // 창을 비웠다 돌아오면 그 사이 밖에서 무슨 일이 있었을 수 있다.
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (state.focused) scheduleTreeRefresh()
+    }),
   )
 
   // 사이드바에서 계획 한 줄을 지운다. 잘못 적은 메모가 그날 내내 남지 않게.

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronRight, ExternalLink } from 'lucide-react'
 import ActivityTypeIcon from '@/components/common/ActivityTypeIcon'
 import DiffStat from '@/components/common/DiffStat'
+import MarkdownPreview from '@/components/draft/MarkdownPreview'
 import { SummaryStatusBadge } from '@/components/common/StatusBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActivityDetail } from '@/api/hooks'
@@ -80,7 +81,8 @@ export default function ActivityDetailRow({ activity }: { activity: Activity }) 
           {activity.summary && (
             <div>
               <p className="mb-0.5 text-[11px] font-medium text-muted-foreground">요약</p>
-              <p className="text-[13px] leading-relaxed">{activity.summary}</p>
+              {/* LLM 이 목록·굵게 같은 서식을 쓴다. 그대로 두면 별표가 글자로 보인다. */}
+              <MarkdownPreview source={activity.summary} />
             </div>
           )}
           {detail.isLoading && <Skeleton className="h-4 w-64" />}

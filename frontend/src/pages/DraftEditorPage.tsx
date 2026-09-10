@@ -16,5 +16,11 @@ export default function DraftEditorPage() {
   }
 
   // AI 생성은 새 버전을 만든다. 그 초안으로 옮겨 간다.
-  return <DraftWorkspace draftId={draftId} onGenerated={(next) => navigate(`/drafts/${next}`)} />
+  return (
+    <DraftWorkspace
+      draftId={draftId}
+      onGenerated={(next) => navigate(`/drafts/${next}`)}
+      onBack={() => navigate('/drafts')}
+    />
+  )
 }

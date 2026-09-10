@@ -2,6 +2,7 @@ package com.worklog.auth;
 
 import com.worklog.admin.WapleClient;
 import com.worklog.admin.WapleProperties;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,12 +56,21 @@ public class EmployeeAccountService {
         }
 
         Long companySeq = wapleProperties.getCompanySeq();
-        Optional<WapleClient.Employee> employee =
-                wapleClient.employees(companySeq == null ? 0L : companySeq).stream()
-                        .filter(e -> e.empSeq() != null && e.empSeq() == empSeq)
-                        .findFirst();
+        List<WapleClient.Employee> roster = wapleClient.employees(companySeq == null ? 0L : companySeq);
+        if (roster.isEmpty()) {
+            // 설정이 빠진 것과 "그런 사원이 없다" 는 다르다. 목록 자체가 비면 설정 문제다 —
+            // 이 구분이 없으면 로그인이 안 되는 이유를 로그에서 찾을 수 없다.
+            log.warn(
+                    "사원 목록이 비어 있어 계정을 만들 수 없다. WAPLE_API_BASE_URL/WAPLE_API_KEY 또는"
+                            + " WAPLE_FALLBACK_EMPLOYEES 를 확인한다 (companySeq={}).",
+                    companySeq);
+            return Optional.empty();
+        }
+        Optional<WapleClient.Employee> employee = roster.stream()
+                .filter(e -> e.empSeq() != null && e.empSeq() == empSeq)
+                .findFirst();
         if (employee.isEmpty()) {
-            log.info("사원 번호 {} 가 회원 목록에 없어 계정을 만들지 않는다.", loginId);
+            log.info("사원 번호 {} 가 회원 목록({}명)에 없어 계정을 만들지 않는다.", loginId, roster.size());
             return Optional.empty();
         }
 
