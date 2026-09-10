@@ -29,9 +29,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String PREFIX = "Bearer ";
 
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
-    public JwtAuthFilter(JwtService jwtService) {
+    public JwtAuthFilter(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -44,7 +46,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             String token = header.substring(PREFIX.length()).trim();
             try {
-                AuthenticatedUser user = jwtService.verify(token);
+                AuthenticatedUser fromToken = jwtService.verify(token);
+                // 권한은 토큰이 아니라 DB 의 지금 값이다. 토큰에 적힌 권한을 믿으면, 관리자였을 때
+                // 받은 토큰이 만료될 때까지 계속 관리자로 통한다. 계정이 지워졌으면 토큰도 죽는다.
+                AuthenticatedUser user = userRepository
+                        .findById(fromToken.id())
+                        .map(u -> new AuthenticatedUser(
+                                u.getId(), fromToken.login(), AuthMethod.JWT,
+                                u.getRole() == null ? UserRole.MEMBER : u.getRole()))
+                        .orElse(null);
+                if (user == null) {
+                    log.debug("토큰의 사용자 {} 가 없다.", fromToken.id());
+                    chain.doFilter(request, response);
+                    return;
+                }
                 var auth = new UsernamePasswordAuthenticationToken(
                         user,
                         null,
