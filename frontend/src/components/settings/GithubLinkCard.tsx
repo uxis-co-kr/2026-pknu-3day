@@ -23,7 +23,7 @@ export default function GithubLinkCard() {
     return (
       <div className="flex items-center justify-between gap-4">
         <p className="text-[13px] text-muted-foreground">
-          아직 연결하지 않았습니다. 연결 전 커밋은 내 이름으로 모이지 않습니다.
+          아직 연결하지 않았습니다. 연결해야 내가 한 커밋을 내 것으로 알아봅니다.
         </p>
         <Button className="h-9 shrink-0 gap-2" disabled={connect.isPending} onClick={() => connect.mutate()}>
           <svg viewBox="0 0 16 16" aria-hidden className="size-4 fill-current">

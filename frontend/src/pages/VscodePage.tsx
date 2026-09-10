@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import DiffStat from '@/components/common/DiffStat'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDailyStats, useMe, useRepos, useSessions } from '@/api/hooks'
+import { useMe, useRepos, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatRelative, formatTime } from '@/lib/date'
 import type { VscodeSession } from '@/types/api'
+
+/** 미커밋 리마인드(F7-2)와 같은 기준. 화면 문구도 "6시간 이상" 이다. */
+const STALE_AFTER_MS = 6 * 60 * 60 * 1000
 
 /**
  * VS 내역 — VS Code 확장이 보낸 **내** 작업.
@@ -20,7 +23,6 @@ export default function VscodePage() {
   const { date } = useSelectedDate()
 
   const { data: me } = useMe()
-  const stats = useDailyStats(date)
   const sessions = useSessions({ date, userId: me?.id })
   const repos = useRepos()
 
@@ -32,9 +34,19 @@ export default function VscodePage() {
     .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt))
 
   const files = shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)
+  /**
+   * 6시간 넘게 커밋하지 않은 내 세션. /stats/daily 의 staleSessions 는 팀 전체를 세므로
+   * 여기서 직접 센다 — 내 화면에 남의 숫자가 섞이면 안 된다.
+   *
+   * <p>기준 시각은 렌더마다 바뀌면 안 되므로 세션 목록이 바뀔 때만 다시 잡는다.
+   */
+  const stale = useMemo(() => {
+    const threshold = Date.now() - STALE_AFTER_MS
+    return shown.filter((x) => !x.lastCommitAt || new Date(x.lastCommitAt).getTime() < threshold).length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions.data, repoFilter, me?.id])
 
 
-  const s = stats.data
 
   return (
     <div className="space-y-4">
@@ -43,14 +55,15 @@ export default function VscodePage() {
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        {stats.isLoading || !s ? (
+        {sessions.isLoading ? (
           [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="내 세션" value={shown.length} hint={`팀 전체 ${s.sessions}`} />
+            {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
+            <SummaryCard label="세션" value={shown.length} hint={shown.length > 0 ? '오늘 보고한 저장소' : '—'} />
             <SummaryCard label="미커밋 파일" value={files} hint={files > 0 ? '커밋 전 작업입니다' : '—'} />
-            <SummaryCard label="6시간 이상 미커밋" value={s.staleSessions}
-              hint={s.staleSessions > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={s.staleSessions > 0} />
+            <SummaryCard label="6시간 이상 미커밋" value={stale}
+              hint={stale > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={stale > 0} />
           </>
         )}
       </div>

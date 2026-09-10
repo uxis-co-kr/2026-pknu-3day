@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApiError, auth } from '@/api/apiClient'
@@ -72,15 +71,15 @@ export default function PasswordPage() {
     </form>
   )
 
+  // 설정의 Section 이 이미 카드다. 여기서 또 감싸면 상자가 겹친다.
   return (
-    <Card className="max-w-[520px] rounded-lg p-6 shadow-none">
-      <h2 className="text-sm font-semibold">비밀번호 변경</h2>
-      <p className="mb-4 mt-1 text-[13px] text-muted-foreground">
+    <div className="max-w-[520px]">
+      <p className="mb-4 text-[13px] text-muted-foreground">
         {usingInitial
           ? '아직 최초 비밀번호(사원번호)를 쓰고 있습니다. 사원번호는 사원 목록에서 조회할 수 있으니 바꾸는 편이 안전합니다.'
           : `${me?.loginId ? `사원번호 ${me.loginId}` : '내 계정'}의 비밀번호를 바꿉니다.`}
       </p>
       {form}
-    </Card>
+    </div>
   )
 }

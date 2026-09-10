@@ -49,16 +49,8 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <Section title="깃허브 연동" description="연결해야 커밋·PR 이 내 이름으로 모입니다. 연결하지 않으면 활동이 미가입 계정으로 남습니다.">
+      <Section title="깃허브 연동" description="GitHub 계정을 연결해야 내 커밋·PR 이 내 것으로 잡힙니다. 연결 전에는 서버가 그 커밋을 누가 했는지 알 수 없어 대시보드에 뜨지 않습니다.">
         <GithubLinkCard />
-      </Section>
-
-      <Section title="비밀번호">
-        <PasswordPage />
-      </Section>
-
-      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">
-        <RepoSection />
       </Section>
 
       <Section title="API 연동 (API Key)" description="VS Code 확장과 외부 연동에서 씁니다. 평문 키는 발급 직후 한 번만 보여 줍니다.">
@@ -98,6 +90,14 @@ export default function SettingsPage() {
           </TableBody>
         </Table>
         <Button size="sm" className="mt-4 h-[34px]" onClick={openDialog}>새 키 발급</Button>
+      </Section>
+
+      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">
+        <RepoSection />
+      </Section>
+
+      <Section title="비밀번호">
+        <PasswordPage />
       </Section>
 
       {/*

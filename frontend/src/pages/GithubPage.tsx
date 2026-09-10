@@ -73,9 +73,13 @@ export default function GithubPage() {
           TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="내 커밋" value={myStat?.commits ?? 0} hint={`팀 전체 ${stats.data?.commits ?? 0}`} />
-            <SummaryCard label="내 PR" value={myStat?.prs ?? 0} hint={`팀 전체 ${stats.data?.prs ?? 0}`} />
-            <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
+            {/*
+              * 팀 전체 숫자는 빼 두었다 — 일반 로그인은 내 내역만 보는 화면이라 옆에 팀 합계가
+              * 있으면 무엇이 내 것인지 흐려진다. 팀 전체는 관리자 콘솔이 맡는다 (9/10 결정).
+              */}
+            <SummaryCard label="커밋" value={myStat?.commits ?? 0} hint={mine.length === 0 ? '—' : `${shown.length}건 표시 중`} />
+            <SummaryCard label="PR" value={myStat?.prs ?? 0} hint="열린 PR" />
+            <SummaryCard label="머지" value={myStat?.merges ?? 0} hint="머지된 PR" />
           </>
         )}
       </div>
