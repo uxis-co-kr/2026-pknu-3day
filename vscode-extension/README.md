@@ -76,6 +76,53 @@ GitHub 커밋만으로는 보이지 않는 **진행 중인 일**이 업무 일�
   열어 두면 그 미커밋 작업도 올라간다 (BACKLOG §5 결정 3번).
 - API Key 는 VS Code 설정에 평문으로 저장된다. 설정 동기화를 켜 두었다면 계정에 함께 올라간다.
 
+## 수집기 테스트
+
+무엇이 서버로 갈지 **보내기 전에** 확인할 수 있다. VS Code 를 띄우지 않고 수집기만 돌린다.
+
+```bash
+npm run compile
+npm run preview                       # 현재 폴더
+npm run preview -- ~/some/repo        # 다른 저장소
+npm run preview -- . --no-diff        # diff 본문 없이
+npm run preview -- . --plan "메모"    # 계획 메모를 넣은 상태로
+npm run preview -- . --full           # 서버로 갈 JSON 전체
+```
+
+출력은 이런 모양이다.
+
+```
+remoteUrl   https://github.com/uxis-co-kr/2026-pknu-3day.git
+branch      VsPeristalsis_dashboard
+workDate    2026-09-10   (KST)
+
+미커밋 4개
+  +1 −0  staged.txt  diff 8줄
+  +2 −1  tracked.txt  diff 11줄
+  +0 −0  blob.dat  diff (없음)
+  +4 −0  new.ts  [새 파일]  diff 5줄
+
+TODO 2개
+  new.ts:2  출석 중복 검증 마무리
+```
+
+**전송은 하지 않는다.** 읽기만 한다.
+
+알아 둘 것:
+
+- `edit timeline` 은 항상 0 이다. VS Code 의 파일 저장 이벤트로만 쌓이므로 밖에서는 재현되지 않는다.
+- 바이너리 파일은 `+0 −0`, diff 없음으로 나온다. 본문을 보내지 않는다.
+- diff 는 파일당 200줄까지다. 그보다 길면 마지막에 생략 줄이 붙는다.
+- `origin` 이 없는 저장소는 건너뛴다 — 서버가 어느 리포인지 알 수 없기 때문이다.
+
+### VS Code 안에서 확인하기
+
+전송까지 포함한 전체 경로는 실제 VS Code 로 본다.
+
+- **F5** — Extension Development Host 가 뜬다. 설치 없이 수정한 코드를 바로 확인할 수 있다.
+- 설치본으로 볼 때는 명령 팔레트 → `WorkLog: 지금 전송` → **출력 패널 → WorkLog Drafter** 채널.
+  전송한 세션 id 와 미커밋 파일 수가 한 줄로 찍힌다.
+
 ## 개발
 
 ```bash

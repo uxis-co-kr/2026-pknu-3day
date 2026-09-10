@@ -63,7 +63,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "preview": "node scripts/preview.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

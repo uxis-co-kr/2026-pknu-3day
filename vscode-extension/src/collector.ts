@@ -173,7 +173,11 @@ async function readLines(fsPath: string): Promise<string[] | undefined> {
     if (!info.isFile() || info.size > MAX_READ_BYTES) return undefined
     const buffer = await readFile(fsPath)
     if (buffer.subarray(0, 8192).includes(0)) return undefined // NUL 이 있으면 바이너리로 본다
-    return buffer.toString('utf8').split('\n')
+    const lines = buffer.toString('utf8').split('\n')
+    // 마지막 개행 뒤의 빈 조각은 줄이 아니다. 그대로 두면 새 파일의 +N 이 git 보다 1 크고,
+    // diff 본문 끝에 빈 '+' 줄이 붙는다.
+    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+    return lines
   } catch {
     return undefined
   }
