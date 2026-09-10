@@ -4,6 +4,7 @@ import com.worklog.config.ApiException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -39,6 +40,8 @@ public class GitHubOAuthController {
     private final UserService userService;
     private final JwtService jwtService;
     private final String frontendUrl;
+    /** 비우면 요청에서 만든다. 여럿이 한 서버를 볼 때만 채운다 (BACKLOG2 §2-1). */
+    private final String configuredRedirectUri;
     private final OAuthStateCodec stateCodec;
 
     public GitHubOAuthController(
@@ -47,13 +50,15 @@ public class GitHubOAuthController {
             UserService userService,
             JwtService jwtService,
             OAuthStateCodec stateCodec,
-            @Value("${worklog.frontend-url}") String frontendUrl) {
+            @Value("${worklog.frontend-url}") String frontendUrl,
+            @Value("${worklog.oauth-redirect-uri:}") String configuredRedirectUri) {
         this.client = client;
         this.properties = properties;
         this.userService = userService;
         this.jwtService = jwtService;
         this.stateCodec = stateCodec;
         this.frontendUrl = stripTrailingSlash(frontendUrl);
+        this.configuredRedirectUri = configuredRedirectUri == null ? null : configuredRedirectUri.trim();
     }
 
     /**
@@ -66,8 +71,10 @@ public class GitHubOAuthController {
      */
     String authorizeUrl(Long link, HttpServletRequest request) {
         requireConfigured();
-        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지 state 안에 서명해 넘긴다.
-        String state = stateCodec.issue(link);
+        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지, 어디로 돌아갈지
+        // state 안에 서명해 넘긴다. 사람마다 접속 주소가 다르므로(각자 자기 내부 IP)
+        // FRONTEND_URL 하나로는 늘 남의 화면으로 돌아간다 (BACKLOG2 §2-1).
+        String state = stateCodec.issue(link, allowedOrigin(request));
         return AUTHORIZE_URL_PREFIX
                 + "?client_id=" + encode(properties.getClientId())
                 + "&redirect_uri=" + encode(redirectUri(request))
@@ -113,16 +120,18 @@ public class GitHubOAuthController {
         GitHubOAuthClient.GitHubUserDto dto = client.fetchUser(accessToken);
 
         Long linkTo = parsed.linkUserId();
+        // 시작한 사람의 화면으로 돌려보낸다. 사람마다 접속 주소가 다르다 (BACKLOG2 §2-1).
+        String returnTo = returnTo(parsed.returnOrigin());
 
         if (linkTo != null) {
             // 이미 로그인한 계정에 붙이는 경우. 새 계정을 만들지 않는다 (TODO_0910 §1-1).
             try {
                 User user = userService.linkGitHub(linkTo, dto, accessToken);
                 log.info("GitHub 연동 성공: {} → 사용자 {}", user.getLogin(), user.getId());
-                response.sendRedirect(frontendUrl + "/settings?github=linked");
+                response.sendRedirect(returnTo + "/settings?github=linked");
             } catch (ApiException e) {
                 log.warn("GitHub 연동 실패: {}", e.getMessage());
-                response.sendRedirect(frontendUrl + "/settings?github=" + encode(e.getCode()));
+                response.sendRedirect(returnTo + "/settings?github=" + encode(e.getCode()));
             }
             return;
         }
@@ -131,7 +140,7 @@ public class GitHubOAuthController {
         String jwt = jwtService.issue(user);
 
         log.info("GitHub 로그인 성공: {} (id={})", user.getLogin(), user.getId());
-        response.sendRedirect(frontendUrl + "/auth/done?token=" + encode(jwt));
+        response.sendRedirect(returnTo + "/auth/done?token=" + encode(jwt));
     }
 
     private void requireConfigured() {
@@ -148,7 +157,105 @@ public class GitHubOAuthController {
      * 그것, 없으면 요청 URL 에서 만든다 — 프록시 뒤에서는 요청 호스트가 localhost 로 보이므로,
      * 다른 기기에서 쓰려면 설정으로 못 박는다.
      */
+    /**
+     * 돌아갈 화면 주소. 사내망 주소만 받는다.
+     *
+     * <p>요청이 알려 준 주소를 그대로 믿으면 <b>열린 리다이렉트</b>가 된다 — 바깥 주소를
+     * 적어 보내면 토큰이 그리로 날아간다. 그래서 사설 대역과 localhost 만 통과시킨다.
+     *
+     * @return 통과하면 그 주소, 아니면 null (설정의 FRONTEND_URL 을 쓴다)
+     */
+    String allowedOrigin(HttpServletRequest request) {
+        String origin = request.getHeader("Origin");
+        if (origin == null || origin.isBlank()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(origin.trim());
+            String host = uri.getHost();
+            if (host == null || !isPrivateHost(host)) {
+                log.warn("사내망 밖의 Origin 은 돌아갈 주소로 쓰지 않는다: {}", origin);
+                return null;
+            }
+            return stripTrailingSlash(origin.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * localhost 와 사설 IP 대역(10./172.16-31./192.168.) 만.
+     *
+     * <p>앞자리만 견주면 {@code 192.168.1.224.evil.com} 같은 주소가 통과한다 — 남이 그
+     * 도메인을 잡아 두면 토큰이 그리로 날아간다. 그래서 <b>네 칸짜리 숫자 주소인지</b>부터
+     * 확인한다.
+     */
+    static boolean isPrivateHost(String host) {
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        if ("localhost".equalsIgnoreCase(host) || "[::1]".equals(host) || "::1".equals(host)) {
+            return true;
+        }
+        int[] octets = parseIpv4(host);
+        if (octets == null) {
+            return false;
+        }
+        if (octets[0] == 127 || octets[0] == 10) {
+            return true;
+        }
+        if (octets[0] == 192 && octets[1] == 168) {
+            return true;
+        }
+        return octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31;
+    }
+
+    /** 점 넷으로 나뉜 0~255 네 칸이어야 한다. 아니면 null. */
+    private static int[] parseIpv4(String host) {
+        String[] parts = host.split("\\.", -1);
+        if (parts.length != 4) {
+            return null;
+        }
+        int[] octets = new int[4];
+        for (int i = 0; i < 4; i++) {
+            if (parts[i].isEmpty() || parts[i].length() > 3) {
+                return null;
+            }
+            for (int k = 0; k < parts[i].length(); k++) {
+                if (!Character.isDigit(parts[i].charAt(k))) {
+                    return null;
+                }
+            }
+            octets[i] = Integer.parseInt(parts[i]);
+            if (octets[i] > 255) {
+                return null;
+            }
+        }
+        return octets;
+    }
+
+    private String returnTo(String returnOrigin) {
+        return returnOrigin == null || returnOrigin.isBlank() ? frontendUrl : returnOrigin;
+    }
+
+    /**
+     * GitHub 이 돌아올 콜백 주소.
+     *
+     * <p>기본은 요청에서 만든다. 그런데 여럿이 한 서버를 볼 때는 그러면 안 된다 — 프록시를
+     * 지나온 요청은 {@code localhost:8080} 으로 보이고, GitHub 은 그 주소로 <b>각자의
+     * 브라우저</b>를 보낸다. 남의 PC 에는 그 서버가 없다.
+     *
+     * <p>그래서 {@code WORKLOG_OAUTH_REDIRECT_URI} 가 있으면 그것을 쓴다. OAuth App 에
+     * 등록한 주소와 글자까지 같아야 하므로, 어차피 한 곳에 적어 두는 편이 맞다.
+     */
     private String redirectUri(HttpServletRequest request) {
+        if (configuredRedirectUri != null && !configuredRedirectUri.isBlank()) {
+            return configuredRedirectUri;
+        }
+        return derivedRedirectUri(request);
+    }
+
+    private String derivedRedirectUri(HttpServletRequest request) {
         if (properties.getRedirectUri() != null && !properties.getRedirectUri().isBlank()) {
             return properties.getRedirectUri().trim();
         }
