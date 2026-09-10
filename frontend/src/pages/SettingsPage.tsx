@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import GithubLinkCard from '@/components/settings/GithubLinkCard'
+import PasswordPage from '@/pages/PasswordPage'
+import RepoSection from '@/components/settings/RepoSection'
 import { Card } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -28,7 +31,11 @@ function Section({ title, description, children }: { title: string; description?
   )
 }
 
-/** 디자인 브리프 3.6 — API Key / Mattermost / LLM 모델 세 카드. */
+/**
+ * 설정 — 9/10 회의 기준. API 연동 · 깃허브 연동 · 리포지터리.
+ *
+ * <p>Mattermost 와 LLM 모델은 관리자 콘솔로 옮겨간다 (담당자 2). 옮겨갈 때까지 여기 둔다.
+ */
 export default function SettingsPage() {
   const keys = useApiKeys()
   const issue = useIssueApiKey()
@@ -55,7 +62,19 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <Section title="API Key" description="VS Code 확장과 외부 연동에서 씁니다. 평문 키는 발급 직후 한 번만 보여 줍니다.">
+      <Section title="깃허브 연동" description="연결해야 커밋·PR 이 내 이름으로 모입니다. 연결하지 않으면 활동이 미가입 계정으로 남습니다.">
+        <GithubLinkCard />
+      </Section>
+
+      <Section title="비밀번호">
+        <PasswordPage />
+      </Section>
+
+      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">
+        <RepoSection />
+      </Section>
+
+      <Section title="API 연동 (API Key)" description="VS Code 확장과 외부 연동에서 씁니다. 평문 키는 발급 직후 한 번만 보여 줍니다.">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

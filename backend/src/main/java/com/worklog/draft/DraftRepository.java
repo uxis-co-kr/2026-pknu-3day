@@ -22,17 +22,23 @@ public interface DraftRepository extends JpaRepository<Draft, Long> {
     /** 같은 (사용자, 날짜) 의 최신 버전. */
     Optional<Draft> findFirstByUserIdAndWorkDateOrderByVersionDesc(Long userId, LocalDate workDate);
 
-    /**
-     * 기간 안의 (사용자, 날짜)별 최신 버전 초안 — 인원별 화면이 날짜마다 배지를 그린다.
-     * 재생성은 version 을 올리므로 같은 (user, date) 에 여러 행이 있다.
-     */
-    @Query("select d from Draft d where d.workDate between :from and :to"
-            + " and d.version = (select max(d2.version) from Draft d2"
-            + "                  where d2.user.id = d.user.id and d2.workDate = d.workDate)")
-    List<Draft> findLatestBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
-
     @Query("select d from Draft d join fetch d.user where d.workDate = :workDate"
             + " and d.version = (select max(d2.version) from Draft d2"
             + "                  where d2.user.id = d.user.id and d2.workDate = d.workDate)")
     List<Draft> findLatestByWorkDate(@Param("workDate") LocalDate workDate);
+
+    /**
+     * 기간 안의 (사용자, 날짜) 별 최신 버전. 최근 날짜가 먼저 온다.
+     *
+     * <p>재생성은 version 을 올리므로 같은 (user, date) 에 여러 행이 있다. 그중 최신만 준다.
+     *
+     * <p>두 곳이 쓴다 — 업무 일지 목록 화면(하루씩이 아니라 여러 날)과 인원별 통계(날짜마다
+     * 배지). 둘 다 {@code draft.getUser()} 를 읽으므로 {@code join fetch} 로 N+1 을 막는다.
+     */
+    @Query("select d from Draft d join fetch d.user"
+            + " where d.workDate between :from and :to"
+            + " and d.version = (select max(d2.version) from Draft d2"
+            + "                  where d2.user.id = d.user.id and d2.workDate = d.workDate)"
+            + " order by d.workDate desc, d.user.id")
+    List<Draft> findLatestBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
 }

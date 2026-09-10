@@ -51,6 +51,21 @@ public class DraftService {
                 .toList();
     }
 
+    /**
+     * 기간 조회 — 업무 일지 목록 화면이 쓴다 (날짜 하나가 아니라 여러 날).
+     *
+     * <p>정렬은 쿼리가 이미 최근 날짜 먼저로 해 둔다.
+     */
+    @Transactional(readOnly = true)
+    public List<DraftSummaryResponse> listBetween(
+            LocalDate from, LocalDate to, Long userId, DraftStatus status) {
+        return drafts.findLatestBetween(from, to).stream()
+                .filter(d -> userId == null || d.getUser().getId().equals(userId))
+                .filter(d -> status == null || d.getStatus() == status)
+                .map(DraftSummaryResponse::from)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public DraftDetailResponse detail(Long id) {
         return toDetail(find(id));

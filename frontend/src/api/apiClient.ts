@@ -13,15 +13,21 @@ export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
  * 404 를 무조건 목업으로 돌리면 `/drafts/9999` 같은 정상적인 "없음" 까지 가짜 데이터로 덮여
  * 버리므로, 목록을 명시해 두고 엔드포인트가 생길 때마다 지운다.
  *
- * 2026-09-10 기준 미구현: 알림·LLM 설정(F7/F9 백엔드), 인원별 통계(2-14).
+ * 2026-09-10 기준 미구현: 사원번호 로그인·비밀번호·GitHub 연동 (9/10 회의, 담당자 2).
+ * /settings/llm 과 /stats/people 은 담당자 2 가 2-14 로 붙여 목록에서 뺐다.
  */
-const MOCK_FALLBACK_PATHS = [/^\/settings\/llm/, /^\/stats\/people/]
+const MOCK_FALLBACK_PATHS = [
+  /^\/auth\/login/,
+  /^\/me\/password/,
+  /^\/me\/github/,
+]
 
 function fallsBackToMock(path: string): boolean {
   return MOCK_FALLBACK_PATHS.some((p) => p.test(path))
 }
 
 const TOKEN_KEY = 'worklog.token'
+const MUST_CHANGE_KEY = 'worklog.mustChangePassword'
 
 export const auth = {
   get token(): string | null {
@@ -32,8 +38,24 @@ export const auth = {
   },
   clear() {
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(MUST_CHANGE_KEY)
   },
-  /** GitHub 로그인은 fetch 가 아니라 브라우저 이동이다 (HANDOFF 1.). */
+  /**
+   * 사원번호 로그인 뒤 호출한다. 비밀번호를 아직 안 바꾼 계정은 표시를 남겨,
+   * RequireAuth 가 다른 화면으로 못 가게 막는다 (TODO_0910 §1-1).
+   */
+  signIn(token: string, mustChangePassword: boolean) {
+    auth.save(token)
+    if (mustChangePassword) localStorage.setItem(MUST_CHANGE_KEY, '1')
+    else localStorage.removeItem(MUST_CHANGE_KEY)
+  },
+  get mustChangePassword(): boolean {
+    return localStorage.getItem(MUST_CHANGE_KEY) === '1'
+  },
+  clearMustChangePassword() {
+    localStorage.removeItem(MUST_CHANGE_KEY)
+  },
+  /** GitHub 연동은 fetch 가 아니라 브라우저 이동이다 (HANDOFF 1.). 로그인 수단이 아니다. */
   startGithubLogin() {
     if (USE_MOCK) {
       auth.save('mock-token')
@@ -41,6 +63,17 @@ export const auth = {
       return
     }
     window.location.assign(`${API_BASE}/auth/github`)
+  },
+  /**
+   * 로그아웃 — 토큰을 버리고 로그인 화면으로 보낸다.
+   *
+   * JWT 는 서버에 세션이 없으므로 클라이언트에서 버리는 것이 곧 로그아웃이다.
+   * 전체 페이지 이동이라 react-query 캐시에 남은 남의 데이터도 같이 사라진다.
+   * 한 기기에서 사람이 바뀌는 상황(요구사항 3)이 이 경로다.
+   */
+  logout() {
+    auth.clear()
+    window.location.assign('/login')
   },
 }
 

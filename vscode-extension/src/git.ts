@@ -77,3 +77,48 @@ export async function changedFiles(cwd: string): Promise<ChangedFile[]> {
 export async function fileDiff(cwd: string, path: string): Promise<string | undefined> {
   return await git(cwd, ['diff', 'HEAD', '--', path])
 }
+
+export interface UnpushedCommit {
+  sha: string
+  subject: string
+  /** ISO-8601 커밋 시각 */
+  at: string
+}
+
+/**
+ * 업스트림 참조. `@{u}` 가 없으면 `origin/<branch>` 가 있는지 본다.
+ *
+ * <p>둘 다 없으면 한 번도 푸시한 적 없는 브랜치다. 그때는 비교 기준이 없어
+ * "미푸시 N개" 를 셀 수 없다 — 0 이 아니라 모른다고 해야 맞다.
+ */
+export async function upstreamRef(cwd: string): Promise<string | undefined> {
+  const tracked = (await git(cwd, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']))?.trim()
+  if (tracked) return tracked
+
+  const branch = await currentBranch(cwd)
+  if (!branch || branch === 'HEAD') return undefined
+  const remote = (await git(cwd, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`]))?.trim()
+  return remote ? `origin/${branch}` : undefined
+}
+
+/**
+ * 아직 원격에 올리지 않은 커밋 (PRD F6 — 커밋했지만 GitHub 수집기가 못 보는 구간).
+ *
+ * @return 업스트림을 못 찾으면 undefined. 빈 배열은 "올릴 것이 없다" 는 뜻이다.
+ */
+export async function unpushedCommits(cwd: string): Promise<UnpushedCommit[] | undefined> {
+  const upstream = await upstreamRef(cwd)
+  if (!upstream) return undefined
+
+  // %x1f = 단위 구분자. 제목에 탭이나 파이프가 들어가도 안전하다.
+  const out = await git(cwd, ['log', `${upstream}..HEAD`, '--format=%h%x1f%s%x1f%cI'])
+  if (out === undefined) return undefined
+
+  const commits: UnpushedCommit[] = []
+  for (const line of out.split('\n')) {
+    if (!line.trim()) continue
+    const [sha, subject, at] = line.split('\x1f')
+    if (sha && subject !== undefined) commits.push({ sha, subject, at: at ?? '' })
+  }
+  return commits
+}
