@@ -4,6 +4,7 @@ import com.worklog.auth.AuthenticatedUser;
 import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.config.ApiException;
+import com.worklog.notify.MattermostNotifier;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,7 +53,14 @@ public class NotifySettingController {
             return created;
         });
 
-        setting.setMattermostWebhookUrl(blankToNull(request.mattermostWebhookUrl()));
+        String url = blankToNull(request.mattermostWebhookUrl());
+        if (url != null && !MattermostNotifier.looksLikeWebhookUrl(url)) {
+            throw ApiException.badRequest(
+                    "NOT_A_WEBHOOK_URL",
+                    "Incoming Webhook 주소가 아닙니다. Mattermost 통합 > Incoming Webhooks 에서 "
+                            + "만든 \".../hooks/...\" 주소를 넣어 주세요.");
+        }
+        setting.setMattermostWebhookUrl(url);
         if (request.remindUncommitted() != null) {
             setting.setRemindUncommitted(request.remindUncommitted());
         }

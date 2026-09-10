@@ -120,6 +120,9 @@ public class AdminController {
     @PutMapping("/settings/notify")
     @Transactional
     public GlobalNotifyResponse updateGlobalNotify(@RequestBody GlobalNotifyRequest request) {
+        // 시험 전송만 막아 두면, 시험은 성공해도 엉뚱한 주소가 저장된 채로 남는다.
+        requireWebhookShape(request.mattermostWebhookUrl());
+
         NotifySetting setting = notifySettingRepository.findGlobal().orElseGet(NotifySetting::new);
         setting.setUser(null); // 전역 행은 user_id 가 null 이다 (V1 스키마에서 1건으로 제한)
         setting.setMattermostWebhookUrl(blankToNull(request.mattermostWebhookUrl()));
@@ -158,12 +161,7 @@ public class AdminController {
                     "WEBHOOK_NOT_SET", "웹훅 주소를 입력하거나 먼저 저장해 주세요.");
         }
 
-        if (!MattermostNotifier.looksLikeWebhookUrl(url)) {
-            throw ApiException.badRequest(
-                    "NOT_A_WEBHOOK_URL",
-                    "Incoming Webhook 주소가 아닙니다. 채널을 연 브라우저 주소가 아니라 "
-                            + "Mattermost 통합 > Incoming Webhooks 에서 만든 \".../hooks/...\" 주소를 넣어 주세요.");
-        }
+        requireWebhookShape(url);
 
         String text = "✅ WorkLog Drafter 연결 확인 — %s 님이 관리자 콘솔에서 보냈습니다."
                 .formatted(principal.login());
@@ -175,6 +173,18 @@ public class AdminController {
                     "메시지를 보내지 못했습니다. 주소가 맞는지, 채널이 살아 있는지 확인해 주세요.");
         }
         return new TestNotifyResponse(true, text);
+    }
+
+    /** 비어 있는 것은 허용한다 — 알림을 끄는 방법이다. 값이 있으면 웹훅 모양이어야 한다. */
+    private static void requireWebhookShape(String url) {
+        String trimmed = blankToNull(url);
+        if (trimmed == null || MattermostNotifier.looksLikeWebhookUrl(trimmed)) {
+            return;
+        }
+        throw ApiException.badRequest(
+                "NOT_A_WEBHOOK_URL",
+                "Incoming Webhook 주소가 아닙니다. 채널을 연 브라우저 주소가 아니라 "
+                        + "Mattermost 통합 > Incoming Webhooks 에서 만든 \".../hooks/...\" 주소를 넣어 주세요.");
     }
 
     private boolean globalWebhookConfigured() {
