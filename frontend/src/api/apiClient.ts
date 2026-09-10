@@ -42,6 +42,17 @@ export const auth = {
     }
     window.location.assign(`${API_BASE}/auth/github`)
   },
+  /**
+   * 로그아웃 — 토큰을 버리고 로그인 화면으로 보낸다.
+   *
+   * JWT 는 서버에 세션이 없으므로 클라이언트에서 버리는 것이 곧 로그아웃이다.
+   * 전체 페이지 이동이라 react-query 캐시에 남은 남의 데이터도 같이 사라진다.
+   * 한 기기에서 사람이 바뀌는 상황(요구사항 3)이 이 경로다.
+   */
+  logout() {
+    auth.clear()
+    window.location.assign('/login')
+  },
 }
 
 export class ApiError extends Error {
