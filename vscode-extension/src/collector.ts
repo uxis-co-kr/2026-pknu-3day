@@ -19,6 +19,26 @@ interface Save {
 }
 
 /**
+ * 재시작해도 남아야 하는 값. 저장 이벤트와 계획 메모는 git 에서 다시 뽑을 수 없어,
+ * 메모리에만 두면 VS Code 를 끄는 순간 사라진다. 서버는 editTimeline 을 통째로
+ * 덮어쓰므로 그 상태로 전송하면 그날 쌓인 기록까지 지워진다.
+ */
+interface PersistedState {
+  /** 어느 날짜의 기록인지. 날이 바뀌면 통째로 버린다. */
+  date: string
+  saves: Record<string, Save>
+  plans: string[]
+}
+
+const STATE_KEY = 'worklog.session.v1'
+
+/** {@link vscode.Memento} 와 같은 모양. 테스트·미리보기에서는 주지 않는다. */
+export interface StateStore {
+  get<T>(key: string): T | undefined
+  update(key: string, value: unknown): Thenable<void>
+}
+
+/**
  * 워크스페이스에서 커밋되지 않은 작업을 모은다 (PRD F6 수집 항목 1~5).
  *
  * 워크스페이스 폴더마다 저장소가 다를 수 있으므로 payload 를 폴더 단위로 만든다.
@@ -28,7 +48,18 @@ export class Collector {
   /** 파일 저장 이벤트. 키는 절대 경로 — 폴더별로 나눠 담으려면 상대 경로로는 부족하다. */
   private readonly saves = new Map<string, Save>()
 
-  private planNote: string | undefined
+  /** 하루에 여러 번 적을 수 있다. 적은 순서대로 쌓인다. */
+  private plans: string[] = []
+
+  /** 마지막으로 되살리거나 비운 날짜. 자정을 넘기면 초기화하는 기준이다. */
+  private stateDate = todayKst()
+
+  private readonly store: StateStore | undefined
+
+  constructor(store?: StateStore) {
+    this.store = store
+    this.restore()
+  }
 
   /** 마지막 수집에서 센 미커밋 파일 수. 상태바가 읽는다. */
   private lastCount = 0
@@ -45,6 +76,7 @@ export class Collector {
   }
 
   recordSave(fsPath: string, at: Date = new Date()): void {
+    this.rolloverIfNeeded()
     const iso = at.toISOString()
     const prev = this.saves.get(fsPath)
     if (prev) {
@@ -53,14 +85,27 @@ export class Collector {
     } else {
       this.saves.set(fsPath, { firstSavedAt: iso, lastSavedAt: iso, saveCount: 1 })
     }
+    this.persist()
   }
 
-  setPlanNote(note: string): void {
-    this.planNote = note
+  /** 계획 메모를 하나 더한다. 같은 문구를 두 번 적으면 무시한다. */
+  addPlanNote(note: string): void {
+    this.rolloverIfNeeded()
+    const trimmed = note.trim()
+    if (!trimmed || this.plans.includes(trimmed)) return
+    this.plans.push(trimmed)
+    this.persist()
   }
 
-  get todayPlanNote(): string | undefined {
-    return this.planNote
+  removePlanNote(note: string): void {
+    const i = this.plans.indexOf(note)
+    if (i < 0) return
+    this.plans.splice(i, 1)
+    this.persist()
+  }
+
+  get planNotes(): string[] {
+    return [...this.plans]
   }
 
   get uncommittedCount(): number {
@@ -69,6 +114,7 @@ export class Collector {
 
   /** 워크스페이스의 git 폴더마다 하나씩. 저장소가 없으면 빈 배열. */
   async collect(collectDiff: boolean): Promise<SessionPayload[]> {
+    this.rolloverIfNeeded()
     const folders = vscode.workspace.workspaceFolders ?? []
     const payloads: SessionPayload[] = []
     let total = 0
@@ -98,7 +144,8 @@ export class Collector {
         workDate: todayKst(),
         uncommittedFiles,
         todos,
-        planNote: this.planNote,
+        // 서버 계약은 문자열 한 칸이다 (PRD 7). 여러 줄로 담아 보낸다.
+        planNote: this.plans.length > 0 ? this.plans.join('\n') : undefined,
         editTimeline: this.timelineFor(cwd),
         lastCommitAt,
       }
@@ -158,6 +205,40 @@ export class Collector {
       })
     }
     return todos
+  }
+
+  /**
+   * 날이 바뀌면 어제 기록을 버린다. 자정을 넘겨 켜 둔 VS Code 가 어제 저장 이벤트를
+   * 오늘 세션으로 보내면 안 된다.
+   */
+  private rolloverIfNeeded(): void {
+    const today = todayKst()
+    if (today === this.stateDate) return
+    log(`업무 일자가 ${this.stateDate} → ${today} 로 바뀌어 저장 기록과 계획을 비웁니다`)
+    this.stateDate = today
+    this.saves.clear()
+    this.plans = []
+    this.persist()
+  }
+
+  private persist(): void {
+    void this.store?.update(STATE_KEY, {
+      date: this.stateDate,
+      saves: Object.fromEntries(this.saves),
+      plans: this.plans,
+    } satisfies PersistedState)
+  }
+
+  private restore(): void {
+    const saved = this.store?.get<PersistedState>(STATE_KEY)
+    if (!saved) return
+    if (saved.date !== this.stateDate) {
+      log(`저장된 기록이 ${saved.date} 것이라 쓰지 않습니다 (오늘은 ${this.stateDate})`)
+      return
+    }
+    for (const [fsPath, save] of Object.entries(saved.saves ?? {})) this.saves.set(fsPath, save)
+    this.plans = [...(saved.plans ?? [])]
+    log(`저장 기록 ${this.saves.size}건, 계획 ${this.plans.length}건을 되살렸습니다`)
   }
 
   /** 이 폴더 안에서 저장된 파일만, git 기준 상대 경로로 바꿔 담는다 (PRD F6-5). */

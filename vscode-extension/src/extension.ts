@@ -105,7 +105,8 @@ function restartTimer() {
 
 export function activate(context: vscode.ExtensionContext): void {
   initLog(context)
-  collector = new Collector()
+  // globalState 에 저장 기록·계획을 남긴다. 재시작해도 그날 것은 이어 쌓인다.
+  collector = new Collector(context.globalState)
 
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
   statusBar.command = 'worklog.sendNow'
@@ -128,19 +129,30 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('worklog.refresh', () => tree.refresh()),
   )
 
+  // 사이드바에서 계획 한 줄을 지운다. 잘못 적은 메모가 그날 내내 남지 않게.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('worklog.removePlan', (node?: { note?: string }) => {
+      if (!node?.note) return
+      collector.removePlanNote(node.note)
+      log(`계획 삭제: ${node.note}`)
+      void tree.refresh()
+    }),
+  )
+
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.recordPlan', async () => {
+      const count = collector.planNotes.length
       const note = await vscode.window.showInputBox({
-        title: 'WorkLog: 오늘 계획 기록',
-        prompt: '오늘 무엇을 할 계획인지 한두 줄로 적으세요. 초안의 "계획 / TODO" 에 들어갑니다.',
+        title: 'WorkLog: 계획 추가',
+        prompt: count === 0
+          ? '오늘 무엇을 할 계획인지 한 줄로 적으세요. 초안의 "계획 / TODO" 에 들어갑니다.'
+          : `이미 ${count}건 적었습니다. 덧붙일 계획을 적으세요.`,
         placeHolder: '예) 오후에 출석 중복 검증 로직 마무리',
-        value: collector.todayPlanNote,
       })
       if (note !== undefined && note.trim()) {
-        collector.setPlanNote(note.trim())
-        log(`계획 메모: ${note.trim()}`)
+        collector.addPlanNote(note)
+        log(`계획 추가: ${note.trim()} (총 ${collector.planNotes.length}건)`)
         void tree.refresh()
-        vscode.window.showInformationMessage('WorkLog: 오늘 계획을 기록했습니다.')
       }
     }),
   )

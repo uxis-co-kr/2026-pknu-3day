@@ -25,7 +25,7 @@
     "commands": [
       {
         "command": "worklog.recordPlan",
-        "title": "WorkLog: 오늘 계획 기록",
+        "title": "WorkLog: 계획 추가",
         "icon": "$(note)"
       },
       {
@@ -37,6 +37,11 @@
         "command": "worklog.refresh",
         "title": "WorkLog: 새로고침",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "worklog.removePlan",
+        "title": "WorkLog: 계획 삭제",
+        "icon": "$(trash)"
       }
     ],
     "configuration": {
@@ -98,6 +103,13 @@
           "command": "worklog.refresh",
           "when": "view == worklog.session",
           "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "worklog.removePlan",
+          "when": "view == worklog.session && viewItem == worklog.plan",
+          "group": "inline"
         }
       ]
     }

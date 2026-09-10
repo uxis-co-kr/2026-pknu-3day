@@ -60,12 +60,15 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
       const cwd = this.collector.folderOf(p)
       const name = repoName(p.remoteUrl)
 
-      const children: Node[] = []
-      if (p.planNote) {
-        children.push(leaf(p.planNote, 'note', '오늘 계획'))
-      } else {
-        children.push(leaf('계획 없음 — WorkLog: 오늘 계획 기록', 'note'))
-      }
+      const notes = this.collector.planNotes
+      const children: Node[] = [
+        group(
+          `계획 ${notes.length}건`,
+          'note',
+          notes.map((n) => planNode(n)),
+          notes.length > 0,
+        ),
+      ]
       children.push(group(`미커밋 ${p.uncommittedFiles.length}개`, 'diff', p.uncommittedFiles.map((f) => fileNode(f, cwd))))
       children.push(group(`TODO ${p.todos.length}개`, 'checklist', p.todos.map((t) => todoNode(t, cwd))))
       children.push(
@@ -121,6 +124,14 @@ function group(label: string, icon: string, children: Node[], expanded = false):
   const item = new vscode.TreeItem(label, state)
   item.iconPath = new vscode.ThemeIcon(icon)
   return { item, children }
+}
+
+/** 계획 한 줄. 우클릭으로 지울 수 있게 contextValue 와 note 를 달아 둔다. */
+function planNode(note: string): Node & { note: string } {
+  const node = leaf(note, 'circle-small-filled') as Node & { note: string }
+  node.item.contextValue = 'worklog.plan'
+  node.note = note
+  return node
 }
 
 /** 파일 노드는 누르면 열린다. 새 파일은 diff 대신 본문이 가므로 표시를 나눈다. */

@@ -46,7 +46,7 @@ const { Collector } = require(path.join(outDir, 'collector.js'))
 
 async function main() {
   const collector = new Collector()
-  if (planNote) collector.setPlanNote(planNote)
+  if (planNote) collector.addPlanNote(planNote)
 
   const payloads = await collector.collect(!flags.has('--no-diff'))
 
