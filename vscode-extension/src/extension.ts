@@ -1,9 +1,11 @@
 import * as vscode from 'vscode'
 import { Collector } from './collector'
 import { initLog, log } from './log'
+import { WorkLogTreeProvider } from './sidebar'
 import { Uploader } from './uploader'
 
 let collector: Collector
+let tree: WorkLogTreeProvider
 let statusBar: vscode.StatusBarItem
 let timer: NodeJS.Timeout | undefined
 /** 전송이 겹치지 않게 한다 — 주기 타이머와 "지금 전송" 이 동시에 들어올 수 있다. */
@@ -53,6 +55,12 @@ async function send(reason: string): Promise<string | undefined> {
     }
     const result = await new Uploader({ serverUrl, apiKey }).send(payloads)
     renderStatusBar(result.ok ? undefined : result.reason)
+    tree.setStatus(
+      result.ok
+        ? { kind: 'sent', at: new Date(), files: collector.uncommittedCount }
+        : { kind: 'failed', at: new Date(), reason: result.reason },
+    )
+    void tree.refresh()
     return result.ok ? undefined : result.reason
   } catch (e) {
     // 여기까지 온 예외는 버그다. 확장을 죽이지는 않는다.
@@ -79,6 +87,15 @@ async function promptForApiKey(): Promise<void> {
   }
 }
 
+/**
+ * 저장할 때마다 git 을 부르면 연속 저장에서 낭비가 크다. 1초 안의 저장은 한 번으로 묶는다.
+ */
+let treeRefreshTimer: NodeJS.Timeout | undefined
+function scheduleTreeRefresh() {
+  if (treeRefreshTimer) clearTimeout(treeRefreshTimer)
+  treeRefreshTimer = setTimeout(() => void tree.refresh(), 1000)
+}
+
 function restartTimer() {
   if (timer) clearInterval(timer)
   const minutes = Math.max(5, readConfig().intervalMinutes)
@@ -95,11 +112,20 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar)
   renderStatusBar()
 
+  tree = new WorkLogTreeProvider(collector)
+  context.subscriptions.push(vscode.window.registerTreeDataProvider('worklog.session', tree))
+  void tree.refresh()
+
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.uri.scheme !== 'file') return
       collector.recordSave(doc.uri.fsPath)
+      scheduleTreeRefresh()
     }),
+  )
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('worklog.refresh', () => tree.refresh()),
   )
 
   context.subscriptions.push(
@@ -113,6 +139,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (note !== undefined && note.trim()) {
         collector.setPlanNote(note.trim())
         log(`계획 메모: ${note.trim()}`)
+        void tree.refresh()
         vscode.window.showInformationMessage('WorkLog: 오늘 계획을 기록했습니다.')
       }
     }),
@@ -148,6 +175,10 @@ export async function deactivate(): Promise<void> {
   if (timer) {
     clearInterval(timer)
     timer = undefined
+  }
+  if (treeRefreshTimer) {
+    clearTimeout(treeRefreshTimer)
+    treeRefreshTimer = undefined
   }
   await send('종료 시 전송')
 }

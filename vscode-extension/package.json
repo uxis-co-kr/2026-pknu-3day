@@ -25,11 +25,18 @@
     "commands": [
       {
         "command": "worklog.recordPlan",
-        "title": "WorkLog: 오늘 계획 기록"
+        "title": "WorkLog: 오늘 계획 기록",
+        "icon": "$(note)"
       },
       {
         "command": "worklog.sendNow",
-        "title": "WorkLog: 지금 전송"
+        "title": "WorkLog: 지금 전송",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "worklog.refresh",
+        "title": "WorkLog: 새로고침",
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -57,6 +64,42 @@
           "description": "미커밋 diff 본문을 함께 보낼지. 끄면 파일 경로와 변경 줄 수만 보낸다."
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "worklog",
+          "title": "WorkLog Drafter",
+          "icon": "media/worklog.svg"
+        }
+      ]
+    },
+    "views": {
+      "worklog": [
+        {
+          "id": "worklog.session",
+          "name": "오늘 보낼 내용"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "worklog.sendNow",
+          "when": "view == worklog.session",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worklog.recordPlan",
+          "when": "view == worklog.session",
+          "group": "navigation@2"
+        },
+        {
+          "command": "worklog.refresh",
+          "when": "view == worklog.session",
+          "group": "navigation@3"
+        }
+      ]
     }
   },
   "scripts": {

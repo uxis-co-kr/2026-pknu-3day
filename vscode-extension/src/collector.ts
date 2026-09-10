@@ -33,6 +33,17 @@ export class Collector {
   /** 마지막 수집에서 센 미커밋 파일 수. 상태바가 읽는다. */
   private lastCount = 0
 
+  /**
+   * payload 가 어느 폴더에서 나왔는지. 사이드바가 파일을 열려면 절대 경로가 필요한데,
+   * 그 경로는 서버로 보내는 값이 아니라 payload 에 담을 수 없다.
+   */
+  private readonly folders = new WeakMap<SessionPayload, string>()
+
+  /** 이 payload 를 만든 워크스페이스 폴더의 절대 경로. */
+  folderOf(payload: SessionPayload): string | undefined {
+    return this.folders.get(payload)
+  }
+
   recordSave(fsPath: string, at: Date = new Date()): void {
     const iso = at.toISOString()
     const prev = this.saves.get(fsPath)
@@ -81,7 +92,7 @@ export class Collector {
       const todos = await this.scanTodos(cwd, changed)
       total += uncommittedFiles.length
 
-      payloads.push({
+      const payload: SessionPayload = {
         remoteUrl,
         branch,
         workDate: todayKst(),
@@ -90,7 +101,9 @@ export class Collector {
         planNote: this.planNote,
         editTimeline: this.timelineFor(cwd),
         lastCommitAt,
-      })
+      }
+      this.folders.set(payload, cwd)
+      payloads.push(payload)
     }
 
     this.lastCount = total
