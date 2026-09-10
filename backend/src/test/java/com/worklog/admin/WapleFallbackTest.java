@@ -19,6 +19,12 @@ class WapleFallbackTest {
     }
 
     @Test
+    @DisplayName("임시 항목이 없으면 목록은 실제 것뿐이다")
+    void noExtraWhenUnset() {
+        assertThat(client("http://127.0.0.1:1/none", "key", "").employees(1L)).isEmpty();
+    }
+
+    @Test
     @DisplayName("사내 API 설정이 없으면 임시 목록을 쓴다")
     void usesFallbackWhenNotConfigured() {
         var employees = client(null, null, "9999:조웅식,9998:배태일").employees(0L);
@@ -51,11 +57,12 @@ class WapleFallbackTest {
     }
 
     @Test
-    @DisplayName("진짜 API 가 설정돼 있으면 임시 목록은 쓰이지 않는다")
-    void realApiWins() {
-        // 사내망이 아니라 호출은 실패하지만, 임시 목록으로 떨어지지 않는다는 것이 요점이다.
-        var employees = client("http://127.0.0.1:1/none", "key", "9999:조웅식").employees(1L);
+    @DisplayName("진짜 API 가 있어도 임시 항목은 뒤에 덧붙는다 — 와플에 없는 사람으로 시험하려는 목적이다")
+    void appendsToRealList() {
+        // 사내망이 아니라 실제 목록은 비지만, 임시 항목은 그대로 붙어야 한다.
+        var employees = client("http://127.0.0.1:1/none", "key", "9999:조웅식,9998:배태일").employees(1L);
 
-        assertThat(employees).isEmpty();
+        assertThat(employees).hasSize(2);
+        assertThat(employees).extracting(WapleClient.Employee::empSeq).containsExactly(9999L, 9998L);
     }
 }

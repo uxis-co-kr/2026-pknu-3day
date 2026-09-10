@@ -61,14 +61,27 @@ public class WapleClient {
     /**
      * 재직중 사원 목록.
      *
-     * <p>사내 API 설정이 없으면 {@code worklog.waple.fallback-employees} 를 쓴다 — 사내망 밖에서
-     * 회원 흐름을 시험하기 위한 <b>임시 수단</b>이다. 진짜 API 가 붙으면 그쪽이 우선한다.
+     * <p>{@code worklog.waple.fallback-employees} 에 적은 항목은 <b>실제 목록 뒤에 덧붙는다</b> —
+     * 사내 API 가 없을 때는 그것만, 있을 때는 실제 사원 다음에 온다. 아직 와플에 등록되지 않은
+     * 사람으로 흐름을 시험하기 위한 <b>임시 수단</b>이다. 시험이 끝나면 설정을 비운다.
      */
     public List<Employee> employees(long coSeq) {
+        List<Employee> extra = fallbackEmployees();
         if (!isConfigured()) {
-            return fallbackEmployees();
+            return extra;
         }
-        return get("/core/v1/companies/%d/employees".formatted(coSeq), "employees", Employee.class);
+        List<Employee> real =
+                get("/core/v1/companies/%d/employees".formatted(coSeq), "employees", Employee.class);
+        if (extra.isEmpty()) {
+            return real;
+        }
+        // 실제 사원과 번호가 겹치면 실제 쪽을 남긴다.
+        java.util.Set<Long> taken =
+                real.stream().map(Employee::empSeq).collect(java.util.stream.Collectors.toSet());
+        List<Employee> merged = new java.util.ArrayList<>(real);
+        extra.stream().filter(e -> !taken.contains(e.empSeq())).forEach(merged::add);
+        log.info("사내 사원 {}명에 임시 항목 {}건을 덧붙인다.", real.size(), merged.size() - real.size());
+        return merged;
     }
 
     /** {@code 9999:조웅식,9998:배태일} 을 사원 목록으로 읽는다. */
@@ -88,9 +101,6 @@ public class WapleClient {
             } catch (NumberFormatException e) {
                 log.warn("사원 목록 항목을 읽지 못했다: {}", entry);
             }
-        }
-        if (!parsed.isEmpty()) {
-            log.info("사내 API 설정이 없어 임시 사원 목록 {}건을 쓴다.", parsed.size());
         }
         return parsed;
     }
