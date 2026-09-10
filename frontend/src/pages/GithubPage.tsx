@@ -85,6 +85,9 @@ export default function GithubPage() {
               </button>
             ))}
           </div>
+        </DayFilters>
+
+      </div>
 
       <div className="grid grid-cols-3 gap-3">
         {stats.isLoading ? (
@@ -96,9 +99,6 @@ export default function GithubPage() {
             <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
           </>
         )}
-      </div>
-        </DayFilters>
-
       </div>
 
       <Card className="overflow-hidden rounded-lg shadow-none">
