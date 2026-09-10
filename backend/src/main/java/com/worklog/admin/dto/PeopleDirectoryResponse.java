@@ -29,8 +29,10 @@ public record PeopleDirectoryResponse(
 
     /**
      * @param githubLinked GitHub 활성화 상태. 토큰이 있어야 수집기가 그 사람 리포를 읽는다
-     * @param vscodeLinked VS Code 연동 여부. 확장은 API Key 로만 붙으므로 키가 있으면 연동된 것이다
-     * @param sessionCount 확장이 보낸 세션 수 — 키만 받고 실제로 안 쓰는 경우를 구분한다
+     * @param vscodeLinked 확장이 <b>실제로 보낸 적</b>이 있는지. 키만 발급하고 쓰지 않는 경우가
+     *     흔해서, 키 유무가 아니라 세션이 들어왔는지로 판정한다
+     * @param apiKeyCount 발급한 API Key 수. 키는 있는데 세션이 없으면 "발급만 함" 이다
+     * @param sessionCount 확장이 보낸 세션 수
      * @param activityCount 수집된 활동 수 — 실제로 쓰고 있는지 판단하는 값
      * @param repos 이 사람이 등록한 리포. 행을 펼치면 보인다
      */
@@ -42,6 +44,7 @@ public record PeopleDirectoryResponse(
             String role,
             boolean githubLinked,
             boolean vscodeLinked,
+            long apiKeyCount,
             long sessionCount,
             Long empSeq,
             long activityCount,

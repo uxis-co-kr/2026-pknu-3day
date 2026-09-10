@@ -16,7 +16,7 @@ function LinkBadge({ linked, note }: { linked: boolean; note?: string }) {
     </Badge>
   ) : (
     <Badge variant="outline" className="font-normal text-muted-foreground">
-      아직 연결되지 않음
+      {note ?? '아직 연결되지 않음'}
     </Badge>
   )
 }
@@ -127,7 +127,13 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
                   {acc ? (
                     <LinkBadge
                       linked={acc.vscodeLinked}
-                      note={acc.sessionCount > 0 ? `세션 ${acc.sessionCount}` : undefined}
+                      note={
+                        acc.vscodeLinked
+                          ? `세션 ${acc.sessionCount}`
+                          : acc.apiKeyCount > 0
+                            ? '키만 발급됨'
+                            : undefined
+                      }
                     />
                   ) : (
                     <span className="text-[13px] text-muted-foreground">—</span>

@@ -35,9 +35,10 @@ export interface AdminAccount {
   role: 'MEMBER' | 'ADMIN'
   /** 수집기가 이 사람 권한으로 리포를 읽을 수 있는지 */
   githubLinked: boolean
-  /** 확장은 API Key 로만 붙는다. 키가 있으면 연동 수단은 갖춘 것이다 */
+  /** 확장이 실제로 보낸 적이 있는지. 키 유무가 아니라 세션이 들어왔는지로 본다 */
   vscodeLinked: boolean
-  /** 확장이 실제로 보낸 세션 수 — 키만 받고 안 쓰는 경우와 구분한다 */
+  /** 발급한 API Key 수. 키는 있는데 세션이 없으면 "발급만 함" 이다 */
+  apiKeyCount: number
   sessionCount: number
   empSeq: number | null
   activityCount: number

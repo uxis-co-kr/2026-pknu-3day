@@ -147,8 +147,9 @@ public class PeopleDirectoryService {
                 user.getRole().name(),
                 // 토큰이 있어야 수집기가 그 사람 권한으로 리포를 읽는다.
                 user.getGithubTokenEnc() != null,
-                // 확장은 API Key 로만 붙는다. 키가 있으면 연동 수단은 갖춘 것이다.
-                ctx.apiKeysByUser().getOrDefault(userId, 0L) > 0,
+                // 키만 발급하고 확장을 안 쓰는 경우가 흔하다. 실제로 보낸 적이 있어야 연동으로 본다.
+                ctx.sessionsByUser().getOrDefault(userId, 0L) > 0,
+                ctx.apiKeysByUser().getOrDefault(userId, 0L),
                 ctx.sessionsByUser().getOrDefault(userId, 0L),
                 user.getEmpSeq(),
                 ctx.activityByUser().getOrDefault(userId, 0L),
