@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/api/apiClient'
-import { useDeleteRepo, useRegisterRepo, useRepos, useSyncRepo } from '@/api/hooks'
+import { useDeleteRepo, useMe, useRegisterRepo, useRepos, useSyncRepo } from '@/api/hooks'
 import { formatRelative } from '@/lib/date'
 
 /** 디자인 브리프 3.4 — 등록·삭제·동기화. 빈 상태는 일러스트 없이 텍스트만. */
@@ -22,6 +22,7 @@ export default function RepoSection() {
   const { data: repos, isLoading } = useRepos()
   const register = useRegisterRepo()
   const remove = useDeleteRepo()
+  const { data: me } = useMe()
   const sync = useSyncRepo()
 
   const [fullName, setFullName] = useState('')
@@ -74,6 +75,7 @@ export default function RepoSection() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-10 text-[12px]">리포 이름</TableHead>
                 <TableHead className="h-10 w-[140px] text-[12px]">기본 브랜치</TableHead>
+                <TableHead className="h-10 w-[120px] text-[12px]">등록자</TableHead>
                 <TableHead className="h-10 w-[110px] text-[12px]">오늘 활동 수</TableHead>
                 <TableHead className="h-10 w-[140px] text-[12px]">마지막 동기화</TableHead>
                 <TableHead className="h-10 w-[110px] text-[12px]">상태</TableHead>
@@ -94,6 +96,10 @@ export default function RepoSection() {
                     </a>
                   </TableCell>
                   <TableCell className="text-table text-muted-foreground">{r.defaultBranch ?? '—'}</TableCell>
+                  <TableCell className="text-table text-muted-foreground">
+                    {r.registeredBy?.login ?? '—'}
+                    {r.registeredBy?.id === me?.id && <span className="ml-1 text-primary">(나)</span>}
+                  </TableCell>
                   <TableCell className="text-table tabular-nums">{r.todayActivityCount}</TableCell>
                   <TableCell className="text-table text-muted-foreground">{formatRelative(r.lastSyncedAt)}</TableCell>
                   <TableCell><SyncStatusBadge status={r.syncStatus} /></TableCell>
@@ -106,9 +112,17 @@ export default function RepoSection() {
                     >
                       <RefreshCw />
                     </Button>
+                    {/*
+                      * 남이 등록한 리포는 지울 수 없다 — 서버가 403 으로 막는다.
+                      * 눌리게 두면 오류를 보고서야 알게 되므로 여기서 잠근다.
+                      */}
                     <Button
                       variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-status-failed"
                       aria-label="삭제"
+                      disabled={r.registeredBy?.id !== me?.id}
+                      title={r.registeredBy?.id !== me?.id
+                        ? `${r.registeredBy?.login ?? '다른 사람'} 이(가) 등록한 리포입니다`
+                        : undefined}
                       onClick={() => remove.mutate(r.id)}
                     >
                       <Trash2 />

@@ -65,28 +65,7 @@ export default function GithubPage() {
           repos={repos.data ?? []}
           repoFilter={repoFilter}
           onRepo={(v) => { setRepoFilter(v); setPage(0) }}
-        >
-          <div className="flex h-[34px] overflow-hidden rounded-md border">
-            {TYPE_TABS.map((t, i) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => {
-                setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
-                setPage(0)
-              }}
-                className={cn(
-                  'px-3 text-[13px] transition-colors',
-                  i > 0 && 'border-l',
-                  types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </DayFilters>
-
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -99,6 +78,26 @@ export default function GithubPage() {
             <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
           </>
         )}
+      </div>
+
+      <div className="flex h-[34px] w-fit overflow-hidden rounded-md border">
+        {TYPE_TABS.map((t, i) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => {
+              setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
+              setPage(0)
+            }}
+            className={cn(
+              'px-3 text-[13px] transition-colors',
+              i > 0 && 'border-l',
+              types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <Card className="overflow-hidden rounded-lg shadow-none">
