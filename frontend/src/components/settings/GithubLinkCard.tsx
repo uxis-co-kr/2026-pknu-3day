@@ -49,10 +49,16 @@ export default function GithubLinkCard() {
           )}
         </div>
       </div>
-      <Button variant="outline" size="sm" className="h-9 shrink-0"
-        disabled={disconnect.isPending} onClick={() => disconnect.mutate()}>
-        연결 해제
-      </Button>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* 연결만으로는 활동이 들어오지 않는다. 다음에 무엇을 할지 알려 준다. */}
+        <span className="text-[12px] text-muted-foreground">
+          아래 <strong className="font-medium text-foreground">전체 등록</strong>으로 내 리포를 한 번에 가져올 수 있습니다
+        </span>
+        <Button variant="outline" size="sm" className="h-9"
+          disabled={disconnect.isPending} onClick={() => disconnect.mutate()}>
+          연결 해제
+        </Button>
+      </div>
     </div>
   )
 }

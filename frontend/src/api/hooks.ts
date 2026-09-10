@@ -149,6 +149,15 @@ export const useRegisterRepo = () => useReposMutation((fullName: string) => api.
 export const useDeleteRepo = () => useReposMutation((id: number) => api.delete<null>(`/repos/${id}`))
 export const useSyncRepo = () => useReposMutation((id: number) => api.post<null>(`/repos/${id}/sync`))
 
+/** 내 GitHub 리포를 한 번에 등록하고 바로 수집을 건다 (9/10 "전체 등록"). */
+export const useImportRepos = () =>
+  useReposMutation(() => api.post<{ count: number; repos: string[] }>('/repos/import', {}))
+
+/** 내 리포를 한 번에 동기화한다. full 이면 최근 며칠을 다시 훑는다. */
+export const useSyncAllRepos = () =>
+  useReposMutation((full: boolean) =>
+    api.post<{ count: number; repos: string[] }>(`/repos/sync-all?full=${full}`, {}))
+
 function useApiKeyMutation<TVars, TData>(fn: (v: TVars) => Promise<TData>) {
   const qc = useQueryClient()
   return useMutation({ mutationFn: fn, onSuccess: () => void qc.invalidateQueries({ queryKey: qk.apiKeys }) })

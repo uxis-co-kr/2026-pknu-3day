@@ -43,10 +43,11 @@ public class RepoController {
         this.activityRepository = activityRepository;
     }
 
+    /** 내가 등록한 리포만 (9/10 결정). 남의 리포는 그 사람 목록에만 있다. */
     @GetMapping
-    public List<RepoResponse> list() {
+    public List<RepoResponse> list(@AuthenticationPrincipal AuthenticatedUser principal) {
         Map<Long, Long> todayCommits = todayCommitCounts();
-        return repoService.list().stream()
+        return repoService.listMine(principal.id()).stream()
                 .map(repo -> RepoResponse.from(
                         repo,
                         todayCommits.getOrDefault(repo.getId(), 0L),
@@ -79,6 +80,38 @@ public class RepoController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(RepoResponse.from(repo, 0L, SyncStatus.OK));
     }
+
+    /**
+     * 내 GitHub 리포를 한 번에 등록하고 바로 수집을 건다 (9/10 "전체 등록").
+     *
+     * <p>등록만 하고 두면 다음 스케줄까지 화면이 비어 있다. 방금 연결한 사람에게는 그것이
+     * 고장으로 보인다.
+     */
+    @PostMapping("/import")
+    public ImportResponse importMine(@AuthenticationPrincipal AuthenticatedUser principal) {
+        List<Repo> added = repoService.importMine(principal.id());
+        added.forEach(repo -> collector.syncAsync(repo.getId(), true));
+        return new ImportResponse(added.size(), added.stream().map(Repo::getFullName).toList());
+    }
+
+    /**
+     * 내 리포를 한 번에 동기화한다 (9/10 "전체 동기화").
+     *
+     * <p>{@code full=true} 면 최근 며칠을 다시 훑는다. GitHub 을 막 연결해 예전 활동까지
+     * 끌어올 때 쓴다.
+     */
+    @PostMapping("/sync-all")
+    public ResponseEntity<ImportResponse> syncAll(
+            @AuthenticationPrincipal AuthenticatedUser principal,
+            @RequestParam(defaultValue = "false") boolean full) {
+        List<Repo> mine = repoService.listMine(principal.id());
+        mine.forEach(repo -> collector.syncAsync(repo.getId(), full));
+        return ResponseEntity.accepted()
+                .body(new ImportResponse(mine.size(), mine.stream().map(Repo::getFullName).toList()));
+    }
+
+    /** 몇 개를 다뤘는지 화면이 알려 줄 수 있게 이름까지 준다. */
+    public record ImportResponse(int count, List<String> repos) {}
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(

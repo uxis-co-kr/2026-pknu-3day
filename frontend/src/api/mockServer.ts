@@ -268,7 +268,20 @@ const routes: [string, string, Handler][] = [
     }
   }],
 
-  ['GET', '/repos', () => db.repos],
+  // 내가 등록한 리포만 (9/10 결정).
+  ['GET', '/repos', () => db.repos.filter((r) => r.registeredBy?.id === db.me.id)],
+
+  ['POST', '/repos/import', () => {
+    const added = db.repos.filter((r) => r.registeredBy?.id !== db.me.id)
+    added.forEach((r) => { r.registeredBy = { id: db.me.id, login: db.me.login } })
+    return { count: added.length, repos: added.map((r) => r.fullName) }
+  }],
+
+  ['POST', '/repos/sync-all', () => {
+    const mine = db.repos.filter((r) => r.registeredBy?.id === db.me.id)
+    mine.forEach((r) => { r.lastSyncedAt = now(); r.syncStatus = 'OK' })
+    return { count: mine.length, repos: mine.map((r) => r.fullName) }
+  }],
 
   ['POST', '/repos', (_p, _q, body) => {
     const { fullName } = body as { fullName: string }

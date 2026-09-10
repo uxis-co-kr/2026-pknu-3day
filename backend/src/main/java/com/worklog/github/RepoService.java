@@ -5,8 +5,11 @@ import com.worklog.auth.UserRepository;
 import com.worklog.auth.UserService;
 import com.worklog.config.ApiException;
 import com.worklog.github.dto.GitHubRepoDto;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RepoService {
+
+    private static final Logger log = LoggerFactory.getLogger(RepoService.class);
+
+    /** 한 번에 등록할 리포 수 상한. 최근에 손댄 것부터 채운다. */
+    private static final int IMPORT_LIMIT = 20;
 
     /** GitHub 이 허용하는 owner/name 문자 집합. */
     private static final Pattern FULL_NAME =
@@ -41,6 +49,58 @@ public class RepoService {
     @Transactional(readOnly = true)
     public List<Repo> list() {
         return repoRepository.findAllWithRegistrant();
+    }
+
+    /** 내가 등록한 리포만 (9/10 결정). */
+    @Transactional(readOnly = true)
+    public List<Repo> listMine(Long userId) {
+        return repoRepository.findMineWithRegistrant(userId);
+    }
+
+    /**
+     * 내 GitHub 에서 접근 가능한 리포를 한 번에 등록한다 (9/10 "전체 등록").
+     *
+     * <p>계정에 리포가 수백 개인 사람도 있다. 전부 등록하면 수집이 감당하지 못하고 rate limit
+     * 에도 걸린다. **최근에 손댄 것부터** {@link #IMPORT_LIMIT} 개까지만 가져온다.
+     *
+     * <p>이미 등록된 리포는 건너뛴다 — 남이 등록한 것도 같다. 한 리포가 두 번 등록되면
+     * 수집이 겹친다.
+     *
+     * @return 새로 등록한 리포
+     */
+    @Transactional
+    public List<Repo> importMine(Long userId) {
+        User registrant = userRepository
+                .findById(userId)
+                .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+        String token = userService.githubTokenOf(registrant);
+        if (token == null) {
+            throw ApiException.forbidden(
+                    "GITHUB_NOT_LINKED", "먼저 설정에서 GitHub 을 연결해 주세요.");
+        }
+
+        List<Repo> added = new ArrayList<>();
+        for (GitHubRepoDto dto : gitHubApiClient.listMyRepos(token)) {
+            if (dto.fullName() == null || repoRepository.existsByFullName(dto.fullName())) {
+                continue;
+            }
+            String[] parts = dto.fullName().split("/", 2);
+            if (parts.length != 2) {
+                continue;
+            }
+            Repo repo = new Repo();
+            repo.setOwner(parts[0]);
+            repo.setName(parts[1]);
+            repo.setFullName(dto.fullName());
+            repo.setDefaultBranch(dto.defaultBranch());
+            repo.setRegisteredBy(registrant);
+            added.add(repoRepository.save(repo));
+            if (added.size() >= IMPORT_LIMIT) {
+                break;
+            }
+        }
+        log.info("사용자 {} 의 GitHub 리포 {}개를 새로 등록했다.", registrant.getLogin(), added.size());
+        return added;
     }
 
     @Transactional

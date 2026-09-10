@@ -19,6 +19,11 @@ public interface RepoRepository extends JpaRepository<Repo, Long> {
     @Query("select r from Repo r left join fetch r.registeredBy order by r.fullName asc")
     List<Repo> findAllWithRegistrant();
 
+    /** 내가 등록한 리포만 (9/10 결정). 남이 등록한 것은 그 사람의 목록에만 있다. */
+    @Query("select r from Repo r left join fetch r.registeredBy"
+            + " where r.registeredBy.id = :userId order by r.fullName asc")
+    List<Repo> findMineWithRegistrant(@Param("userId") Long userId);
+
     @Query("select r from Repo r left join fetch r.registeredBy where r.id = :id")
     Optional<Repo> findWithRegistrant(@Param("id") Long id);
 }

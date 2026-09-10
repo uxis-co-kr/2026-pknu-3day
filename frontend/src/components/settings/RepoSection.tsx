@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RefreshCw, Trash2 } from 'lucide-react'
+import { DownloadCloud, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { SyncStatusBadge } from '@/components/common/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/api/apiClient'
-import { useDeleteRepo, useMe, useRegisterRepo, useRepos, useSyncRepo } from '@/api/hooks'
+import { useDeleteRepo, useImportRepos, useMe, useRegisterRepo, useRepos, useSyncAllRepos, useSyncRepo } from '@/api/hooks'
 import { formatRelative } from '@/lib/date'
 
 /** 디자인 브리프 3.4 — 등록·삭제·동기화. 빈 상태는 일러스트 없이 텍스트만. */
@@ -23,6 +23,9 @@ export default function RepoSection() {
   const register = useRegisterRepo()
   const remove = useDeleteRepo()
   const { data: me } = useMe()
+  const importAll = useImportRepos()
+  const syncAll = useSyncAllRepos()
+  const [notice, setNotice] = useState<string | null>(null)
   const sync = useSyncRepo()
 
   const [fullName, setFullName] = useState('')
@@ -53,7 +56,42 @@ export default function RepoSection() {
           등록
         </Button>
         <span className="text-[12px] text-muted-foreground">GitHub에서 접근 가능한 리포만 등록됩니다</span>
+
+        <div className="ml-auto flex items-center gap-2">
+          {/*
+            * 하나씩 등록·동기화하기에는 손이 많이 간다. GitHub 을 막 연결한 사람에게는
+            * 이 두 버튼이 첫걸음이다 (9/10 결정).
+            */}
+          <Button
+            variant="outline" size="sm" className="h-[34px] gap-1.5"
+            disabled={importAll.isPending || syncAll.isPending}
+            title="내 GitHub 에서 최근에 손댄 리포를 한 번에 등록하고 바로 수집합니다"
+            onClick={() => importAll.mutate(undefined, {
+              onSuccess: (r) => setNotice(r.count > 0
+                ? `${r.count}개를 등록하고 수집을 시작했습니다: ${r.repos.slice(0, 3).join(', ')}${r.repos.length > 3 ? ' 외' : ''}`
+                : '새로 등록할 리포가 없습니다. 이미 모두 등록돼 있습니다.'),
+              onError: (e) => setError(e instanceof ApiError ? e.message : '전체 등록에 실패했습니다.'),
+            })}
+          >
+            {importAll.isPending ? <Loader2 className="animate-spin" /> : <DownloadCloud />}
+            전체 등록
+          </Button>
+          <Button
+            variant="outline" size="sm" className="h-[34px] gap-1.5"
+            disabled={syncAll.isPending || importAll.isPending || (repos ?? []).length === 0}
+            title="등록한 리포를 한 번에 다시 훑습니다. 예전 활동까지 끌어옵니다"
+            onClick={() => syncAll.mutate(true, {
+              onSuccess: (r) => setNotice(`${r.count}개 리포의 수집을 시작했습니다. 잠시 뒤 새로고침해 주세요.`),
+              onError: (e) => setError(e instanceof ApiError ? e.message : '전체 동기화에 실패했습니다.'),
+            })}
+          >
+            {syncAll.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            전체 동기화
+          </Button>
+        </div>
       </div>
+
+      {notice && <p className="text-[12px] text-primary">{notice}</p>}
 
       {error && <p className="text-[12px] text-status-failed">{error}</p>}
 
