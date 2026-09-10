@@ -5,9 +5,9 @@ import AutoBadge from '@/components/common/AutoBadge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import EvidencePanel from '@/components/draft/EvidencePanel'
+import MarkdownPreview from '@/components/draft/MarkdownPreview'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
   useDailyStats, useDraft, useDraftRange, useDrafts, useGenerateDraft, useMe,
@@ -15,7 +15,12 @@ import {
 } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatDateLabel, formatTime } from '@/lib/date'
-import { cn } from '@/lib/utils'
+
+/** 편집 화면(/drafts/:id)과 같은 탭 모양. 두 화면이 달라 보이면 안 된다. */
+const TAB =
+  'h-[30px] rounded-none border-b-2 border-transparent px-3.5 text-[13px] shadow-none'
+  + ' data-[state=active]:border-primary data-[state=active]:bg-transparent'
+  + ' data-[state=active]:text-primary data-[state=active]:shadow-none'
 
 /** YYYY-MM 의 첫날·마지막날. 목록은 달 단위로 넘긴다. */
 function monthRange(ym: string): { from: string; to: string } {
@@ -222,36 +227,29 @@ function TodayEditor({ draftId, onRegenerate, busy }: {
         </div>
       </div>
 
-      <div className="h-[41px] shrink-0 border-b px-4">
-        <div className="flex h-[41px] items-center gap-1">
-          {(['edit', 'preview'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cn(
-                'h-[30px] border-b-2 px-3.5 text-[13px] transition-colors',
-                tab === t ? 'border-primary font-medium text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t === 'edit' ? '편집' : '미리보기'}
-            </button>
-          ))}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'edit' | 'preview')} className="flex min-h-0 flex-1 flex-col">
+        <div className="h-[41px] shrink-0 border-b px-5">
+          <TabsList className="h-[41px] gap-1 bg-transparent p-0">
+            <TabsTrigger value="edit" className={TAB}>편집</TabsTrigger>
+            <TabsTrigger value="preview" className={TAB}>미리보기</TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      {tab === 'edit' ? (
-        <Textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => { setText(e.target.value); setTouched(true) }}
-            className="min-h-0 flex-1 resize-none rounded-none border-0 font-mono text-[13px] leading-relaxed focus-visible:ring-0"
-        />
-      ) : (
-        <div className="prose prose-sm min-h-0 max-w-none flex-1 overflow-y-auto px-5 py-4">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        <div className="min-h-0 flex-1 p-5">
+          {tab === 'edit' ? (
+            <Textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => { setText(e.target.value); setTouched(true) }}
+              className="h-full resize-none text-[13px] leading-6"
+            />
+          ) : (
+            <div className="h-full overflow-y-auto rounded-md border p-5">
+              <MarkdownPreview source={text} />
+            </div>
+          )}
         </div>
-      )}
+      </Tabs>
     </Card>
 
     <EvidencePanel
