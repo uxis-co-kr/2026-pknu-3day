@@ -23,6 +23,13 @@ public class LocalAuthController {
 
     private static final Logger log = LoggerFactory.getLogger(LocalAuthController.class);
 
+    /**
+     * 최소 길이는 로그인 화면이 안내하는 값과 같아야 한다. 화면은 "4자 이상" 이라고 적어 두는데
+     * 서버가 8자를 요구하면, 최초 로그인 강제 변경을 통과할 방법이 없어 로그인할 때마다 같은
+     * 화면으로 되돌아온다. 규칙은 한 곳에서만 정한다 (PasswordPage.tsx / mockServer.ts 와 동일).
+     */
+    static final int MIN_PASSWORD_LENGTH = 4;
+
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final EmployeeAccountService employeeAccountService;
@@ -88,8 +95,15 @@ public class LocalAuthController {
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "현재 비밀번호가 올바르지 않습니다.");
         }
-        if (request.newPassword().length() < 8) {
-            throw ApiException.badRequest("PASSWORD_TOO_SHORT", "비밀번호는 8자 이상이어야 합니다.");
+        if (request.newPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw ApiException.badRequest(
+                    "PASSWORD_TOO_SHORT",
+                    "비밀번호는 " + MIN_PASSWORD_LENGTH + "자 이상이어야 합니다.");
+        }
+        // 사원번호는 사원 목록 API 로 누구나 조회할 수 있어 비밀이 아니다 (TODO_0910 §1-1).
+        if (request.newPassword().equals(user.getLoginId())) {
+            throw ApiException.badRequest(
+                    "PASSWORD_IS_LOGIN_ID", "사원번호와 같은 비밀번호는 쓸 수 없습니다.");
         }
         if (PasswordHasher.matches(request.newPassword(), user.getPasswordHash())) {
             throw ApiException.badRequest("PASSWORD_UNCHANGED", "지금 쓰는 비밀번호와 다르게 정해 주세요.");
