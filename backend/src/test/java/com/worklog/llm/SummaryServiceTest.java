@@ -13,6 +13,7 @@ import com.worklog.activity.Activity;
 import com.worklog.activity.ActivityRepository;
 import com.worklog.activity.ActivityType;
 import com.worklog.activity.SummaryStatus;
+import com.worklog.auth.User;
 import com.worklog.github.Repo;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -25,6 +26,8 @@ class SummaryServiceTest {
 
     private ActivityRepository activityRepository;
     private LlmProvider provider;
+    private LlmSettingService settingService;
+    private LlmProviderResolver resolverMock;
     private SummaryService service;
 
     @BeforeEach
@@ -33,10 +36,12 @@ class SummaryServiceTest {
         provider = mock(LlmProvider.class);
         when(provider.id()).thenReturn("stub");
 
-        LlmProviderResolver resolver = mock(LlmProviderResolver.class);
-        when(resolver.resolve()).thenReturn(provider);
+        resolverMock = mock(LlmProviderResolver.class);
+        when(resolverMock.resolve()).thenReturn(provider);
 
-        service = new SummaryService(activityRepository, resolver, new PromptLoader());
+        settingService = mock(LlmSettingService.class);
+        service = new SummaryService(
+                activityRepository, resolverMock, new PromptLoader(), settingService);
     }
 
     private static Activity commit(String message, String diff) {
@@ -119,6 +124,74 @@ class SummaryServiceTest {
         assertThat(service.runOnce()).isZero();
         verify(activityRepository).findSummaryTargets(eq(3), any(Pageable.class));
         assertThat(SummaryService.MAX_RETRIES).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("활동 소유자가 고른 프로바이더를 쓴다 (PRD F9 — 사용자 설정 우선)")
+    void usesPerUserProvider() {
+        LlmProvider userChoice = mock(LlmProvider.class);
+        when(userChoice.id()).thenReturn("qwen3");
+        when(userChoice.complete(any())).thenReturn("사용자가 고른 모델의 요약");
+        when(settingService.providerOf(3L)).thenReturn("qwen3");
+        when(resolverMock.resolve("qwen3")).thenReturn(userChoice);
+
+        Activity activity = commit("feat: 무언가", "--- a.ts");
+        activity.setUser(user(3L));
+        givenTargets(activity);
+
+        assertThat(service.runOnce()).isEqualTo(1);
+        assertThat(activity.getSummary()).isEqualTo("사용자가 고른 모델의 요약");
+        verify(provider, never()).complete(any());
+    }
+
+    @Test
+    @DisplayName("소유자에게 설정이 없으면 전역 설정으로 떨어진다")
+    void fallsBackToGlobalWhenUserHasNoSetting() {
+        when(settingService.providerOf(3L)).thenReturn(null);
+        when(resolverMock.resolve((String) null)).thenReturn(provider);
+        when(provider.complete(any())).thenReturn("전역 설정 요약");
+
+        Activity activity = commit("feat: 무언가", "--- a.ts");
+        activity.setUser(user(3L));
+        givenTargets(activity);
+
+        assertThat(service.runOnce()).isEqualTo(1);
+        assertThat(activity.getSummary()).isEqualTo("전역 설정 요약");
+    }
+
+    @Test
+    @DisplayName("소유자가 없는(미가입 계정) 활동은 전역 설정을 쓴다 — 설정을 조회하지도 않는다")
+    void unmappedActivityUsesGlobal() {
+        when(provider.complete(any())).thenReturn("전역 설정 요약");
+        Activity activity = commit("feat: 무언가", "--- a.ts");
+        givenTargets(activity);
+
+        assertThat(service.runOnce()).isEqualTo(1);
+        verify(settingService, never()).providerOf(any());
+    }
+
+    @Test
+    @DisplayName("같은 사용자의 활동이 여러 건이어도 설정은 한 번만 조회한다")
+    void cachesSettingLookupPerBatch() {
+        when(settingService.providerOf(3L)).thenReturn(null);
+        when(resolverMock.resolve((String) null)).thenReturn(provider);
+        when(provider.complete(any())).thenReturn("요약");
+
+        Activity a = commit("feat: 하나", "--- a.ts");
+        a.setUser(user(3L));
+        Activity b = commit("feat: 둘", "--- b.ts");
+        b.setUser(user(3L));
+        givenTargets(a, b);
+
+        assertThat(service.runOnce()).isEqualTo(2);
+        verify(settingService, org.mockito.Mockito.times(1)).providerOf(3L);
+    }
+
+    private static User user(Long id) {
+        User u = new User();
+        u.setId(id);
+        u.setLogin("user" + id);
+        return u;
     }
 
     @Test

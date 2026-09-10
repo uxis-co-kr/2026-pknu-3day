@@ -90,6 +90,25 @@ public class LlmProviderResolver {
         return provider;
     }
 
+    /**
+     * 고를 수 있는 프로바이더 이름 — 화면의 라디오 목록 (PRD F9).
+     *
+     * <p>설정 파일에 프리셋을 더하면 여기에도 자동으로 늘어난다.
+     */
+    public java.util.List<String> availableIds() {
+        return java.util.List.copyOf(byId.keySet());
+    }
+
+    /** 그 이름의 프로바이더가 등록돼 있는지. */
+    public boolean supports(String providerId) {
+        return providerId != null && byId.containsKey(providerId);
+    }
+
+    /** 설정에서 고른 프로바이더 이름. 검증에 실패해 mock 으로 폴백했더라도 설정값 그대로다. */
+    public String configuredId() {
+        return configuredId;
+    }
+
     /** 프리셋 이름과 설정으로 프로바이더를 만든다. */
     @FunctionalInterface
     interface PresetFactory {

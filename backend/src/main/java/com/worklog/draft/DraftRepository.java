@@ -22,6 +22,15 @@ public interface DraftRepository extends JpaRepository<Draft, Long> {
     /** 같은 (사용자, 날짜) 의 최신 버전. */
     Optional<Draft> findFirstByUserIdAndWorkDateOrderByVersionDesc(Long userId, LocalDate workDate);
 
+    /**
+     * 기간 안의 (사용자, 날짜)별 최신 버전 초안 — 인원별 화면이 날짜마다 배지를 그린다.
+     * 재생성은 version 을 올리므로 같은 (user, date) 에 여러 행이 있다.
+     */
+    @Query("select d from Draft d where d.workDate between :from and :to"
+            + " and d.version = (select max(d2.version) from Draft d2"
+            + "                  where d2.user.id = d.user.id and d2.workDate = d.workDate)")
+    List<Draft> findLatestBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
     @Query("select d from Draft d join fetch d.user where d.workDate = :workDate"
             + " and d.version = (select max(d2.version) from Draft d2"
             + "                  where d2.user.id = d.user.id and d2.workDate = d.workDate)")

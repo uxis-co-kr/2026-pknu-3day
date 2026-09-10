@@ -91,6 +91,24 @@ public interface ActivityRepository
     List<Object[]> countUnmappedByTypeBetween(
             @Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
 
+    /**
+     * 인원별 시계열 집계 (PRD 7. /stats/people).
+     *
+     * <p>KST 날짜로 묶어야 하므로 DB 에서 시간대를 변환한다. TIMESTAMPTZ 라 저장은 UTC 다.
+     * 주 단위 묶기는 서비스에서 한다 — 날짜 단위 결과를 접는 편이 쿼리 하나로 끝나고 검증도 쉽다.
+     *
+     * @return [userId, KST 날짜, type, 건수]
+     */
+    @Query(value = "select a.user_id,"
+            + "       (a.occurred_at at time zone 'Asia/Seoul')::date as d,"
+            + "       a.type, count(*)"
+            + " from activities a"
+            + " where a.user_id is not null and a.occurred_at >= :start and a.occurred_at < :end"
+            + " group by a.user_id, d, a.type",
+            nativeQuery = true)
+    List<Object[]> countByUserAndDateBetween(
+            @Param("start") OffsetDateTime start, @Param("end") OffsetDateTime end);
+
     /** 활동이 있는 사용자 id — 18:00 초안 스케줄러가 대상을 고를 때 쓴다. */
     @Query("select distinct a.user.id from Activity a"
             + " where a.user is not null and a.occurredAt >= :start and a.occurredAt < :end")
