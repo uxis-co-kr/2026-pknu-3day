@@ -1,71 +1,77 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BarChart3, Bot, Send, Users2, LayoutGrid } from 'lucide-react'
+import UserAvatar from '@/components/common/UserAvatar'
 import { Button } from '@/components/ui/button'
+import { useMe } from '@/api/hooks'
 import { cn } from '@/lib/utils'
 
 /**
  * 관리자 콘솔 껍데기 (TODO_0910 §1-3).
  *
- * 일반 화면의 사이드바(AppLayout)를 쓰지 않는다. 회의에서 "지금 구상한 페이지 말고
- * 또 다른 페이지"로 정해졌고, 관리 대상이 개인이 아니라 팀 전체라 다른 자리에 있다는 것이
- * 한눈에 보여야 한다. 그래서 어두운 상단 바 + 가로 탭으로 서비스 화면과 구분한다.
+ * 서비스 화면(AppLayout)과 <b>같은 양식</b>을 쓴다 — 사이드바 241 + 상단 바 57,
+ * 아이콘 없이 글자만 쓰는 메뉴, 본문 최대 1200 폭. 회의에서 "또 다른 페이지"로 정해진 것은
+ * 메뉴 구성이 다르다는 뜻이지 다른 디자인을 쓰라는 뜻이 아니어서, 같은 제품으로 보이도록
+ * 맞췄다. 관리자 화면임은 로고 옆 배지와 "서비스로 돌아가기" 로만 구분한다.
  */
-const TABS = [
-  { to: '/admin', end: true, label: '개요', icon: LayoutGrid },
-  { to: '/admin/people', end: false, label: '직원 · 계정', icon: Users2 },
-  { to: '/admin/activity', end: false, label: '팀원 내역', icon: BarChart3 },
-  { to: '/admin/llm', end: false, label: 'LLM 모델', icon: Bot },
-  { to: '/admin/notify', end: false, label: 'Mattermost', icon: Send },
-]
+const item = (active: boolean) =>
+  cn(
+    'flex h-[33px] items-center rounded-md px-2.5 text-sm transition-colors',
+    active ? 'bg-primary/10 font-medium text-primary' : 'text-foreground hover:bg-muted',
+  )
 
 export default function AdminShell() {
   const navigate = useNavigate()
+  const { data: me } = useMe()
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="bg-slate-900 text-slate-100">
-        <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 px-2 text-slate-300 hover:bg-slate-800 hover:text-slate-50"
-            onClick={() => navigate('/')}
-          >
-            <ArrowLeft className="size-4" />
-            서비스로
-          </Button>
-          <div className="h-4 w-px bg-slate-700" />
-          <span className="text-sm font-semibold tracking-tight">관리자 콘솔</span>
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-400">
-            ADMIN
+    <div className="flex h-screen bg-background">
+      <aside className="flex w-[241px] shrink-0 flex-col border-r bg-background">
+        <div className="flex h-[66px] items-center gap-2.5 px-[22px]">
+          <span className="flex size-[26px] items-center justify-center rounded-md bg-primary text-[13px] font-bold text-primary-foreground">
+            W
+          </span>
+          <span className="text-sm font-semibold">WorkLog Drafter</span>
+        </div>
+
+        <div className="px-3 pb-2">
+          <span className="inline-flex h-[22px] items-center rounded bg-muted px-2 text-[11px] font-medium text-muted-foreground">
+            관리자 콘솔
           </span>
         </div>
 
-        <nav className="mx-auto flex max-w-[1200px] gap-1 px-6">
-          {TABS.map(({ to, end, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'border-amber-400 text-slate-50'
-                    : 'border-transparent text-slate-400 hover:text-slate-200',
-                )
-              }
-            >
-              <Icon className="size-4" />
-              {label}
-            </NavLink>
-          ))}
+        <nav className="flex flex-col gap-0.5 px-3">
+          <NavLink to="/admin" end className={({ isActive }) => item(isActive)}>개요</NavLink>
+          <NavLink to="/admin/people" className={({ isActive }) => item(isActive)}>직원 · 계정</NavLink>
+          <NavLink to="/admin/activity" className={({ isActive }) => item(isActive)}>팀원 내역</NavLink>
+          <NavLink to="/admin/llm" className={({ isActive }) => item(isActive)}>LLM 모델</NavLink>
+          <NavLink to="/admin/notify" className={({ isActive }) => item(isActive)}>Mattermost</NavLink>
         </nav>
-      </header>
 
-      <main className="mx-auto max-w-[1200px] px-6 py-6">
-        <Outlet />
-      </main>
+        <div className="mt-auto px-3 pb-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-[33px] w-full justify-start px-2.5 text-sm font-normal text-muted-foreground"
+            onClick={() => navigate('/')}
+          >
+            서비스로 돌아가기
+          </Button>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-[57px] shrink-0 items-center justify-between border-b bg-background px-6">
+          <span className="text-[13px] font-medium text-muted-foreground">
+            팀 전체 설정과 현황을 관리합니다
+          </span>
+          <UserAvatar name={me?.name} login={me?.login} avatarUrl={me?.avatarUrl} />
+        </header>
+
+        <main className="flex-1 overflow-y-auto bg-muted/40">
+          <div className="mx-auto w-full max-w-[1200px] px-10 py-6">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

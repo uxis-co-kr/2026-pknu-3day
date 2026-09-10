@@ -62,3 +62,12 @@ export const useSaveAdminLlm = () => {
     },
   })
 }
+
+/** 지금 입력한 주소로 시험 전송한다. 저장하지 않으므로 맞는지 먼저 볼 수 있다. */
+export const useTestWebhook = () =>
+  useMutation({
+    mutationFn: (mattermostWebhookUrl: string | null) =>
+      api.post<{ sent: boolean; text: string }>('/admin/settings/notify/test', {
+        mattermostWebhookUrl,
+      }),
+  })

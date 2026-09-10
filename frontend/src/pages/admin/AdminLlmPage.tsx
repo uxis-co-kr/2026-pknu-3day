@@ -25,10 +25,10 @@ export default function AdminLlmPage() {
 
   return (
     <AdminGuard error={error}>
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">LLM 모델</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-[15px] font-semibold">LLM 모델</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             커밋 요약과 업무 일지 초안을 만드는 모델입니다. 프리셋 중에서만 고를 수 있습니다.
           </p>
         </div>
@@ -44,11 +44,11 @@ export default function AdminLlmPage() {
                     <div key={id} className="flex items-start gap-3 rounded border p-3">
                       <RadioGroupItem value={id} id={`llm-${id}`} className="mt-0.5" />
                       <Label htmlFor={`llm-${id}`} className="cursor-pointer font-normal">
-                        <span className="text-sm font-medium">{id}</span>
+                        <span className="text-[13px] font-medium">{id}</span>
                         {id === data.provider && (
                           <span className="ml-2 text-xs text-muted-foreground">사용 중</span>
                         )}
-                        <p className="mt-0.5 text-sm text-muted-foreground">
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">
                           {DESCRIPTIONS[id] ?? '설정에 추가된 프리셋입니다.'}
                         </p>
                       </Label>

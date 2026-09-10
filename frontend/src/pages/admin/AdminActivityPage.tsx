@@ -16,8 +16,8 @@ export default function AdminActivityPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">팀원 내역</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-[15px] font-semibold">팀원 내역</h1>
+        <p className="mt-1 text-[13px] text-muted-foreground">
           기간별 커밋 · PR · 머지와 그날의 업무 일지 상태를 봅니다.
         </p>
       </div>

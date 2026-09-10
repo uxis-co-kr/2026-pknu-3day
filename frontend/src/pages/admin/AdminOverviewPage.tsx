@@ -40,8 +40,8 @@ function Readiness({
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
       )}
       <div className="min-w-0">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="mt-0.5 text-sm text-muted-foreground">{ok ? okText : todoText}</p>
+        <p className="text-[13px] font-medium">{title}</p>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">{ok ? okText : todoText}</p>
       </div>
       {!ok && to && (
         <Link to={to} className="ml-auto shrink-0 text-sm text-primary hover:underline">
@@ -57,10 +57,10 @@ export default function AdminOverviewPage() {
 
   return (
     <AdminGuard error={error}>
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">개요</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-[15px] font-semibold">개요</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             {data ? `${data.adminLogin} 님으로 접속했습니다.` : '팀 전체 상태를 봅니다.'}
           </p>
         </div>
@@ -127,7 +127,7 @@ export default function AdminOverviewPage() {
               <CardContent className="flex items-center gap-3 p-4">
                 <Users2 className="size-5 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">직원 · 계정</p>
+                  <p className="text-[13px] font-medium">직원 · 계정</p>
                   <p className="text-sm text-muted-foreground">
                     누가 GitHub 을 연결했는지, 누가 빠져 있는지
                   </p>
@@ -140,7 +140,7 @@ export default function AdminOverviewPage() {
               <CardContent className="flex items-center gap-3 p-4">
                 <GitBranch className="size-5 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">미연결 기여자</p>
+                  <p className="text-[13px] font-medium">미연결 기여자</p>
                   <p className="text-sm text-muted-foreground">
                     활동은 잡히는데 사람에 붙지 않은 계정
                   </p>

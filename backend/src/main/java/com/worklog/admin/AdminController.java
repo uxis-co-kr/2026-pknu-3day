@@ -8,11 +8,13 @@ import com.worklog.config.ApiException;
 import com.worklog.llm.LlmSettingService;
 import com.worklog.notify.NotifySetting;
 import com.worklog.notify.NotifySettingRepository;
+import com.worklog.notify.Notifier;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,16 +38,19 @@ public class AdminController {
     private final NotifySettingRepository notifySettingRepository;
     private final LlmSettingService llmSettingService;
     private final UserRepository userRepository;
+    private final Notifier notifier;
 
     public AdminController(
             PeopleDirectoryService directoryService,
             NotifySettingRepository notifySettingRepository,
             LlmSettingService llmSettingService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            Notifier notifier) {
         this.directoryService = directoryService;
         this.notifySettingRepository = notifySettingRepository;
         this.llmSettingService = llmSettingService;
         this.userRepository = userRepository;
+        this.notifier = notifier;
     }
 
     /** 콘솔 첫 화면이 무엇을 보여 줄 수 있는지 알려 준다. */
@@ -125,6 +130,45 @@ public class AdminController {
                 setting.getMattermostWebhookUrl(), setting.getRemindUncommitted());
     }
 
+    /**
+     * 웹훅이 실제로 닿는지 확인한다.
+     *
+     * <p>저장만으로는 주소가 맞는지 알 수 없다. 초안을 만들어 보는 것 말고는 확인할 방법이
+     * 없으면 설정을 틀린 채로 두게 된다. 본문에 주소를 받아 <b>저장하지 않고</b> 그 주소로만
+     * 쏘므로, 지금 입력한 값이 맞는지 저장 전에 확인할 수 있다.
+     */
+    @PostMapping("/settings/notify/test")
+    @Transactional(readOnly = true)
+    public TestNotifyResponse testNotify(
+            @AuthenticationPrincipal AuthenticatedUser principal,
+            @RequestBody(required = false) TestNotifyRequest request) {
+
+        String url = request == null ? null : blankToNull(request.mattermostWebhookUrl());
+        if (url == null) {
+            // 입력이 없으면 저장된 전역 설정으로 시험한다.
+            url = notifySettingRepository
+                    .findGlobal()
+                    .map(NotifySetting::getMattermostWebhookUrl)
+                    .map(AdminController::blankToNull)
+                    .orElse(null);
+        }
+        if (url == null) {
+            throw ApiException.badRequest(
+                    "WEBHOOK_NOT_SET", "웹훅 주소를 입력하거나 먼저 저장해 주세요.");
+        }
+
+        String text = "✅ WorkLog Drafter 연결 확인 — %s 님이 관리자 콘솔에서 보냈습니다."
+                .formatted(principal.login());
+        boolean sent = notifier.send(url, text);
+        if (!sent) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "NOTIFY_FAILED",
+                    "메시지를 보내지 못했습니다. 주소가 맞는지, 채널이 살아 있는지 확인해 주세요.");
+        }
+        return new TestNotifyResponse(true, text);
+    }
+
     private boolean globalWebhookConfigured() {
         return notifySettingRepository
                 .findGlobal()
@@ -149,6 +193,10 @@ public class AdminController {
     public record LinkEmployeeRequest(Long coSeq, Long empSeq) {}
 
     public record GlobalNotifyRequest(String mattermostWebhookUrl, Boolean remindUncommitted) {}
+
+    public record TestNotifyRequest(String mattermostWebhookUrl) {}
+
+    public record TestNotifyResponse(boolean sent, String text) {}
 
     public record GlobalNotifyResponse(String mattermostWebhookUrl, Boolean remindUncommitted) {}
 }

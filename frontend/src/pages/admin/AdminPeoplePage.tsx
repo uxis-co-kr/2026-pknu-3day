@@ -81,10 +81,10 @@ export default function AdminPeoplePage() {
 
   return (
     <AdminGuard error={error}>
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">직원 · 계정</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-[15px] font-semibold">직원 · 계정</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             사내 직원과 서비스 계정이 어떻게 이어져 있는지, 누구의 GitHub 이 붙어 있는지 봅니다.
           </p>
         </div>
@@ -97,7 +97,7 @@ export default function AdminPeoplePage() {
             <Card>
               <CardContent className="p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-medium">사내 직원</p>
+                  <p className="text-[13px] font-medium">사내 직원</p>
                   <span className="text-xs text-muted-foreground">
                     회원 조회 API 기준 {data.employees.length}명
                   </span>
@@ -154,10 +154,10 @@ export default function AdminPeoplePage() {
             <Card>
               <CardContent className="p-4">
                 <div className="mb-1 flex items-center justify-between">
-                  <p className="text-sm font-medium">사원과 연결되지 않은 계정</p>
+                  <p className="text-[13px] font-medium">사원과 연결되지 않은 계정</p>
                   <span className="text-xs text-muted-foreground">{data.unlinkedAccounts.length}건</span>
                 </div>
-                <p className="mb-3 text-sm text-muted-foreground">
+                <p className="mb-3 text-[13px] text-muted-foreground">
                   로그인은 했지만 사내 사원과 이어지지 않은 계정입니다. 사원 번호를 넣어 이어 줍니다.
                 </p>
 
@@ -194,12 +194,12 @@ export default function AdminPeoplePage() {
             <Card id="contributors">
               <CardContent className="p-4">
                 <div className="mb-1 flex items-center justify-between">
-                  <p className="text-sm font-medium">사람에 연결되지 않은 기여자</p>
+                  <p className="text-[13px] font-medium">사람에 연결되지 않은 기여자</p>
                   <span className="text-xs text-muted-foreground">
                     {data.unclaimedContributors.length}건
                   </span>
                 </div>
-                <p className="mb-3 text-sm text-muted-foreground">
+                <p className="mb-3 text-[13px] text-muted-foreground">
                   커밋은 수집되는데 이 서비스에 로그인한 적이 없는 GitHub 계정입니다. 이 활동은
                   총계에는 들어가지만 사용자 카드나 업무 일지에는 나오지 않습니다. 본인이 한 번
                   로그인하면 지난 활동까지 자동으로 이어집니다.
