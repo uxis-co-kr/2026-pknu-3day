@@ -15,7 +15,18 @@ export interface AdminOverview {
   llmProvider: string
 }
 
-/** 우리 서비스 계정. 사원과 이어졌는지, GitHub 이 붙었는지가 핵심이다. */
+/** 그 사람이 등록한 리포. 사원 행을 펼치면 보인다. */
+export interface AdminRepo {
+  repoId: number
+  fullName: string
+  defaultBranch: string | null
+  lastSyncedAt: string | null
+  syncStatus: 'OK' | 'SYNCING' | 'FAILED'
+  /** 이 리포에서 그 사람 앞으로 잡힌 활동 수 */
+  activityCount: number
+}
+
+/** 우리 서비스 계정 — 그 사람이 WorkLog Drafter 에 로그인해서 생긴 것. */
 export interface AdminAccount {
   userId: number
   login: string
@@ -24,9 +35,14 @@ export interface AdminAccount {
   role: 'MEMBER' | 'ADMIN'
   /** 수집기가 이 사람 권한으로 리포를 읽을 수 있는지 */
   githubLinked: boolean
+  /** 확장은 API Key 로만 붙는다. 키가 있으면 연동 수단은 갖춘 것이다 */
+  vscodeLinked: boolean
+  /** 확장이 실제로 보낸 세션 수 — 키만 받고 안 쓰는 경우와 구분한다 */
+  sessionCount: number
   empSeq: number | null
   activityCount: number
   joinedAt: string
+  repos: AdminRepo[]
 }
 
 /** 사내 회원(와플) 사원. account 가 null 이면 아직 서비스를 쓰지 않는 사람이다. */

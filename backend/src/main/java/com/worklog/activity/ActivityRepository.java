@@ -84,6 +84,11 @@ public interface ActivityRepository
             + " where a.user is null and lower(a.externalLogin) = lower(:login)")
     int linkExistingActivities(@Param("userId") Long userId, @Param("login") String login);
 
+    /** 관리자 콘솔 — (사용자, 리포)별 활동 수. 사원 행을 펼쳤을 때 리포마다 보여 준다. */
+    @Query("select a.user.id, a.repo.id, count(a) from Activity a"
+            + " where a.user is not null group by a.user.id, a.repo.id")
+    List<Object[]> countByUserAndRepo();
+
     /** 관리자 콘솔 — 사용자별 총 활동 수. */
     @Query("select a.user.id, count(a) from Activity a where a.user is not null group by a.user.id")
     List<Object[]> countAllByUser();

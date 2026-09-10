@@ -10,6 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import AdminGuard from './AdminGuard'
+import EmployeeTable from './EmployeeTable'
 import { useAdminPeople, useLinkEmployee } from './api'
 import type { AdminAccount } from './types'
 
@@ -125,38 +126,10 @@ export default function AdminPeoplePage() {
                         의 임시 목록을 쓰고 있습니다. 실제 API가 붙으면 그쪽으로 자동 전환됩니다.
                       </p>
                     )}
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-24">사원 번호</TableHead>
-                        <TableHead>이름</TableHead>
-                        <TableHead>서비스 계정</TableHead>
-                        <TableHead className="w-28">GitHub</TableHead>
-                        <TableHead className="w-20 text-right">활동</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.employees.map((e) => (
-                        <TableRow key={e.empSeq}>
-                          <TableCell className="tabular-nums text-muted-foreground">{e.empSeq}</TableCell>
-                          <TableCell>{e.empNm}</TableCell>
-                          <TableCell>
-                            {e.account ? (
-                              <AccountCell account={e.account} />
-                            ) : (
-                              <span className="text-sm text-muted-foreground">— 아직 사용하지 않음</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {e.account ? <GithubBadge linked={e.account.githubLinked} /> : null}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {e.account?.activityCount ?? 0}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                    <p className="mb-2 text-[12px] text-muted-foreground">
+                      행을 클릭하면 그 사원이 등록한 리포지터리가 펼쳐집니다.
+                    </p>
+                    <EmployeeTable employees={data.employees} />
                   </>
                 )}
               </CardContent>
