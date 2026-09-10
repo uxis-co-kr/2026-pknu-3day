@@ -89,6 +89,10 @@ public interface ActivityRepository
             + " where a.user is not null group by a.user.id, a.repo.id")
     List<Object[]> countByUserAndRepo();
 
+    /** 관리자 콘솔 — 요약 상태별 건수. 요약이 밀려 있으면 초안이 부실해진다. */
+    @Query("select a.summaryStatus, count(a) from Activity a group by a.summaryStatus")
+    List<Object[]> countBySummaryStatus();
+
     /** 관리자 콘솔 — 사용자별 총 활동 수. */
     @Query("select a.user.id, count(a) from Activity a where a.user is not null group by a.user.id")
     List<Object[]> countAllByUser();

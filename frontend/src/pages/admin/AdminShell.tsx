@@ -1,6 +1,16 @@
+import { LogOut } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import UserAvatar from '@/components/common/UserAvatar'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { auth } from '@/api/apiClient'
 import { useMe } from '@/api/hooks'
 import { cn } from '@/lib/utils'
 
@@ -63,7 +73,26 @@ export default function AdminShell() {
           <span className="text-[13px] font-medium text-muted-foreground">
             팀 전체 설정과 현황을 관리합니다
           </span>
-          <UserAvatar name={me?.name} login={me?.login} avatarUrl={me?.avatarUrl} />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="내 계정"
+            >
+              <UserAvatar name={me?.name} login={me?.login} avatarUrl={me?.avatarUrl} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuLabel className="font-normal">
+                <div className="text-[13px] font-medium leading-tight">{me?.name ?? me?.login ?? '—'}</div>
+                <div className="mt-0.5 text-xs font-normal text-muted-foreground">관리자</div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => navigate('/')}>서비스 화면으로</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => auth.logout()}>
+                <LogOut />
+                로그아웃
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         <main className="flex-1 overflow-y-auto bg-muted/40">

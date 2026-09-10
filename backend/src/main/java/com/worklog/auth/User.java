@@ -28,11 +28,23 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "github_id", nullable = false, unique = true)
+    /** GitHub 로그인으로 만들어진 계정만 값이 있다. 자체 계정은 null. */
+    @Column(name = "github_id", unique = true)
     private Long githubId;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String login;
+
+    /** 자체 로그인 아이디. 관리자는 'admin', 사원은 사원 번호 (TODO_0910 §1-1). */
+    @Column(name = "login_id", length = 100)
+    private String loginId;
+
+    @Column(name = "password_hash", length = 200)
+    private String passwordHash;
+
+    /** 최초 비밀번호는 발급자가 알고 있으므로 비밀이 아니다. 처음 로그인하면 바꾸게 한다. */
+    @Column(name = "must_change_password", nullable = false)
+    private Boolean mustChangePassword = false;
 
     @Column(length = 200)
     private String name;

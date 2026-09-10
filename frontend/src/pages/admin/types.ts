@@ -13,6 +13,15 @@ export interface AdminOverview {
   wapleConfigured: boolean
   globalWebhookConfigured: boolean
   llmProvider: string
+  repoCount: number
+  /** 지금 수집 중인 리포 수 */
+  syncingRepoCount: number
+  anyRepoSyncFailed: boolean
+  activityCount: number
+  /** 아직 요약되지 않은 활동. 밀려 있으면 초안이 부실해진다 */
+  pendingSummaryCount: number
+  /** 3회까지 실패해 포기한 활동 */
+  failedSummaryCount: number
 }
 
 /** 그 사람이 등록한 리포. 사원 행을 펼치면 보인다. */
