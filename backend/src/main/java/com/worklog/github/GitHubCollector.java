@@ -9,6 +9,7 @@ import com.worklog.auth.UserRepository;
 import com.worklog.auth.UserService;
 import com.worklog.github.dto.GitHubCommitDto;
 import com.worklog.github.dto.GitHubPullRequestDto;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -33,6 +34,18 @@ public class GitHubCollector {
 
     /** 첫 동기화에서 거슬러 올라갈 기간 (PRD F1 수용 기준). */
     private static final int FIRST_SYNC_DAYS = 7;
+
+    /**
+     * 증분 수집에서 since 를 이만큼 앞당긴다.
+     *
+     * <p>GitHub 의 since 는 <b>커밋 작성 시각</b>으로 거르는데 우리가 넣는 값은 <b>우리가 동기화한
+     * 시각</b>이다. 아침에 작성해 두고 점심에 푸시한 커밋은 그 사이 동기화가 한 번이라도 돌면
+     * 작성 시각이 since 보다 앞서서 영영 들어오지 않는다. 실제로 09:27 에 작성해 09:35 에 푸시한
+     * 커밋이 09:32 동기화 뒤에 누락됐다.
+     *
+     * <p>겹쳐 조회되는 커밋은 이미 저장한 sha 라 상세 호출 없이 걸러지므로 비용은 목록 조회뿐이다.
+     */
+    private static final Duration SINCE_LOOKBACK = Duration.ofHours(24);
 
     private final RepoRepository repoRepository;
     private final ActivityRepository activityRepository;
@@ -115,7 +128,8 @@ public class GitHubCollector {
             // 수집 중에 들어온 커밋을 놓치지 않도록 "시작" 시각을 다음 since 로 쓴다.
             OffsetDateTime syncStartedAt = OffsetDateTime.now();
             OffsetDateTime since = (!full && repo.getLastSyncedAt() != null)
-                    ? repo.getLastSyncedAt()
+                    // 푸시가 늦은 커밋을 놓치지 않도록 되돌아본다.
+                    ? repo.getLastSyncedAt().minus(SINCE_LOOKBACK)
                     : syncStartedAt.minusDays(FIRST_SYNC_DAYS);
 
             List<GitHubCommitDto> commits =

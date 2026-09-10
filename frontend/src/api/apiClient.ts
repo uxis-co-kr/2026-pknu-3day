@@ -13,12 +13,10 @@ export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
  * 404 를 무조건 목업으로 돌리면 `/drafts/9999` 같은 정상적인 "없음" 까지 가짜 데이터로 덮여
  * 버리므로, 목록을 명시해 두고 엔드포인트가 생길 때마다 지운다.
  *
- * 2026-09-10 기준 미구현: 알림·LLM 설정(F7/F9 백엔드), 인원별 통계(2-14),
- * 사원번호 로그인·비밀번호·GitHub 연동(9/10 회의, 담당자 2).
+ * 2026-09-10 기준 미구현: 사원번호 로그인·비밀번호·GitHub 연동 (9/10 회의, 담당자 2).
+ * /settings/llm 과 /stats/people 은 담당자 2 가 2-14 로 붙여 목록에서 뺐다.
  */
 const MOCK_FALLBACK_PATHS = [
-  /^\/settings\/llm/,
-  /^\/stats\/people/,
   /^\/auth\/login/,
   /^\/me\/password/,
   /^\/me\/github/,

@@ -30,7 +30,10 @@ public interface DraftRepository extends JpaRepository<Draft, Long> {
     /**
      * 기간 안의 (사용자, 날짜) 별 최신 버전. 최근 날짜가 먼저 온다.
      *
-     * <p>업무 일지 목록 화면이 쓴다 — 하루씩이 아니라 여러 날을 한 번에 본다.
+     * <p>재생성은 version 을 올리므로 같은 (user, date) 에 여러 행이 있다. 그중 최신만 준다.
+     *
+     * <p>두 곳이 쓴다 — 업무 일지 목록 화면(하루씩이 아니라 여러 날)과 인원별 통계(날짜마다
+     * 배지). 둘 다 {@code draft.getUser()} 를 읽으므로 {@code join fetch} 로 N+1 을 막는다.
      */
     @Query("select d from Draft d join fetch d.user"
             + " where d.workDate between :from and :to"
