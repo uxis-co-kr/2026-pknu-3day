@@ -284,9 +284,15 @@ const routes: [string, string, Handler][] = [
   }],
 
   ['POST', '/repos', (_p, _q, body) => {
-    const { fullName } = body as { fullName: string }
-    if (!/^[\w.-]+\/[\w.-]+$/.test(fullName)) {
-      throw new MockHttpError(400, 'INVALID_FULL_NAME', 'owner/repo 형식으로 입력해 주세요.')
+    // 서버와 같은 규칙으로 주소에서 owner/repo 를 뽑는다 (RepoService.parseRepoRef).
+    const fullName = (body as { fullName: string }).fullName
+      ?.trim()
+      .replace(/^git@github\.com:/, 'https://github.com/')
+      .replace(/^(https?:\/\/)?(www\.)?github\.com\//, '')
+      .replace(/\.git$/, '')
+      .split('/').slice(0, 2).join('/')
+    if (!fullName || !/^[\w.-]+\/[\w.-]+$/.test(fullName)) {
+      throw new MockHttpError(400, 'INVALID_FULL_NAME', 'GitHub 주소를 붙여 넣어 주세요. 예) https://github.com/owner/repo')
     }
     if (db.repos.some((r) => r.fullName === fullName)) {
       throw new MockHttpError(409, 'REPO_ALREADY_REGISTERED', '이미 등록된 리포입니다.')

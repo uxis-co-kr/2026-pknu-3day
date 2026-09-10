@@ -5,7 +5,7 @@ import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useActivities, useDailyStats, useMe, useRepos } from '@/api/hooks'
+import { useActivities, useMe, useRepos } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { cn } from '@/lib/utils'
 import type { ActivityType } from '@/types/api'
@@ -29,7 +29,6 @@ export default function GithubPage() {
   const { date } = useSelectedDate()
 
   const { data: me } = useMe()
-  const stats = useDailyStats(date)
   const activities = useActivities({ date, userId: me?.id })
   const repos = useRepos()
 
@@ -54,8 +53,18 @@ export default function GithubPage() {
   const current = Math.min(page, pageCount - 1)
   const rows = shown.slice(current * PER_PAGE, (current + 1) * PER_PAGE)
 
-  /** 요약 카드는 팀 총계가 아니라 내 것이다. */
-  const myStat = stats.data?.byUser.find((u) => u.userId === me?.id)
+  /**
+   * 요약은 내 활동에서 직접 센다.
+   *
+   * <p>전에는 /stats/daily 의 byUser 에서 내 몫을 골라 썼는데, 그 응답에는 팀 전원의 숫자가
+   * 함께 실려 온다. 화면에 안 그려도 브라우저까지는 오는 것이라 아예 부르지 않는다
+   * (9/10 결정 — 일반 로그인은 내 것만 본다).
+   */
+  const myStat = {
+    commits: mine.filter((a) => a.type === 'COMMIT').length,
+    prs: mine.filter((a) => a.type === 'PR_OPENED').length,
+    merges: mine.filter((a) => a.type === 'PR_MERGED').length,
+  }
 
 
   return (
@@ -69,17 +78,13 @@ export default function GithubPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        {stats.isLoading ? (
+        {activities.isLoading ? (
           TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
         ) : (
           <>
-            {/*
-              * 팀 전체 숫자는 빼 두었다 — 일반 로그인은 내 내역만 보는 화면이라 옆에 팀 합계가
-              * 있으면 무엇이 내 것인지 흐려진다. 팀 전체는 관리자 콘솔이 맡는다 (9/10 결정).
-              */}
-            <SummaryCard label="커밋" value={myStat?.commits ?? 0} hint={mine.length === 0 ? '—' : `${shown.length}건 표시 중`} />
-            <SummaryCard label="PR" value={myStat?.prs ?? 0} hint="열린 PR" />
-            <SummaryCard label="머지" value={myStat?.merges ?? 0} hint="머지된 PR" />
+            <SummaryCard label="커밋" value={myStat.commits} hint={mine.length === 0 ? '—' : `${shown.length}건 표시 중`} />
+            <SummaryCard label="PR" value={myStat.prs} hint="내가 연 PR" />
+            <SummaryCard label="머지" value={myStat.merges} hint="머지된 내 PR" />
           </>
         )}
       </div>

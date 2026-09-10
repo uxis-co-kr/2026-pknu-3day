@@ -49,13 +49,13 @@ export default function RepoSection() {
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void onRegister()}
-          placeholder="owner/repo"
-          className="h-[34px] w-[260px] text-[13px]"
+          placeholder="https://github.com/owner/repo"
+          className="h-[34px] w-[340px] text-[13px]"
         />
         <Button size="sm" className="h-[34px]" disabled={register.isPending} onClick={() => void onRegister()}>
           등록
         </Button>
-        <span className="text-[12px] text-muted-foreground">GitHub에서 접근 가능한 리포만 등록됩니다</span>
+        <span className="text-[12px] text-muted-foreground">GitHub 주소를 붙여 넣으세요. 접근 권한이 있는 리포만 등록됩니다</span>
 
         <div className="ml-auto flex items-center gap-2">
           {/*

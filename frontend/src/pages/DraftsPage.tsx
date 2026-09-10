@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import DraftWorkspace from '@/components/draft/DraftWorkspace'
-import { useDailyStats, useDraftRange, useDrafts, useGenerateDraft, useMe, useSessions } from '@/api/hooks'
+import { useActivities, useDraftRange, useDrafts, useGenerateDraft, useMe, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatDateLabel, formatTime } from '@/lib/date'
 
@@ -39,14 +39,15 @@ export default function DraftsPage() {
   const list = useDraftRange({ ...range, userId: me?.id }, Boolean(me))
 
   const today = useDrafts({ date, userId: me?.id })
-  const stats = useDailyStats(date)
+  const activities = useActivities({ date, userId: me?.id })
   const sessions = useSessions({ date, userId: me?.id })
   const generate = useGenerateDraft()
 
   const todayDraft = today.data?.[0]
-  const myStat = stats.data?.byUser.find((u) => u.userId === me?.id)
+  // 내 활동에서 직접 센다. /stats/daily 응답에는 팀 전원의 숫자가 실려 온다.
+  const myActivities = (activities.data?.items ?? []).filter((a) => a.user?.id === me?.id)
   const mySessions = (sessions.data ?? []).filter((s) => s.userId === me?.id)
-  const material = (myStat?.commits ?? 0) + (myStat?.prs ?? 0) + mySessions.length
+  const material = myActivities.length + mySessions.length
 
   // 오늘 것은 위에서 이미 펼쳐 놓았다. 목록에서는 뺀다.
   const past = (list.data ?? []).filter((d) => d.workDate !== date)

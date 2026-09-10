@@ -103,11 +103,40 @@ public class RepoService {
         return added;
     }
 
+    /**
+     * GitHub 주소에서 {@code owner/repo} 를 뽑는다 (9/10 — 주소를 붙여 넣어 등록한다).
+     *
+     * <p>브라우저 주소창에서 복사하면 {@code https://github.com/owner/repo} 이고, 클론 주소는
+     * {@code .git} 이 붙는다. 트리·이슈 경로까지 함께 복사되는 일도 흔하다. 셋 다 받는다.
+     * {@code owner/repo} 를 그대로 적은 것도 그대로 통과시킨다 — 쓰던 방식을 막을 이유가 없다.
+     *
+     * @return 뽑아낸 owner/repo. 형식이 아니면 {@code null}
+     */
+    static String parseRepoRef(String input) {
+        String text = input == null ? "" : input.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        // git@github.com:owner/repo.git 형태도 받는다.
+        text = text.replaceFirst("^git@github\\.com:", "https://github.com/");
+        text = text.replaceFirst("^(https?://)?(www\\.)?github\\.com/", "");
+        text = text.replaceFirst("\\.git$", "");
+        // /tree/main, /issues 처럼 뒤에 붙은 경로를 떼어 낸다.
+        String[] parts = text.split("/");
+        if (parts.length < 2) {
+            return null;
+        }
+        String ref = parts[0] + "/" + parts[1];
+        return FULL_NAME.matcher(ref).matches() ? ref : null;
+    }
+
     @Transactional
     public Repo register(Long userId, String fullName) {
-        String normalized = fullName == null ? "" : fullName.trim();
-        if (!FULL_NAME.matcher(normalized).matches()) {
-            throw ApiException.badRequest("INVALID_FULL_NAME", "owner/repo 형식으로 입력해 주세요.");
+        String normalized = parseRepoRef(fullName);
+        if (normalized == null) {
+            throw ApiException.badRequest(
+                    "INVALID_FULL_NAME",
+                    "GitHub 주소를 붙여 넣어 주세요. 예) https://github.com/owner/repo");
         }
         if (repoRepository.existsByFullName(normalized)) {
             throw ApiException.conflict("REPO_ALREADY_REGISTERED", "이미 등록된 리포입니다.");
