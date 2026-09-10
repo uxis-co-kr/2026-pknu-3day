@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -64,6 +65,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(new ApiError(
                         "MISSING_PARAMETER", "%s 파라미터가 필요합니다.".formatted(e.getParameterName())));
+    }
+
+    /**
+     * 경로는 맞는데 메서드가 다른 경우. 500 "서버 오류" 로 뭉뚱그리면 화면과 서버의 규약이
+     * 어긋난 것을 알아채기 어렵다. 무엇을 받는지 그대로 알려 준다.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiError> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException e) {
+        log.warn("허용되지 않은 메서드: {} (가능: {})", e.getMethod(), e.getSupportedHttpMethods());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(new ApiError(
+                        "METHOD_NOT_ALLOWED",
+                        "%s 로는 부를 수 없는 경로입니다.".formatted(e.getMethod())));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

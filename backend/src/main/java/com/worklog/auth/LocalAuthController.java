@@ -8,8 +8,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -76,8 +77,11 @@ public class LocalAuthController {
 
     /**
      * 비밀번호 변경. 최초 비밀번호는 발급자가 알고 있으므로 처음 로그인하면 반드시 바꾸게 한다.
+     *
+     * <p>화면은 POST 로 부른다(hooks.ts / mockServer.ts). PUT 도 함께 받는다 — 한쪽만 열어 두면
+     * 변경이 405 로 막히고, 그 계정은 로그인할 때마다 강제 변경 화면으로 되돌아온다.
      */
-    @PutMapping("/me/password")
+    @RequestMapping(value = "/me/password", method = {RequestMethod.POST, RequestMethod.PUT})
     @Transactional
     public ChangePasswordResponse changePassword(
             @AuthenticationPrincipal AuthenticatedUser principal,
@@ -88,25 +92,23 @@ public class LocalAuthController {
                 .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
 
         if (user.getPasswordHash() == null) {
-            throw ApiException.badRequest(
-                    "NO_LOCAL_PASSWORD", "이 계정은 GitHub 으로 로그인합니다. 바꿀 비밀번호가 없습니다.");
+            throw reject(user, "NO_LOCAL_PASSWORD", "이 계정은 GitHub 으로 로그인합니다. 바꿀 비밀번호가 없습니다.");
         }
         if (!PasswordHasher.matches(request.currentPassword(), user.getPasswordHash())) {
+            log.info("{} 비밀번호 변경 거절: INVALID_CREDENTIALS", user.getLoginId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "현재 비밀번호가 올바르지 않습니다.");
         }
         if (request.newPassword().length() < MIN_PASSWORD_LENGTH) {
-            throw ApiException.badRequest(
-                    "PASSWORD_TOO_SHORT",
-                    "비밀번호는 " + MIN_PASSWORD_LENGTH + "자 이상이어야 합니다.");
+            throw reject(
+                    user, "PASSWORD_TOO_SHORT", "비밀번호는 " + MIN_PASSWORD_LENGTH + "자 이상이어야 합니다.");
         }
         // 사원번호는 사원 목록 API 로 누구나 조회할 수 있어 비밀이 아니다 (TODO_0910 §1-1).
         if (request.newPassword().equals(user.getLoginId())) {
-            throw ApiException.badRequest(
-                    "PASSWORD_IS_LOGIN_ID", "사원번호와 같은 비밀번호는 쓸 수 없습니다.");
+            throw reject(user, "PASSWORD_IS_LOGIN_ID", "사원번호와 같은 비밀번호는 쓸 수 없습니다.");
         }
         if (PasswordHasher.matches(request.newPassword(), user.getPasswordHash())) {
-            throw ApiException.badRequest("PASSWORD_UNCHANGED", "지금 쓰는 비밀번호와 다르게 정해 주세요.");
+            throw reject(user, "PASSWORD_UNCHANGED", "지금 쓰는 비밀번호와 다르게 정해 주세요.");
         }
 
         user.setPasswordHash(PasswordHasher.hash(request.newPassword()));
@@ -114,6 +116,15 @@ public class LocalAuthController {
         userRepository.save(user);
         log.info("{} 비밀번호 변경", user.getLoginId());
         return new ChangePasswordResponse(true);
+    }
+
+    /**
+     * 변경이 거절된 이유를 남긴다. 최초 로그인 강제 변경을 통과하지 못하면 로그인할 때마다
+     * 같은 화면으로 되돌아오는데, 성공만 기록하면 왜 막혔는지 볼 방법이 없다.
+     */
+    private ApiException reject(User user, String code, String message) {
+        log.info("{} 비밀번호 변경 거절: {}", user.getLoginId(), code);
+        return ApiException.badRequest(code, message);
     }
 
     public record LoginRequest(@NotBlank String loginId, @NotBlank String password) {}
