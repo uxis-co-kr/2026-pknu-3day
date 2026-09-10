@@ -2,51 +2,46 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock, FileDiff, ListTodo, NotebookPen } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
-import UserCardHeader from '@/components/day/UserCardHeader'
 import SummaryCard from '@/components/common/SummaryCard'
 import DiffStat from '@/components/common/DiffStat'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useActivities, useDailyStats, useDrafts, useGenerateDraft, useRepos, useSessions } from '@/api/hooks'
+import { DraftStatusBadge } from '@/components/common/StatusBadge'
+import { Button } from '@/components/ui/button'
+import { useDailyStats, useDrafts, useGenerateDraft, useMe, useRepos, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatRelative, formatTime } from '@/lib/date'
-import type { UserRef, VscodeSession } from '@/types/api'
+import type { VscodeSession } from '@/types/api'
 
 /**
- * VS 내역 — VS Code 확장이 보낸 그날의 작업.
+ * VS 내역 — VS Code 확장이 보낸 **내** 작업.
  *
  * <p>GitHub 활동과 나란한 **초안의 다른 한 갈래**다 (PRD F3). 커밋 전 작업이라 GitHub 쪽에는
- * 아무 흔적이 없다.
+ * 아무 흔적이 없다. 팀원 전체는 관리자 콘솔이 맡는다 (9/10 회의).
  */
 export default function VscodePage() {
   const { date } = useSelectedDate()
   const navigate = useNavigate()
 
+  const { data: me } = useMe()
   const stats = useDailyStats(date)
-  const sessions = useSessions({ date })
-  const drafts = useDrafts({ date })
+  const sessions = useSessions({ date, userId: me?.id })
+  const drafts = useDrafts({ date, userId: me?.id })
   const repos = useRepos()
-  // 사용자 이름은 활동에만 실려 온다. 세션에는 userId 뿐이라 여기서 이름을 얻는다.
-  const activities = useActivities({ date })
   const generate = useGenerateDraft()
 
   const [repoFilter, setRepoFilter] = useState('all')
-  const [userFilter, setUserFilter] = useState('all')
-
-  const users = new Map<number, UserRef>()
-  for (const a of activities.data?.items ?? []) if (a.user) users.set(a.user.id, a.user)
 
   const shown = (sessions.data ?? []).filter((s) =>
-    (repoFilter === 'all' || s.repo?.id === Number(repoFilter)) &&
-    (userFilter === 'all' || s.userId === Number(userFilter)))
+    s.userId === me?.id && (repoFilter === 'all' || s.repo?.id === Number(repoFilter)))
 
-  /** 세션은 사용자별로 묶는다. 한 사람이 저장소를 여럿 열어 두면 세션도 여럿이다. */
-  const byUser = new Map<number, VscodeSession[]>()
-  for (const s of shown) byUser.set(s.userId, [...(byUser.get(s.userId) ?? []), s])
+  const draft = drafts.data?.[0]
+  const files = shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)
 
-  async function onGenerate(userId: number) {
-    const draft = await generate.mutateAsync({ date, userId })
-    if (draft && 'id' in draft) navigate(`/drafts/${draft.id}`)
+  async function onGenerate() {
+    if (!me) return
+    const created = await generate.mutateAsync({ date, userId: me.id })
+    if (created && 'id' in created) navigate(`/drafts/${created.id}`)
   }
 
   const s = stats.data
@@ -58,45 +53,43 @@ export default function VscodePage() {
           [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="세션" value={s.sessions} hint={`${byUser.size}명`} />
-            <SummaryCard label="미커밋 파일" value={shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)} hint="—" />
+            <SummaryCard label="내 세션" value={shown.length} hint={`팀 전체 ${s.sessions}`} />
+            <SummaryCard label="미커밋 파일" value={files} hint={files > 0 ? '커밋 전 작업입니다' : '—'} />
             <SummaryCard label="6시간 이상 미커밋" value={s.staleSessions}
               hint={s.staleSessions > 0 ? '⚠ 커밋을 권합니다' : '—'} warn={s.staleSessions > 0} />
           </>
         )}
       </div>
 
-      <DayFilters
-        repos={repos.data ?? []}
-        users={[...users.values()]}
-        repoFilter={repoFilter}
-        userFilter={userFilter}
-        onRepo={setRepoFilter}
-        onUser={setUserFilter}
-      />
-
-      <div className="space-y-3">
-        {[...byUser.entries()].map(([userId, list]) => (
-          <Card key={userId} className="overflow-hidden rounded-lg shadow-none">
-            <UserCardHeader
-              user={users.get(userId)}
-              userId={userId}
-              summary={`세션 ${list.length} · 미커밋 ${list.reduce((n, x) => n + x.uncommittedFiles.length, 0)}파일`}
-              draft={drafts.data?.find((d) => d.userId === userId)}
-              busy={generate.isPending}
-              onOpenDraft={(id) => navigate(`/drafts/${id}`)}
-              onGenerate={(id) => void onGenerate(id)}
-            />
-            {list.map((session) => <SessionDetail key={session.id} session={session} />)}
-          </Card>
-        ))}
-
-        {!sessions.isLoading && byUser.size === 0 && (
-          <Card className="rounded-lg p-10 text-center text-[13px] text-muted-foreground shadow-none">
-            이 날짜에는 VS Code 에서 보낸 작업이 없습니다.
-          </Card>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
+        <div className="flex items-center gap-3">
+          {draft && <DraftStatusBadge status={draft.status} />}
+          {draft ? (
+            <Button variant="outline" size="sm" className="h-[34px]" onClick={() => navigate(`/drafts/${draft.id}`)}>
+              초안 열기
+            </Button>
+          ) : (
+            <Button size="sm" className="h-[34px]" disabled={generate.isPending} onClick={() => void onGenerate()}>
+              초안 생성
+            </Button>
+          )}
+        </div>
       </div>
+
+      <Card className="overflow-hidden rounded-lg shadow-none">
+        {shown.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <p className="text-[13px] text-muted-foreground">이 날짜에는 VS Code 에서 보낸 작업이 없습니다.</p>
+            <p className="mx-auto mt-2 max-w-[420px] text-[12px] leading-relaxed text-muted-foreground/70">
+              VS Code 에서 <strong>WorkLog: 지금 전송</strong> 을 누르거나, 확장 사이드바의 전송 버튼을 쓰면
+              여기에 나타납니다.
+            </p>
+          </div>
+        ) : (
+          shown.map((session) => <SessionDetail key={session.id} session={session} />)
+        )}
+      </Card>
     </div>
   )
 }

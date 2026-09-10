@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ActivityDetailRow from '@/components/activity/ActivityDetailRow'
 import DayFilters from '@/components/day/DayFilters'
-import UserCardHeader from '@/components/day/UserCardHeader'
 import SummaryCard from '@/components/common/SummaryCard'
+import { DraftStatusBadge } from '@/components/common/StatusBadge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useActivities, useDailyStats, useDrafts, useGenerateDraft, useRepos } from '@/api/hooks'
+import { useActivities, useDailyStats, useDrafts, useGenerateDraft, useMe, useRepos } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { cn } from '@/lib/utils'
-import type { ActivityType, UserRef } from '@/types/api'
+import type { ActivityType } from '@/types/api'
 
 const TYPE_TABS: { key: ActivityType; label: string }[] = [
   { key: 'COMMIT', label: '커밋' },
@@ -18,135 +19,123 @@ const TYPE_TABS: { key: ActivityType; label: string }[] = [
 ]
 
 /**
- * 깃허브 내역 — 그날의 GitHub 활동을 사용자별로 본다.
+ * 깃허브 내역 — **내** GitHub 활동을 날짜별로 본다.
  *
- * <p>VS 활동은 별도 메뉴로 나갔다. 초안은 여기서 "생성" 을 눌렀을 때 서버가 GitHub 활동과
- * VS 세션을 **함께** 모아 만든다 (PRD F3).
+ * <p>팀원 전체 내역은 관리자 콘솔이 맡는다 (9/10 회의). 그래서 사용자 필터도, 사람별
+ * 카드도 없다.
  */
 export default function GithubPage() {
   const { date } = useSelectedDate()
   const navigate = useNavigate()
 
+  const { data: me } = useMe()
   const stats = useDailyStats(date)
-  const activities = useActivities({ date })
-  const drafts = useDrafts({ date })
+  const activities = useActivities({ date, userId: me?.id })
+  const drafts = useDrafts({ date, userId: me?.id })
   const repos = useRepos()
   const generate = useGenerateDraft()
 
   const [repoFilter, setRepoFilter] = useState('all')
-  const [userFilter, setUserFilter] = useState('all')
   const [types, setTypes] = useState<ActivityType[]>(TYPE_TABS.map((t) => t.key))
 
   // 서버는 최신순으로 주는데 타임라인은 시간순이다 (아트보드 2: 10:12 → 16:30).
-  const all = [...(activities.data?.items ?? [])].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+  const mine = [...(activities.data?.items ?? [])]
+    .filter((a) => a.user?.id === me?.id)
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
 
-  /** 사용자 이름은 활동에만 실려 온다. 가입하지 않은 계정의 활동은 user 가 null 이다 (PRD F1-5). */
-  const users = useMemo(() => {
-    const map = new Map<number, UserRef>()
-    for (const a of all) if (a.user && !map.has(a.user.id)) map.set(a.user.id, a.user)
-    return map
-  }, [all])
+  const shown = mine.filter((a) =>
+    types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter)))
 
-  const shown = all.filter((a) =>
-    a.user !== null &&
-    types.includes(a.type) &&
-    (repoFilter === 'all' || a.repo.id === Number(repoFilter)) &&
-    (userFilter === 'all' || a.user.id === Number(userFilter)))
+  /** 요약 카드는 팀 총계가 아니라 내 것이다. */
+  const myStat = stats.data?.byUser.find((u) => u.userId === me?.id)
+  const draft = drafts.data?.[0]
 
-  const rows = (stats.data?.byUser ?? [])
-    .map((u) => ({
-      stat: u,
-      user: users.get(u.userId),
-      activities: shown.filter((a) => a.user?.id === u.userId),
-      draft: drafts.data?.find((d) => d.userId === u.userId),
-    }))
-    .filter((r) => userFilter === 'all' || r.stat.userId === Number(userFilter))
-
-  async function onGenerate(userId: number) {
-    const draft = await generate.mutateAsync({ date, userId })
-    if (draft && 'id' in draft) navigate(`/drafts/${draft.id}`)
+  async function onGenerate() {
+    if (!me) return
+    const created = await generate.mutateAsync({ date, userId: me.id })
+    if (created && 'id' in created) navigate(`/drafts/${created.id}`)
   }
-
-  const s = stats.data
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        {stats.isLoading || !s ? (
+        {stats.isLoading ? (
           TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
         ) : (
           <>
-            <SummaryCard label="커밋" value={s.commits}
-              hint={s.commitsDelta === 0 ? '어제와 같음' : `어제 대비 ${s.commitsDelta > 0 ? '+' : ''}${s.commitsDelta}`} />
-            <SummaryCard label="PR" value={s.prs} hint={`열림 ${s.prs} · 머지 ${s.merges}`} />
-            <SummaryCard label="머지" value={s.merges} hint="—" />
+            <SummaryCard label="내 커밋" value={myStat?.commits ?? 0} hint={`팀 전체 ${stats.data?.commits ?? 0}`} />
+            <SummaryCard label="내 PR" value={myStat?.prs ?? 0} hint={`팀 전체 ${stats.data?.prs ?? 0}`} />
+            <SummaryCard label="내 머지" value={myStat?.merges ?? 0} hint={`팀 전체 ${stats.data?.merges ?? 0}`} />
           </>
         )}
       </div>
 
-      <DayFilters
-        repos={repos.data ?? []}
-        users={[...users.values()]}
-        repoFilter={repoFilter}
-        userFilter={userFilter}
-        onRepo={setRepoFilter}
-        onUser={setUserFilter}
-      >
-        <div className="flex h-[34px] overflow-hidden rounded-md border">
-          {TYPE_TABS.map((t, i) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])}
-              className={cn(
-                'px-3 text-[13px] transition-colors',
-                i > 0 && 'border-l',
-                types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="flex items-center justify-between gap-3">
+        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter}>
+          <div className="flex h-[34px] overflow-hidden rounded-md border">
+            {TYPE_TABS.map((t, i) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])}
+                className={cn(
+                  'px-3 text-[13px] transition-colors',
+                  i > 0 && 'border-l',
+                  types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </DayFilters>
+
+        <div className="flex items-center gap-3">
+          {draft && <DraftStatusBadge status={draft.status} />}
+          {draft ? (
+            <Button variant="outline" size="sm" className="h-[34px]" onClick={() => navigate(`/drafts/${draft.id}`)}>
+              초안 열기
+            </Button>
+          ) : (
+            <Button size="sm" className="h-[34px]" disabled={generate.isPending} onClick={() => void onGenerate()}>
+              초안 생성
+            </Button>
+          )}
         </div>
-      </DayFilters>
-
-      <div className="space-y-3">
-        {rows.map(({ stat, user, activities: acts, draft }) => (
-          <Card key={stat.userId} className="overflow-hidden rounded-lg shadow-none">
-            <UserCardHeader
-              user={user}
-              userId={stat.userId}
-              summary={[`커밋 ${stat.commits}`, stat.prs > 0 && `PR ${stat.prs}`, stat.merges > 0 && `머지 ${stat.merges}`]
-                .filter(Boolean).join(' · ')}
-              draft={draft}
-              busy={generate.isPending}
-              onOpenDraft={(id) => navigate(`/drafts/${id}`)}
-              onGenerate={(id) => void onGenerate(id)}
-            />
-            {acts.length === 0 ? (
-              <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">표시할 활동이 없습니다.</p>
-            ) : (
-              acts.map((a) => <ActivityDetailRow key={a.id} activity={a} />)
-            )}
-          </Card>
-        ))}
-
-        {/*
-          * 총계 = byUser 합계 + unmapped 다. 가입하지 않은 외부 기여자의 활동은 어느 사용자
-          * 카드에도 붙지 않아 요약 카드 숫자와 타임라인이 어긋나 보인다. 있을 때만 설명한다.
-          */}
-        {(s?.unmapped?.commits ?? 0) > 0 && (
-          <p className="px-1 text-[12px] text-muted-foreground">
-            사용자에 연결되지 않은 활동 {s!.unmapped.commits}건은 타임라인에 표시되지 않습니다.
-          </p>
-        )}
-
-        {!stats.isLoading && rows.length === 0 && (
-          <Card className="rounded-lg p-10 text-center text-[13px] text-muted-foreground shadow-none">
-            이 날짜에는 기록된 GitHub 활동이 없습니다.
-          </Card>
-        )}
       </div>
+
+      <Card className="overflow-hidden rounded-lg shadow-none">
+        {activities.isLoading ? (
+          <div className="space-y-2 p-4"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+        ) : shown.length === 0 ? (
+          <EmptyHint hasAny={mine.length > 0} />
+        ) : (
+          shown.map((a) => <ActivityDetailRow key={a.id} activity={a} />)
+        )}
+      </Card>
+    </div>
+  )
+}
+
+/**
+ * 비어 있을 때의 안내.
+ *
+ * <p>수집기는 **기본 브랜치의 커밋만** 가져온다 (`GET /repos/{o}/{r}/commits` 에 sha 를
+ * 주지 않는다). 작업 브랜치에만 있는 커밋은 머지되기 전까지 여기 뜨지 않는다.
+ * 빈 화면을 보고 "수집이 고장났나" 로 오해하지 않도록 적어 둔다 (TODO_0910 §3-5).
+ */
+function EmptyHint({ hasAny }: { hasAny: boolean }) {
+  return (
+    <div className="px-6 py-12 text-center">
+      <p className="text-[13px] text-muted-foreground">
+        {hasAny ? '이 필터에 맞는 활동이 없습니다.' : '이 날짜에는 내 GitHub 활동이 없습니다.'}
+      </p>
+      {!hasAny && (
+        <p className="mx-auto mt-2 max-w-[440px] text-[12px] leading-relaxed text-muted-foreground/70">
+          커밋을 했는데도 비어 있다면, 아직 <strong>기본 브랜치에 머지되지 않았기</strong> 때문일 수 있습니다.
+          수집기는 기본 브랜치의 커밋만 가져옵니다. 작업 중인 내용은 <strong>VS 내역</strong>에서 볼 수 있습니다.
+        </p>
+      )}
     </div>
   )
 }
