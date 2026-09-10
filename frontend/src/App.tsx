@@ -14,7 +14,6 @@ const DraftEditorPage = lazy(() => import('@/pages/DraftEditorPage'))
 const DraftsPage = lazy(() => import('@/pages/DraftsPage'))
 // 메뉴에서는 빠졌지만 경로는 남긴다 — 관리자 콘솔의 "팀원 전체 내역" 이 이 화면을 재사용한다.
 const PeoplePage = lazy(() => import('@/pages/PeoplePage'))
-const AdminPage = lazy(() => import('@/pages/AdminPage'))
 
 // 관리자 콘솔 (TODO_0910 1-3, 담당자 2). 서비스 화면과 레이아웃이 다르고
 // 관리자만 들어가므로 통째로 떼어 낸다.
@@ -48,14 +47,14 @@ export default function App() {
           <Route path="/drafts" element={<DraftsPage />} />
           <Route path="/drafts/:id" element={<DraftEditorPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
           {/* 옛 경로 → 새 자리 */}
           <Route path="/" element={<Navigate to="/github" replace />} />
           <Route path="/repos" element={<Navigate to="/settings" replace />} />
           <Route path="/people" element={<PeoplePage />} />
         </Route>
 
-          {/* 관리자 콘솔 — AppLayout 을 쓰지 않는 별도 화면 (TODO_0910 1-3) */}
+          {/* 관리자 콘솔 — AppLayout 을 쓰지 않는 별도 화면 (TODO_0910 1-3).
+              담당자 1 이 만들어 둔 뼈대(AdminPage)를 이 콘솔이 대신한다. */}
           <Route path="/admin" element={<AdminShell />}>
             <Route index element={<AdminOverviewPage />} />
             <Route path="people" element={<AdminPeoplePage />} />
