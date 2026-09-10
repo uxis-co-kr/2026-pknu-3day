@@ -8,6 +8,7 @@ import com.worklog.config.ApiException;
 import com.worklog.llm.LlmSettingService;
 import com.worklog.notify.NotifySetting;
 import com.worklog.notify.NotifySettingRepository;
+import com.worklog.notify.MattermostNotifier;
 import com.worklog.notify.Notifier;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -155,6 +156,13 @@ public class AdminController {
         if (url == null) {
             throw ApiException.badRequest(
                     "WEBHOOK_NOT_SET", "웹훅 주소를 입력하거나 먼저 저장해 주세요.");
+        }
+
+        if (!MattermostNotifier.looksLikeWebhookUrl(url)) {
+            throw ApiException.badRequest(
+                    "NOT_A_WEBHOOK_URL",
+                    "Incoming Webhook 주소가 아닙니다. 채널을 연 브라우저 주소가 아니라 "
+                            + "Mattermost 통합 > Incoming Webhooks 에서 만든 \".../hooks/...\" 주소를 넣어 주세요.");
         }
 
         String text = "✅ WorkLog Drafter 연결 확인 — %s 님이 관리자 콘솔에서 보냈습니다."

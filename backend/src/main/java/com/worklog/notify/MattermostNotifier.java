@@ -26,6 +26,22 @@ public class MattermostNotifier implements Notifier {
         this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
+    /**
+     * Incoming Webhook 주소인지 모양으로 판별한다.
+     *
+     * <p>채널을 브라우저에서 연 주소({@code .../<팀>/channels/<채널>})를 그대로 넣는 실수가
+     * 잦다. 그 주소로 POST 하면 서버는 살아 있으니 연결은 되고 404 만 돌아와서, 무엇이
+     * 잘못됐는지 알기 어렵다. 보내기 전에 걸러 낸다.
+     */
+    public static boolean looksLikeWebhookUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        String trimmed = url.trim();
+        return (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+                && trimmed.contains("/hooks/");
+    }
+
     @Override
     public boolean send(String webhookUrl, String text) {
         if (webhookUrl == null || webhookUrl.isBlank()) {
