@@ -45,6 +45,10 @@ public interface VscodeSessionRepository extends JpaRepository<VscodeSession, Lo
     @Query("select s.user.id, count(s) from VscodeSession s where s.workDate = :workDate group by s.user.id")
     List<Object[]> countByUser(@Param("workDate") LocalDate workDate);
 
+    /** 관리자 콘솔 — 사용자별 전체 세션 수. 확장을 실제로 쓰고 있는지 판단한다. */
+    @Query("select s.user.id, count(s) from VscodeSession s group by s.user.id")
+    List<Object[]> countAllByUser();
+
     /**
      * 마지막 커밋이 오래된 세션 수 (PRD 7. staleSessions, F7-2 리마인드와 같은 기준).
      * 커밋 이력이 아예 없는 세션도 방치로 본다.

@@ -29,7 +29,12 @@ public record PeopleDirectoryResponse(
 
     /**
      * @param githubLinked GitHub 활성화 상태. 토큰이 있어야 수집기가 그 사람 리포를 읽는다
+     * @param vscodeLinked 확장이 <b>실제로 보낸 적</b>이 있는지. 키만 발급하고 쓰지 않는 경우가
+     *     흔해서, 키 유무가 아니라 세션이 들어왔는지로 판정한다
+     * @param apiKeyCount 발급한 API Key 수. 키는 있는데 세션이 없으면 "발급만 함" 이다
+     * @param sessionCount 확장이 보낸 세션 수
      * @param activityCount 수집된 활동 수 — 실제로 쓰고 있는지 판단하는 값
+     * @param repos 이 사람이 등록한 리포. 행을 펼치면 보인다
      */
     public record AccountRow(
             Long userId,
@@ -38,9 +43,26 @@ public record PeopleDirectoryResponse(
             String avatarUrl,
             String role,
             boolean githubLinked,
+            boolean vscodeLinked,
+            long apiKeyCount,
+            long sessionCount,
             Long empSeq,
             long activityCount,
-            OffsetDateTime joinedAt) {}
+            OffsetDateTime joinedAt,
+            List<RepoRow> repos) {}
+
+    /**
+     * 그 사람이 등록한 리포 (PRD F1 — 등록자의 토큰으로 수집한다).
+     *
+     * @param activityCount 이 리포에서 그 사람 앞으로 잡힌 활동 수
+     */
+    public record RepoRow(
+            Long repoId,
+            String fullName,
+            String defaultBranch,
+            OffsetDateTime lastSyncedAt,
+            String syncStatus,
+            long activityCount) {}
 
     /**
      * 커밋 author 로만 남은 GitHub 계정 (PRD F1-5).

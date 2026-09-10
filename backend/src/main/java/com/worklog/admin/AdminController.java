@@ -1,11 +1,17 @@
 package com.worklog.admin;
 
+import com.worklog.activity.ActivityRepository;
+import com.worklog.activity.SummaryStatus;
 import com.worklog.admin.dto.PeopleDirectoryResponse;
 import com.worklog.auth.AuthenticatedUser;
 import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.config.ApiException;
+import com.worklog.github.GitHubCollector;
+import com.worklog.github.Repo;
+import com.worklog.github.RepoRepository;
 import com.worklog.llm.LlmSettingService;
+import com.worklog.llm.SummaryService;
 import com.worklog.notify.NotifySetting;
 import com.worklog.notify.NotifySettingRepository;
 import com.worklog.notify.MattermostNotifier;
@@ -18,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,18 +47,30 @@ public class AdminController {
     private final LlmSettingService llmSettingService;
     private final UserRepository userRepository;
     private final Notifier notifier;
+    private final ActivityRepository activityRepository;
+    private final RepoRepository repoRepository;
+    private final GitHubCollector collector;
+    private final SummaryService summaryService;
 
     public AdminController(
             PeopleDirectoryService directoryService,
             NotifySettingRepository notifySettingRepository,
             LlmSettingService llmSettingService,
             UserRepository userRepository,
-            Notifier notifier) {
+            Notifier notifier,
+            ActivityRepository activityRepository,
+            RepoRepository repoRepository,
+            GitHubCollector collector,
+            SummaryService summaryService) {
         this.directoryService = directoryService;
         this.notifySettingRepository = notifySettingRepository;
         this.llmSettingService = llmSettingService;
         this.userRepository = userRepository;
         this.notifier = notifier;
+        this.activityRepository = activityRepository;
+        this.repoRepository = repoRepository;
+        this.collector = collector;
+        this.summaryService = summaryService;
     }
 
     /** 콘솔 첫 화면이 무엇을 보여 줄 수 있는지 알려 준다. */
@@ -59,6 +78,18 @@ public class AdminController {
     @Transactional(readOnly = true)
     public OverviewResponse overview(@AuthenticationPrincipal AuthenticatedUser principal) {
         PeopleDirectoryResponse directory = directoryService.directory();
+        long pending = 0;
+        long failed = 0;
+        for (Object[] row : activityRepository.countBySummaryStatus()) {
+            SummaryStatus status = (SummaryStatus) row[0];
+            long count = (Long) row[1];
+            if (status == SummaryStatus.PENDING) {
+                pending = count;
+            } else if (status == SummaryStatus.FAILED) {
+                failed = count;
+            }
+        }
+        List<Repo> repos = repoRepository.findAllWithRegistrant();
         return new OverviewResponse(
                 principal.login(),
                 userRepository.count(),
@@ -66,7 +97,38 @@ public class AdminController {
                 directory.unclaimedContributors().size(),
                 directory.wapleConfigured(),
                 globalWebhookConfigured(),
-                llmSettingService.get(principal.id()).provider());
+                llmSettingService.get(principal.id()).provider(),
+                repos.size(),
+                repos.stream().filter(r -> collector.isSyncing(r.getId())).count(),
+                repos.stream().anyMatch(r -> r.getLastSyncStatus() != com.worklog.github.SyncStatus.OK),
+                activityRepository.count(),
+                pending,
+                failed);
+    }
+
+    /**
+     * 등록된 리포를 한꺼번에 동기화한다 (TODO_0910 §1-2 "전체 동기화").
+     *
+     * <p>지금은 리포 관리 화면에서 한 건씩 눌러야 한다. 리포가 늘면 손이 많이 가고,
+     * 무엇보다 "지금 전부 최신인가" 를 한 번에 맞출 방법이 없다.
+     */
+    @PostMapping("/repos/sync-all")
+    public SyncAllResponse syncAll(
+            @RequestParam(defaultValue = "false") boolean full) {
+        List<Repo> repos = repoRepository.findAllWithRegistrant();
+        repos.forEach(repo -> collector.syncAsync(repo.getId(), full));
+        return new SyncAllResponse(repos.size(), full);
+    }
+
+    /**
+     * 요약을 한 번 더 돌린다.
+     *
+     * <p>스케줄러가 1분마다 돌지만, 모델을 바꾼 직후나 실패가 쌓였을 때 기다리지 않고
+     * 확인하려면 손으로 밀 수 있어야 한다.
+     */
+    @PostMapping("/summaries/run")
+    public SummaryRunResponse runSummaries() {
+        return new SummaryRunResponse(summaryService.runOnce());
     }
 
     /** 회사 직원 목록 + GitHub 활성화 상태 (§1-3 넷째). */
@@ -120,6 +182,9 @@ public class AdminController {
     @PutMapping("/settings/notify")
     @Transactional
     public GlobalNotifyResponse updateGlobalNotify(@RequestBody GlobalNotifyRequest request) {
+        // 시험 전송만 막아 두면, 시험은 성공해도 엉뚱한 주소가 저장된 채로 남는다.
+        requireWebhookShape(request.mattermostWebhookUrl());
+
         NotifySetting setting = notifySettingRepository.findGlobal().orElseGet(NotifySetting::new);
         setting.setUser(null); // 전역 행은 user_id 가 null 이다 (V1 스키마에서 1건으로 제한)
         setting.setMattermostWebhookUrl(blankToNull(request.mattermostWebhookUrl()));
@@ -158,12 +223,7 @@ public class AdminController {
                     "WEBHOOK_NOT_SET", "웹훅 주소를 입력하거나 먼저 저장해 주세요.");
         }
 
-        if (!MattermostNotifier.looksLikeWebhookUrl(url)) {
-            throw ApiException.badRequest(
-                    "NOT_A_WEBHOOK_URL",
-                    "Incoming Webhook 주소가 아닙니다. 채널을 연 브라우저 주소가 아니라 "
-                            + "Mattermost 통합 > Incoming Webhooks 에서 만든 \".../hooks/...\" 주소를 넣어 주세요.");
-        }
+        requireWebhookShape(url);
 
         String text = "✅ WorkLog Drafter 연결 확인 — %s 님이 관리자 콘솔에서 보냈습니다."
                 .formatted(principal.login());
@@ -175,6 +235,18 @@ public class AdminController {
                     "메시지를 보내지 못했습니다. 주소가 맞는지, 채널이 살아 있는지 확인해 주세요.");
         }
         return new TestNotifyResponse(true, text);
+    }
+
+    /** 비어 있는 것은 허용한다 — 알림을 끄는 방법이다. 값이 있으면 웹훅 모양이어야 한다. */
+    private static void requireWebhookShape(String url) {
+        String trimmed = blankToNull(url);
+        if (trimmed == null || MattermostNotifier.looksLikeWebhookUrl(trimmed)) {
+            return;
+        }
+        throw ApiException.badRequest(
+                "NOT_A_WEBHOOK_URL",
+                "Incoming Webhook 주소가 아닙니다. 채널을 연 브라우저 주소가 아니라 "
+                        + "Mattermost 통합 > Incoming Webhooks 에서 만든 \".../hooks/...\" 주소를 넣어 주세요.");
     }
 
     private boolean globalWebhookConfigured() {
@@ -189,6 +261,12 @@ public class AdminController {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    /**
+     * @param syncingRepoCount 지금 수집 중인 리포 수
+     * @param anyRepoSyncFailed 마지막 수집이 실패한 리포가 있는지
+     * @param pendingSummaryCount 아직 요약되지 않은 활동 — 밀려 있으면 초안이 부실해진다
+     * @param failedSummaryCount 3회까지 실패해 포기한 활동
+     */
     public record OverviewResponse(
             String adminLogin,
             long accountCount,
@@ -196,7 +274,17 @@ public class AdminController {
             int unclaimedContributorCount,
             boolean wapleConfigured,
             boolean globalWebhookConfigured,
-            String llmProvider) {}
+            String llmProvider,
+            int repoCount,
+            long syncingRepoCount,
+            boolean anyRepoSyncFailed,
+            long activityCount,
+            long pendingSummaryCount,
+            long failedSummaryCount) {}
+
+    public record SyncAllResponse(int repoCount, boolean full) {}
+
+    public record SummaryRunResponse(int summarized) {}
 
     public record LinkEmployeeRequest(Long coSeq, Long empSeq) {}
 

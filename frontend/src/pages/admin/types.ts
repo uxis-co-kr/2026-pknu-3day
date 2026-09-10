@@ -13,9 +13,29 @@ export interface AdminOverview {
   wapleConfigured: boolean
   globalWebhookConfigured: boolean
   llmProvider: string
+  repoCount: number
+  /** 지금 수집 중인 리포 수 */
+  syncingRepoCount: number
+  anyRepoSyncFailed: boolean
+  activityCount: number
+  /** 아직 요약되지 않은 활동. 밀려 있으면 초안이 부실해진다 */
+  pendingSummaryCount: number
+  /** 3회까지 실패해 포기한 활동 */
+  failedSummaryCount: number
 }
 
-/** 우리 서비스 계정. 사원과 이어졌는지, GitHub 이 붙었는지가 핵심이다. */
+/** 그 사람이 등록한 리포. 사원 행을 펼치면 보인다. */
+export interface AdminRepo {
+  repoId: number
+  fullName: string
+  defaultBranch: string | null
+  lastSyncedAt: string | null
+  syncStatus: 'OK' | 'SYNCING' | 'FAILED'
+  /** 이 리포에서 그 사람 앞으로 잡힌 활동 수 */
+  activityCount: number
+}
+
+/** 우리 서비스 계정 — 그 사람이 WorkLog Drafter 에 로그인해서 생긴 것. */
 export interface AdminAccount {
   userId: number
   login: string
@@ -24,9 +44,15 @@ export interface AdminAccount {
   role: 'MEMBER' | 'ADMIN'
   /** 수집기가 이 사람 권한으로 리포를 읽을 수 있는지 */
   githubLinked: boolean
+  /** 확장이 실제로 보낸 적이 있는지. 키 유무가 아니라 세션이 들어왔는지로 본다 */
+  vscodeLinked: boolean
+  /** 발급한 API Key 수. 키는 있는데 세션이 없으면 "발급만 함" 이다 */
+  apiKeyCount: number
+  sessionCount: number
   empSeq: number | null
   activityCount: number
   joinedAt: string
+  repos: AdminRepo[]
 }
 
 /** 사내 회원(와플) 사원. account 가 null 이면 아직 서비스를 쓰지 않는 사람이다. */

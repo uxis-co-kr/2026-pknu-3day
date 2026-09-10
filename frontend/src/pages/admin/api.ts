@@ -71,3 +71,25 @@ export const useTestWebhook = () =>
         mattermostWebhookUrl,
       }),
   })
+
+/** 등록된 리포를 한꺼번에 동기화한다 (TODO_0910 §1-2 "전체 동기화"). */
+export const useSyncAllRepos = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (full: boolean) =>
+      api.post<{ repoCount: number; full: boolean }>(`/admin/repos/sync-all?full=${full}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminQk.overview })
+      void qc.invalidateQueries({ queryKey: adminQk.people })
+    },
+  })
+}
+
+/** 요약을 손으로 한 번 더 돌린다. 모델을 바꾼 직후 기다리지 않고 확인할 때 쓴다. */
+export const useRunSummaries = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<{ summarized: number }>('/admin/summaries/run'),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.overview }),
+  })
+}

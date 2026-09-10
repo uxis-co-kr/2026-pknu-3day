@@ -17,7 +17,9 @@ export default function PasswordPage() {
   const { data: me } = useMe()
   const change = useChangePassword()
 
-  const usingInitial = auth.mustChangePassword
+  // 서버(GET /me)가 답이다. 브라우저에 남은 표시만 믿으면 이미 바꾼 계정에도 안내가 뜬다.
+  // 강제하지는 않는다 (9/10 결정) — 안내 문구의 조건으로만 쓴다.
+  const usingInitial = me ? me.mustChangePassword === true : auth.mustChangePassword
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')

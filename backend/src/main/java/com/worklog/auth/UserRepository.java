@@ -13,4 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 관리자 콘솔 — 사원 번호로 이미 연결된 계정이 있는지 (TODO_0910 §1-3). */
     java.util.List<User> findByEmpSeq(Long empSeq);
+
+    /** 자체 로그인 (TODO_0910 §1-1). */
+    Optional<User> findByLoginId(String loginId);
 }
