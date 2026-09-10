@@ -9,6 +9,8 @@ public class GitHubOAuthProperties {
     private String clientId;
     private String clientSecret;
     private String scope = "read:user repo";
+    /** OAuth App 에 등록한 콜백 주소. 비우면 요청 URL 로 만든다. */
+    private String redirectUri = "";
 
     public String getClientId() {
         return clientId;
@@ -32,6 +34,14 @@ public class GitHubOAuthProperties {
 
     public void setScope(String scope) {
         this.scope = scope;
+    }
+
+    public String getRedirectUri() {
+        return redirectUri;
+    }
+
+    public void setRedirectUri(String redirectUri) {
+        this.redirectUri = redirectUri;
     }
 
     public boolean isConfigured() {

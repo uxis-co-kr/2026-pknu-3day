@@ -1,15 +1,11 @@
 package com.worklog.auth;
 
 import com.worklog.config.ApiException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
  * GitHub OAuth 로그인 (PRD F5, 7).
  *
  * <pre>
- *   GET /auth/github          → state 쿠키 발급 후 GitHub 인가 페이지로 302
- *   GET /auth/github/callback → state 검증 → code 교환 → 사용자 UPSERT → JWT 발급
+ *   GET /auth/github          → 서명한 state 를 붙여 GitHub 인가 페이지로 302
+ *   GET /auth/github/callback → state 서명·만료 검증 → code 교환 → 사용자 UPSERT → JWT 발급
  *                             → 302 {FRONTEND_URL}/auth/done?token=...
  * </pre>
+ *
+ * <p>state 는 쿠키가 아니라 서명으로 검증한다 ({@link OAuthStateCodec}). 화면 주소와 콜백 주소의
+ * 호스트가 달라도(사내 IP 로 열고 콜백은 localhost 로 등록) 쿠키에 기대지 않으니 통한다.
  */
 @RestController
 @RequestMapping("/auth/github")
@@ -35,26 +34,25 @@ public class GitHubOAuthController {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubOAuthController.class);
 
-    private static final String STATE_COOKIE = "worklog_oauth_state";
-    private static final int STATE_TTL_SECONDS = 300;
-
     private final GitHubOAuthClient client;
     private final GitHubOAuthProperties properties;
     private final UserService userService;
     private final JwtService jwtService;
     private final String frontendUrl;
-    private final SecureRandom random = new SecureRandom();
+    private final OAuthStateCodec stateCodec;
 
     public GitHubOAuthController(
             GitHubOAuthClient client,
             GitHubOAuthProperties properties,
             UserService userService,
             JwtService jwtService,
+            OAuthStateCodec stateCodec,
             @Value("${worklog.frontend-url}") String frontendUrl) {
         this.client = client;
         this.properties = properties;
         this.userService = userService;
         this.jwtService = jwtService;
+        this.stateCodec = stateCodec;
         this.frontendUrl = stripTrailingSlash(frontendUrl);
     }
 
@@ -70,10 +68,8 @@ public class GitHubOAuthController {
             throws IOException {
         requireConfigured();
 
-        String state = randomState();
-        response.addCookie(stateCookie(state, STATE_TTL_SECONDS, request.isSecure()));
-        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지 쿠키로 넘긴다.
-        response.addCookie(linkCookie(link == null ? "" : link.toString(), request.isSecure()));
+        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지 state 안에 서명해 넘긴다.
+        String state = stateCodec.issue(link);
 
         String url = AUTHORIZE_URL_PREFIX
                 + "?client_id=" + encode(properties.getClientId())
@@ -92,8 +88,6 @@ public class GitHubOAuthController {
             HttpServletResponse response)
             throws IOException {
         requireConfigured();
-        // state 쿠키는 성공하든 실패하든 재사용되지 않게 지운다.
-        response.addCookie(stateCookie("", 0, request.isSecure()));
 
         if (code == null || code.isBlank()) {
             throw new ApiException(
@@ -101,18 +95,19 @@ public class GitHubOAuthController {
                     "OAUTH_CODE_MISSING",
                     errorDescription == null ? "GitHub 이 code 를 돌려주지 않았습니다." : errorDescription);
         }
-        String expected = readStateCookie(request);
-        if (expected == null || !expected.equals(state)) {
-            log.warn("OAuth state 불일치 — CSRF 가능성. expected={}, actual={}", expected, state);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "OAUTH_STATE_MISMATCH", "로그인 요청이 유효하지 않습니다. 다시 시도해 주세요.");
-        }
+        OAuthStateCodec.Parsed parsed = stateCodec.verify(state).orElseThrow(() -> {
+            log.warn("OAuth state 검증 실패 — 서명이 다르거나 5분이 지났다. state={}", state);
+            return new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "OAUTH_STATE_MISMATCH",
+                    "로그인 요청이 유효하지 않습니다 (5분이 지났거나 주소가 손상됨). 다시 시도해 주세요.");
+        });
 
         String accessToken = client.exchangeCode(
                 code, properties.getClientId(), properties.getClientSecret(), redirectUri(request));
         GitHubOAuthClient.GitHubUserDto dto = client.fetchUser(accessToken);
 
-        Long linkTo = readLinkCookie(request);
-        response.addCookie(linkCookie("", request.isSecure()));
+        Long linkTo = parsed.linkUserId();
 
         if (linkTo != null) {
             // 이미 로그인한 계정에 붙이는 경우. 새 계정을 만들지 않는다 (TODO_0910 §1-1).
@@ -144,10 +139,14 @@ public class GitHubOAuthController {
     }
 
     /**
-     * OAuth App 에 등록한 콜백 주소와 글자까지 같아야 한다. 요청 URL 에서 만들어
-     * 포트를 바꿔 띄워도 어긋나지 않게 한다.
+     * OAuth App 에 등록한 콜백 주소와 글자까지 같아야 한다. 설정(GITHUB_REDIRECT_URI)이 있으면
+     * 그것, 없으면 요청 URL 에서 만든다 — 프록시 뒤에서는 요청 호스트가 localhost 로 보이므로,
+     * 다른 기기에서 쓰려면 설정으로 못 박는다.
      */
     private String redirectUri(HttpServletRequest request) {
+        if (properties.getRedirectUri() != null && !properties.getRedirectUri().isBlank()) {
+            return properties.getRedirectUri().trim();
+        }
         String scheme = request.getScheme();
         int port = request.getServerPort();
         boolean defaultPort = ("http".equals(scheme) && port == 80) || ("https".equals(scheme) && port == 443);
@@ -157,61 +156,6 @@ public class GitHubOAuthController {
                 + (defaultPort ? "" : ":" + port)
                 + request.getContextPath()
                 + "/auth/github/callback";
-    }
-
-    private static final String LINK_COOKIE = "worklog_oauth_link";
-
-    private Cookie linkCookie(String value, boolean secure) {
-        Cookie cookie = new Cookie(LINK_COOKIE, value);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(secure);
-        cookie.setPath("/");
-        cookie.setMaxAge(value.isEmpty() ? 0 : STATE_TTL_SECONDS);
-        return cookie;
-    }
-
-    private Long readLinkCookie(HttpServletRequest request) {
-        if (request.getCookies() == null) {
-            return null;
-        }
-        for (Cookie cookie : request.getCookies()) {
-            if (LINK_COOKIE.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
-                try {
-                    return Long.valueOf(cookie.getValue());
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-            }
-        }
-        return null;
-    }
-
-    private String randomState() {
-        byte[] bytes = new byte[24];
-        random.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private Cookie stateCookie(String value, int maxAge, boolean secure) {
-        Cookie cookie = new Cookie(STATE_COOKIE, value);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(secure);
-        cookie.setPath("/");
-        cookie.setMaxAge(maxAge);
-        return cookie;
-    }
-
-    private String readStateCookie(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return null;
-        }
-        return Arrays.stream(cookies)
-                .filter(c -> STATE_COOKIE.equals(c.getName()))
-                .map(Cookie::getValue)
-                .filter(v -> v != null && !v.isBlank())
-                .findFirst()
-                .orElse(null);
     }
 
     private static String encode(String value) {
