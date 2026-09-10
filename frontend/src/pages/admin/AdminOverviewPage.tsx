@@ -81,9 +81,9 @@ export default function AdminOverviewPage() {
                 hint={data.wapleConfigured ? '회원 조회 API 기준' : '회원 조회 API 미설정'}
               />
               <Stat
-                label="미연결 기여자"
+                label="로그인 안 한 기여자"
                 value={data.unclaimedContributorCount}
-                hint="커밋은 있으나 로그인한 적 없는 GitHub 계정"
+                hint="커밋은 있으나 이 서비스를 쓴 적 없는 GitHub 계정"
               />
             </>
           )}
@@ -128,7 +128,7 @@ export default function AdminOverviewPage() {
                 <Users2 className="size-5 text-muted-foreground" />
                 <div>
                   <p className="text-[13px] font-medium">직원 · 계정</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-[13px] text-muted-foreground">
                     누가 GitHub 을 연결했는지, 누가 빠져 있는지
                   </p>
                 </div>
@@ -140,9 +140,9 @@ export default function AdminOverviewPage() {
               <CardContent className="flex items-center gap-3 p-4">
                 <GitBranch className="size-5 text-muted-foreground" />
                 <div>
-                  <p className="text-[13px] font-medium">미연결 기여자</p>
-                  <p className="text-sm text-muted-foreground">
-                    활동은 잡히는데 사람에 붙지 않은 계정
+                  <p className="text-[13px] font-medium">로그인 안 한 기여자</p>
+                  <p className="text-[13px] text-muted-foreground">
+                    커밋은 올라오는데 누구인지 알 수 없는 계정
                   </p>
                 </div>
               </CardContent>

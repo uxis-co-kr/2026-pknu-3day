@@ -154,11 +154,11 @@ export default function AdminPeoplePage() {
             <Card>
               <CardContent className="p-4">
                 <div className="mb-1 flex items-center justify-between">
-                  <p className="text-[13px] font-medium">사원과 연결되지 않은 계정</p>
+                  <p className="text-[13px] font-medium">사원 정보가 없는 계정</p>
                   <span className="text-xs text-muted-foreground">{data.unlinkedAccounts.length}건</span>
                 </div>
                 <p className="mb-3 text-[13px] text-muted-foreground">
-                  로그인은 했지만 사내 사원과 이어지지 않은 계정입니다. 사원 번호를 넣어 이어 줍니다.
+                  로그인은 했지만 어느 사원인지 정해지지 않은 계정입니다. 사원 번호를 넣어 이어 줍니다.
                 </p>
 
                 {data.unlinkedAccounts.length === 0 ? (
@@ -194,20 +194,20 @@ export default function AdminPeoplePage() {
             <Card id="contributors">
               <CardContent className="p-4">
                 <div className="mb-1 flex items-center justify-between">
-                  <p className="text-[13px] font-medium">사람에 연결되지 않은 기여자</p>
+                  <p className="text-[13px] font-medium">아직 로그인하지 않은 기여자</p>
                   <span className="text-xs text-muted-foreground">
                     {data.unclaimedContributors.length}건
                   </span>
                 </div>
                 <p className="mb-3 text-[13px] text-muted-foreground">
-                  커밋은 수집되는데 이 서비스에 로그인한 적이 없는 GitHub 계정입니다. 이 활동은
-                  총계에는 들어가지만 사용자 카드나 업무 일지에는 나오지 않습니다. 본인이 한 번
-                  로그인하면 지난 활동까지 자동으로 이어집니다.
+                  커밋은 수집되는데 이 서비스에 로그인한 적이 없는 GitHub 계정입니다. 누구인지
+                  알 수 없어 활동이 총계에만 잡히고 사용자 카드나 업무 일지에는 나오지 않습니다.
+                  본인이 한 번 로그인하면 지난 활동까지 자동으로 이어집니다.
                 </p>
 
                 {data.unclaimedContributors.length === 0 ? (
                   <p className="py-4 text-center text-sm text-muted-foreground">
-                    모든 활동이 사람에 연결돼 있습니다.
+                    모든 기여자가 로그인했습니다.
                   </p>
                 ) : (
                   <Table>
