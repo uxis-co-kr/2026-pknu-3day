@@ -3,6 +3,7 @@ package com.worklog.admin;
 import com.worklog.activity.ActivityRepository;
 import com.worklog.activity.SummaryStatus;
 import com.worklog.admin.dto.PeopleDirectoryResponse;
+import com.worklog.chat.ChatBotSettingsService;
 import com.worklog.chat.MattermostBot;
 import com.worklog.auth.AuthenticatedUser;
 import com.worklog.auth.User;
@@ -53,6 +54,7 @@ public class AdminController {
     private final GitHubCollector collector;
     private final SummaryService summaryService;
     private final MattermostBot mattermostBot;
+    private final ChatBotSettingsService chatBotSettings;
 
     public AdminController(
             PeopleDirectoryService directoryService,
@@ -64,7 +66,8 @@ public class AdminController {
             RepoRepository repoRepository,
             GitHubCollector collector,
             SummaryService summaryService,
-            MattermostBot mattermostBot) {
+            MattermostBot mattermostBot,
+            ChatBotSettingsService chatBotSettings) {
         this.directoryService = directoryService;
         this.notifySettingRepository = notifySettingRepository;
         this.llmSettingService = llmSettingService;
@@ -75,14 +78,62 @@ public class AdminController {
         this.collector = collector;
         this.summaryService = summaryService;
         this.mattermostBot = mattermostBot;
+        this.chatBotSettings = chatBotSettings;
     }
 
     /** 콘솔 첫 화면이 무엇을 보여 줄 수 있는지 알려 준다. */
-    /** 채널 질의 응답 봇의 상태 — 켜졌는지, 로그인됐는지, 어느 채널을 보는지. */
+    // ── 채널에서 물어보기 (봇) ───────────────────────────────────────────────
+
+    /** 봇의 상태 — 켜졌는지, 로그인됐는지, 채널마다 읽는지·몇 번 답했는지. */
     @GetMapping("/chat/status")
     public java.util.Map<String, Object> chatStatus() {
         return mattermostBot.status();
     }
+
+    /** 저장된 연결 설정. 비밀번호는 돌려주지 않고 있는지만 알려 준다. */
+    @GetMapping("/chat/settings")
+    public ChatSettingsResponse chatSettings() {
+        ChatBotSettingsService.Effective e = chatBotSettings.effective();
+        return new ChatSettingsResponse(
+                e.baseUrl(), e.loginId(), e.password() != null && !e.password().isBlank(), e.enabled(), e.source());
+    }
+
+    /**
+     * 연결 — 저장하고 바로 로그인해 본다. 안 되면 400 에 이유가 실려 화면이 그대로 보여 준다.
+     * 저장만 하고 나중에 조용히 실패하면 관리자는 어디가 틀렸는지 알 길이 없다.
+     */
+    @PutMapping("/chat/settings")
+    public java.util.Map<String, Object> saveChatSettings(@RequestBody ChatSettingsRequest request) {
+        if (request.baseUrl() == null || request.baseUrl().isBlank()
+                || request.loginId() == null || request.loginId().isBlank()) {
+            throw ApiException.badRequest("CHAT_SETTINGS_INCOMPLETE", "서버 주소와 아이디를 입력해 주세요.");
+        }
+        chatBotSettings.save(request.baseUrl(), request.loginId(), request.password());
+        return mattermostBot.connectNow();
+    }
+
+    /** 연결 끊기 — 설정은 남기고 봇만 멈춘다. 다시 "연결"을 누르면 그 설정으로 붙는다. */
+    @PostMapping("/chat/disconnect")
+    public java.util.Map<String, Object> disconnectChat() {
+        chatBotSettings.setEnabled(false);
+        mattermostBot.disconnect();
+        return mattermostBot.status();
+    }
+
+    /** 채널 하나를 읽을지 말지. */
+    @PutMapping("/chat/channels/{channelId}")
+    public java.util.Map<String, Object> setChannelWatching(
+            @PathVariable String channelId, @RequestBody ChannelWatchRequest request) {
+        chatBotSettings.setWatching(channelId, request.watching(), mattermostBot.knownChannelIds());
+        return mattermostBot.status();
+    }
+
+    public record ChatSettingsResponse(
+            String baseUrl, String loginId, boolean passwordSet, boolean enabled, String source) {}
+
+    public record ChatSettingsRequest(String baseUrl, String loginId, String password) {}
+
+    public record ChannelWatchRequest(boolean watching) {}
 
     @GetMapping("/overview")
     @Transactional(readOnly = true)

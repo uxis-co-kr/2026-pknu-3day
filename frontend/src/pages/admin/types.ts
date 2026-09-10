@@ -96,15 +96,41 @@ export interface AdminLlmSettings {
   available: string[]
 }
 
+/** 봇이 들어가 있는 채널 하나. */
+export interface ChatBotChannel {
+  id: string
+  name: string
+  displayName: string
+  /** O 공개 · P 비공개 · D 개인 메시지 · G 그룹 메시지 */
+  type: 'O' | 'P' | 'D' | 'G' | string
+  /** 이 채널의 글을 읽고 답하는지 (관리자가 끌 수 있다) */
+  watching: boolean
+  answeredCount: number
+  lastAnsweredAt: string | null
+}
+
 /** `GET /admin/chat/status` — 채널에서 물어보면 답하는 봇의 상태. */
 export interface ChatBotStatus {
-  /** .env 에 봇 계정이 적혀 있는지 */
+  /** 연결 설정이 있고 켜져 있는지 */
   enabled: boolean
   /** Mattermost 로그인이 된 상태인지 */
   connected: boolean
   botUsername: string | null
-  /** 봇이 들어가 있어 읽고 있는 채널 이름들 */
-  channels: string[]
   baseUrl: string
+  loginId: string
+  /** 설정 출처 — db(콘솔에서 저장) / env(서버 .env) / none */
+  source: 'db' | 'env' | 'none'
+  lastPollAt: string | null
+  lastError: string | null
+  channels: ChatBotChannel[]
   checkedAt: string
+}
+
+/** `GET /admin/chat/settings` — 저장된 연결 설정. 비밀번호는 있는지만 알려 준다. */
+export interface ChatBotSettings {
+  baseUrl: string
+  loginId: string
+  passwordSet: boolean
+  enabled: boolean
+  source: 'db' | 'env' | 'none'
 }

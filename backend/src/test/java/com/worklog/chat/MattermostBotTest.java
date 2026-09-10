@@ -26,15 +26,16 @@ class MattermostBotTest {
     private WorkLogAnswerService answers;
     private MattermostBot bot;
 
+    private ChatBotSettingsService settings;
+
     @BeforeEach
     void setUp() {
-        MattermostBotProperties props = new MattermostBotProperties();
-        props.setBaseUrl(BASE + "/");
-        props.setLoginId("worklog-bot");
-        props.setPassword("pw");
+        settings = mock(ChatBotSettingsService.class);
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db"));
         client = mock(MattermostClient.class);
         answers = mock(WorkLogAnswerService.class);
-        bot = new MattermostBot(props, client, answers);
+        bot = new MattermostBot(settings, client, answers);
 
         when(client.login(eq(BASE), eq("worklog-bot"), eq("pw"))).thenReturn("tok");
         when(client.me(BASE, "tok")).thenReturn(new MmUser("bot-id", "worklog-bot"));
@@ -84,8 +85,51 @@ class MattermostBotTest {
     @Test
     @DisplayName("계정이 없으면 아무것도 하지 않는다")
     void disabledWithoutCredentials() {
-        MattermostBot off = new MattermostBot(new MattermostBotProperties(), client, answers);
-        off.poll();
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective("", "", null, false, null, "none"));
+        bot.poll();
         verify(client, never()).login(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("읽기를 끈 채널은 보지 않는다 — 상태에는 남아서 다시 켤 수 있다")
+    void skipsUnwatchedChannels() {
+        when(settings.effective()).thenReturn(new ChatBotSettingsService.Effective(
+                BASE, "worklog-bot", "pw", true, java.util.Set.of("other"), "db"));
+
+        bot.poll();
+
+        verify(client, never()).postsSince(any(), any(), eq("ch1"), anyLong());
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> rows =
+                (java.util.List<java.util.Map<String, Object>>) bot.status().get("channels");
+        org.assertj.core.api.Assertions.assertThat(rows).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(rows.get(0)).containsEntry("watching", false);
+    }
+
+    @Test
+    @DisplayName("연결 버튼 — 비밀번호가 틀리면 이유를 담아 400")
+    void connectNowReportsBadCredentials() {
+        when(client.login(any(), any(), any())).thenThrow(new MattermostClient.Unauthorized());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bot.connectNow())
+                .isInstanceOf(com.worklog.config.ApiException.class)
+                .hasMessageContaining("아이디 또는 비밀번호");
+    }
+
+    @Test
+    @DisplayName("설정이 바뀌면 다음 주기에 새 계정으로 다시 로그인한다")
+    void reloginsWhenSettingsChange() {
+        when(client.postsSince(any(), any(), any(), anyLong())).thenReturn(List.of());
+        bot.poll();
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "other-bot", "pw2", true, null, "db"));
+        when(client.login(BASE, "other-bot", "pw2")).thenReturn("tok2");
+        when(client.me(BASE, "tok2")).thenReturn(new MmUser("bot-id", "other-bot"));
+        when(client.myChannels(BASE, "tok2", "bot-id")).thenReturn(List.of());
+
+        bot.poll();
+
+        verify(client).login(BASE, "other-bot", "pw2");
     }
 }

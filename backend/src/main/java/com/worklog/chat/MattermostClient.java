@@ -42,13 +42,18 @@ public class MattermostClient {
 
     /** @return 세션 토큰 */
     public String login(String baseUrl, String loginId, String password) {
-        ResponseEntity<Map> res = restClient
-                .post()
-                .uri(baseUrl + "/api/v4/users/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("login_id", loginId, "password", password))
-                .retrieve()
-                .toEntity(Map.class);
+        ResponseEntity<Map> res;
+        try {
+            res = restClient
+                    .post()
+                    .uri(baseUrl + "/api/v4/users/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("login_id", loginId, "password", password))
+                    .retrieve()
+                    .toEntity(Map.class);
+        } catch (HttpClientErrorException e) {
+            throw translate(e); // 401 → Unauthorized: "아이디 또는 비밀번호가 맞지 않습니다"
+        }
         String token = res.getHeaders().getFirst("Token");
         if (token == null || token.isBlank()) {
             throw new IllegalStateException("로그인 응답에 Token 헤더가 없다.");
