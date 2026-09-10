@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -56,11 +56,18 @@ function RepoList({ account }: { account: AdminAccount }) {
       </p>
       <div className="space-y-1">
         {account.repos.map((r) => (
-          <div
+          // 리포 이름을 누르면 GitHub 으로 간다. 관리자가 "이 리포가 뭐지" 할 때 바로 볼 수 있게.
+          <a
             key={r.repoId}
-            className="flex items-center gap-3 rounded border bg-background px-3 py-2 text-[13px]"
+            href={`https://github.com/${r.fullName}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 rounded border bg-background px-3 py-2 text-[13px] transition-colors hover:border-primary/40 hover:bg-muted/40"
           >
-            <span className="font-medium">{r.fullName}</span>
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              {r.fullName}
+              <ExternalLink className="size-3 text-muted-foreground" />
+            </span>
             {r.defaultBranch && (
               <span className="text-[12px] text-muted-foreground">{r.defaultBranch}</span>
             )}
@@ -70,7 +77,7 @@ function RepoList({ account }: { account: AdminAccount }) {
               </Badge>
             )}
             <span className="ml-auto tabular-nums text-muted-foreground">활동 {r.activityCount}</span>
-          </div>
+          </a>
         ))}
       </div>
     </div>
@@ -96,6 +103,7 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
           <TableHead>서비스 계정</TableHead>
           <TableHead className="w-40">VS Code 연동</TableHead>
           <TableHead className="w-40">GitHub 연동</TableHead>
+          <TableHead className="w-20 text-right">리포</TableHead>
           <TableHead className="w-20 text-right">활동 수</TableHead>
         </TableRow>
       </TableHeader>
@@ -146,12 +154,15 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
                     <span className="text-[13px] text-muted-foreground">—</span>
                   )}
                 </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {acc ? acc.repos.length : <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{acc?.activityCount ?? 0}</TableCell>
               </TableRow>
 
               {expanded && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="bg-muted/30 p-0">
+                  <TableCell colSpan={8} className="bg-muted/30 p-0">
                     {acc ? (
                       <RepoList account={acc} />
                     ) : (
