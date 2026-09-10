@@ -33,10 +33,13 @@ function renderStatusBar(error?: string) {
   statusBar.show()
 }
 
-async function send(reason: string): Promise<void> {
+/** API Key 가 없을 때 Uploader 가 돌려주는 사유. 첫 실행 안내를 띄우는 조건이다. */
+const NO_API_KEY = 'API Key 미설정'
+
+async function send(reason: string): Promise<string | undefined> {
   if (sending) {
     log(`${reason}: 이미 전송 중이라 건너뜁니다`)
-    return
+    return undefined
   }
   sending = true
   try {
@@ -46,16 +49,33 @@ async function send(reason: string): Promise<void> {
 
     if (payloads.length === 0) {
       renderStatusBar()
-      return
+      return undefined
     }
     const result = await new Uploader({ serverUrl, apiKey }).send(payloads)
     renderStatusBar(result.ok ? undefined : result.reason)
+    return result.ok ? undefined : result.reason
   } catch (e) {
     // 여기까지 온 예외는 버그다. 확장을 죽이지는 않는다.
     log(`전송 중 예기치 못한 오류: ${e instanceof Error ? e.stack ?? e.message : String(e)}`)
     renderStatusBar('전송 실패')
+    return '전송 실패'
   } finally {
     sending = false
+  }
+}
+
+/**
+ * 설정 화면을 열어 준다. 설치 직후에는 API Key 가 비어 있어 전송이 무조건 실패하는데,
+ * 상태바 경고만으로는 무엇을 해야 하는지 알 수 없다 (BACKLOG F-6 사용자 테스트).
+ */
+async function promptForApiKey(): Promise<void> {
+  const open = '설정 열기'
+  const picked = await vscode.window.showWarningMessage(
+    'WorkLog: API Key 가 설정되지 않아 전송하지 못했습니다. 대시보드 설정 화면에서 발급한 키(wl_ 로 시작)를 넣어 주세요.',
+    open,
+  )
+  if (picked === open) {
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'worklog.apiKey')
   }
 }
 
@@ -99,12 +119,14 @@ export function activate(context: vscode.ExtensionContext): void {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.sendNow', () =>
-      vscode.window.withProgress(
+    vscode.commands.registerCommand('worklog.sendNow', async () => {
+      const failure = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Window, title: 'WorkLog 전송 중…' },
         () => send('지금 전송'),
-      ),
-    ),
+      )
+      // 사용자가 직접 누른 경우에만 안내한다. 주기·시작 전송까지 알리면 성가시다.
+      if (failure === NO_API_KEY) await promptForApiKey()
+    }),
   )
 
   context.subscriptions.push(

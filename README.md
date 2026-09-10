@@ -78,6 +78,29 @@ psql -h localhost -p 5433 -U worklog -d worklog
 
 JPA 는 `ddl-auto: validate` 라 엔티티와 스키마가 어긋나면 기동 시점에 실패한다.
 
+## VS Code 확장 설치
+
+배포용 `.vsix` 를 만들고 설치하는 경로다. 확장 자체의 사용법·설정·문제 해결은
+[vscode-extension/README.md](vscode-extension/README.md) 에 있다.
+
+```bash
+cd vscode-extension
+npm install
+npm run package        # worklog-drafter-0.1.0.vsix 생성
+```
+
+설치는 둘 중 하나로 한다.
+
+```bash
+code --install-extension worklog-drafter-0.1.0.vsix
+```
+
+또는 VS Code → 확장 패널 → 우상단 `⋯` → **Install from VSIX…**.
+
+설치 후 **API Key 를 넣어야 전송이 된다.** 대시보드 → 설정 → API Key 발급 →
+VS Code 설정(`Cmd+,`)에서 `worklog` 검색 → **Api Key** 에 붙여넣는다.
+키가 없으면 상태바에 `WorkLog: API Key 미설정` 이 뜨고, 클릭하면 설정 화면으로 안내한다.
+
 ## 브랜치
 
 | 브랜치 | 용도 |
