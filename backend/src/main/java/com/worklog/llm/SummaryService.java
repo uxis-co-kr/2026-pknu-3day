@@ -32,14 +32,17 @@ public class SummaryService {
     private final ActivityRepository activityRepository;
     private final LlmProviderResolver resolver;
     private final PromptLoader promptLoader;
+    private final LlmSettingService settingService;
 
     public SummaryService(
             ActivityRepository activityRepository,
             LlmProviderResolver resolver,
-            PromptLoader promptLoader) {
+            PromptLoader promptLoader,
+            LlmSettingService settingService) {
         this.activityRepository = activityRepository;
         this.resolver = resolver;
         this.promptLoader = promptLoader;
+        this.settingService = settingService;
     }
 
     /**
@@ -54,15 +57,34 @@ public class SummaryService {
         if (targets.isEmpty()) {
             return 0;
         }
-        LlmProvider provider = resolver.resolve();
         int done = 0;
+        // 같은 사용자의 활동이 이어지므로 설정 조회 결과를 배치 안에서 재사용한다.
+        Map<Long, LlmProvider> perUser = new HashMap<>();
         for (Activity activity : targets) {
-            if (summarize(activity, provider)) {
+            if (summarize(activity, providerFor(activity, perUser))) {
                 done++;
             }
         }
-        log.info("요약 파이프라인 — 대상 {}건, 완료 {}건 (provider={})", targets.size(), done, provider.id());
+        log.info(
+                "요약 파이프라인 — 대상 {}건, 완료 {}건 (기본 provider={})",
+                targets.size(),
+                done,
+                resolver.resolve().id());
         return done;
+    }
+
+    /**
+     * 활동 소유자의 설정 → 전역 설정 순으로 프로바이더를 고른다 (PRD F9).
+     *
+     * <p>소유자가 없는(미가입 계정) 활동은 전역 설정을 쓴다.
+     */
+    private LlmProvider providerFor(Activity activity, Map<Long, LlmProvider> cache) {
+        Long userId = activity.getUser() == null ? null : activity.getUser().getId();
+        if (userId == null) {
+            return resolver.resolve();
+        }
+        return cache.computeIfAbsent(
+                userId, id -> resolver.resolve(settingService.providerOf(id)));
     }
 
     private boolean summarize(Activity activity, LlmProvider provider) {

@@ -2,6 +2,7 @@ package com.worklog.stats;
 
 import com.worklog.config.KstDates;
 import com.worklog.stats.dto.DailyStatsResponse;
+import com.worklog.stats.dto.PeopleStatsResponse;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class StatsController {
 
     private final StatsService statsService;
+    private final PeopleStatsService peopleStatsService;
 
-    public StatsController(StatsService statsService) {
+    public StatsController(StatsService statsService, PeopleStatsService peopleStatsService) {
         this.statsService = statsService;
+        this.peopleStatsService = peopleStatsService;
     }
 
     @GetMapping("/daily")
@@ -27,5 +30,21 @@ public class StatsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate date) {
         return statsService.daily(date == null ? KstDates.today() : date);
+    }
+
+    /**
+     * 인원별 시계열 (PRD 7. GET /stats/people — P2, F10b).
+     *
+     * <p>{@code from}/{@code to} 를 생략하면 오늘까지 7일. {@code userId} 를 생략하면 전원.
+     */
+    @GetMapping("/people")
+    public PeopleStatsResponse people(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                    LocalDate to,
+            @RequestParam(defaultValue = "day") String granularity,
+            @RequestParam(required = false) Long userId) {
+        return peopleStatsService.people(from, to, Granularity.from(granularity), userId);
     }
 }

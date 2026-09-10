@@ -1,6 +1,7 @@
 package com.worklog.draft;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.config.ApiException;
 import com.worklog.draft.dto.DraftDetailResponse;
 import com.worklog.draft.dto.DraftSummaryResponse;
 import jakarta.validation.constraints.NotNull;
@@ -33,11 +34,26 @@ public class DraftController {
         this.draftService = draftService;
     }
 
+    /**
+     * 초안 목록. {@code date} 하나를 주면 그날, {@code from}·{@code to} 를 주면 그 기간이다.
+     *
+     * <p>기간 조회는 업무 일지 목록 화면이 쓴다 — 날짜 선택기로 하루씩 넘기지 않고
+     * 여러 날을 한 화면에서 본다. 기존 호출부는 {@code date} 를 그대로 쓰면 된다.
+     */
     @GetMapping
     public List<DraftSummaryResponse> list(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) DraftStatus status) {
+        if (date == null && (from == null || to == null)) {
+            throw ApiException.badRequest(
+                    "DATE_REQUIRED", "date 또는 from·to 를 함께 주어야 합니다.");
+        }
+        if (date == null) {
+            return draftService.listBetween(from, to, userId, status);
+        }
         return draftService.list(date, userId, status);
     }
 

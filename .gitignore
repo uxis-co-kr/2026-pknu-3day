@@ -3,6 +3,15 @@
 *.env
 !*.env.example
 
+# --- 사내 데이터 ---
+# 이 저장소는 공개다. 사원 이름·사번, 사내 주소, API 응답 덤프는 절대 커밋하지 않는다.
+# 응답을 파일로 받아 볼 때는 아래 이름을 쓴다.
+*.private.*
+private/
+**/employees*.json
+**/companies*.json
+*.dump.json
+
 # --- macOS ---
 .DS_Store
 
@@ -11,6 +20,9 @@
 *.iml
 .vscode/
 !.vscode/extensions.json
+# 확장 디버깅(F5) 설정은 팀이 공유한다
+!vscode-extension/.vscode/
+!vscode-extension/.vscode/launch.json
 
 # --- Gradle / Java ---
 .gradle/

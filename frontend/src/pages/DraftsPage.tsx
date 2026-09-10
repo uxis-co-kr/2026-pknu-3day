@@ -1,0 +1,147 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { CalendarDays } from 'lucide-react'
+import { DraftStatusBadge } from '@/components/common/StatusBadge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useDailyStats, useDraftRange, useDrafts, useGenerateDraft, useMe, useSessions } from '@/api/hooks'
+import { useSelectedDate } from '@/hooks/useSelectedDate'
+import { formatDateLabel, formatTime } from '@/lib/date'
+import { cn } from '@/lib/utils'
+
+const RANGES = [
+  { days: 14, label: '2주' },
+  { days: 30, label: '한 달' },
+  { days: 90, label: '3개월' },
+]
+
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * 업무 일지 작성 — 내가 쓴 일지를 **날짜별 목록**으로 본다.
+ *
+ * <p>상단 날짜 선택기로 하루씩 넘겨 보는 화면이 아니다. 지난 일지를 한눈에 훑고,
+ * 오늘 것만 위에서 만든다.
+ * <p>일지는 "생성" 을 눌렀을 때만 만들어진다. 서버가 그날의 깃허브 내역과 VS 내역을
+ * 함께 모아 쓴다 (PRD F3).
+ */
+export default function DraftsPage() {
+  const navigate = useNavigate()
+  const { date } = useSelectedDate()
+  const { data: me } = useMe()
+
+  const [days, setDays] = useState(14)
+  const list = useDraftRange({ from: daysAgo(days), to: date, userId: me?.id }, Boolean(me))
+
+  // 오늘(선택한 날짜) 몫은 따로 본다 — 아직 일지가 없으면 여기서 만든다.
+  const today = useDrafts({ date, userId: me?.id })
+  const stats = useDailyStats(date)
+  const sessions = useSessions({ date, userId: me?.id })
+  const generate = useGenerateDraft()
+
+  const todayDraft = today.data?.[0]
+  const myStat = stats.data?.byUser.find((u) => u.userId === me?.id)
+  const mySessions = (sessions.data ?? []).filter((s) => s.userId === me?.id)
+  const material = (myStat?.commits ?? 0) + (myStat?.prs ?? 0) + mySessions.length
+
+  async function onGenerate() {
+    if (!me) return
+    const created = await generate.mutateAsync({ date, userId: me.id })
+    if (created && 'id' in created) navigate(`/drafts/${created.id}`)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 선택한 날짜의 일지 — 없으면 여기서 만든다 */}
+      <Card className="flex items-center justify-between gap-4 rounded-lg p-4 shadow-none">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">{formatDateLabel(date)}</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            {todayDraft
+              ? `버전 ${todayDraft.version} · 수정 ${formatTime(todayDraft.updatedAt)}`
+              : material > 0
+                ? `근거 ${material}건 — 깃허브 내역과 VS 내역을 모아 씁니다`
+                : '이 날짜에는 일지를 만들 활동이 없습니다'}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {todayDraft && <DraftStatusBadge status={todayDraft.status} />}
+          {todayDraft ? (
+            <>
+              <Button variant="outline" size="sm" className="h-[34px]"
+                onClick={() => navigate(`/drafts/${todayDraft.id}`)}>
+                열기
+              </Button>
+              <Button variant="outline" size="sm" className="h-[34px]"
+                disabled={generate.isPending} onClick={() => void onGenerate()}>
+                재생성
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" className="h-[34px]"
+              disabled={generate.isPending || material === 0} onClick={() => void onGenerate()}>
+              업무 일지 생성
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <CalendarDays className="size-4" />
+          지난 업무 일지
+        </h2>
+        <div className="flex h-[30px] overflow-hidden rounded-md border">
+          {RANGES.map((r, i) => (
+            <button
+              key={r.days}
+              type="button"
+              onClick={() => setDays(r.days)}
+              className={cn(
+                'px-3 text-[12px] transition-colors',
+                i > 0 && 'border-l',
+                days === r.days ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Card className="overflow-hidden rounded-lg shadow-none">
+        {list.isLoading ? (
+          <div className="space-y-2 p-4"><Skeleton className="h-9" /><Skeleton className="h-9" /></div>
+        ) : (list.data ?? []).length === 0 ? (
+          <p className="px-6 py-12 text-center text-[13px] text-muted-foreground">
+            이 기간에 쓴 업무 일지가 없습니다.
+          </p>
+        ) : (
+          (list.data ?? []).map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => navigate(`/drafts/${d.id}`)}
+              className="flex w-full items-center gap-4 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/60"
+            >
+              <span className="w-[120px] shrink-0 text-[13px] font-medium tabular-nums">
+                {formatDateLabel(d.workDate)}
+              </span>
+              <DraftStatusBadge status={d.status} />
+              <span className="text-[12px] text-muted-foreground">버전 {d.version}</span>
+              <span className="min-w-0 flex-1" />
+              <span className="shrink-0 text-[12px] text-muted-foreground">
+                {d.confirmedAt ? `확정 ${formatTime(d.confirmedAt)}` : `수정 ${formatTime(d.updatedAt)}`}
+              </span>
+            </button>
+          ))
+        )}
+      </Card>
+    </div>
+  )
+}

@@ -81,8 +81,9 @@ public class RepoController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        repoService.delete(id);
+    public ResponseEntity<Void> delete(
+            @AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        repoService.delete(principal.id(), id);
         return ResponseEntity.noContent().build();
     }
 

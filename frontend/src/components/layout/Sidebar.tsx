@@ -1,6 +1,4 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useDrafts, useMe } from '@/api/hooks'
-import { useSelectedDate } from '@/hooks/useSelectedDate'
+import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 
 const item = (active: boolean) =>
@@ -10,18 +8,19 @@ const item = (active: boolean) =>
   )
 
 /**
- * 좌측 고정 사이드바 — 로고 + 5개 메뉴 (디자인 브리프 2.). 아이콘 없이 글자만 쓴다.
- * "초안" 은 목록 화면이 없으므로 오늘 내 초안으로 보낸다 (App.tsx 주석 참고).
+ * 좌측 고정 사이드바 — 9/10 회의에서 정한 메뉴 넷.
+ *
+ * <p>"홈" 은 깃허브 내역으로 갈렸고, "리포" 는 설정 안으로 들어갔다. "인원" 은 관리자
+ * 콘솔의 팀원 전체 내역으로 흡수된다 (담당자 2). 초안 편집(/drafts/:id)은 초안 작성에서 연다.
  */
-export default function Sidebar() {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const { date } = useSelectedDate()
-  const { data: me } = useMe()
-  const { data: drafts } = useDrafts({ date, userId: me?.id })
-  const myDraft = drafts?.[0]
-  const onDraftPage = location.pathname.startsWith('/drafts')
+const MENU = [
+  { to: '/github', label: '깃허브 내역' },
+  { to: '/vscode', label: 'VS 내역' },
+  { to: '/drafts', label: '업무 일지 작성' },
+  { to: '/settings', label: '설정' },
+]
 
+export default function Sidebar() {
   return (
     <aside className="flex w-[241px] shrink-0 flex-col border-r bg-background">
       <div className="flex h-[66px] items-center gap-2.5 px-[22px]">
@@ -32,19 +31,11 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-0.5 px-3">
-        <NavLink to="/" end className={({ isActive }) => item(isActive)}>홈</NavLink>
-        <button
-          type="button"
-          disabled={!myDraft}
-          onClick={() => myDraft && navigate(`/drafts/${myDraft.id}`)}
-          className={cn(item(onDraftPage), 'text-left disabled:cursor-not-allowed disabled:opacity-40')}
-          title={myDraft ? undefined : '이 날짜에 내 초안이 없습니다'}
-        >
-          초안
-        </button>
-        <NavLink to="/repos" className={({ isActive }) => item(isActive)}>리포</NavLink>
-        <NavLink to="/people" className={({ isActive }) => item(isActive)}>인원</NavLink>
-        <NavLink to="/settings" className={({ isActive }) => item(isActive)}>설정</NavLink>
+        {MENU.map((m) => (
+          <NavLink key={m.to} to={m.to} className={({ isActive }) => item(isActive)}>
+            {m.label}
+          </NavLink>
+        ))}
       </nav>
     </aside>
   )
