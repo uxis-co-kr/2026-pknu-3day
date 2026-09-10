@@ -51,6 +51,8 @@ worklog:
 
   notify:
     mattermost-webhook-url: ${MATTERMOST_WEBHOOK_URL:}
+    # 미커밋 리마인드 (F7-2). 업무 시간에 매시 정각.
+    remind-cron: ${WORKLOG_REMIND_CRON:0 0 10-18 * * *}
 
   # PRD F2. 구현체는 OpenAiCompatProvider 하나이고, 모델은 프리셋으로만 추가한다.
   llm:

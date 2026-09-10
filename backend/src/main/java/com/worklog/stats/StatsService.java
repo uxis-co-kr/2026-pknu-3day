@@ -3,9 +3,9 @@ package com.worklog.stats;
 import com.worklog.activity.ActivityRepository;
 import com.worklog.activity.ActivityType;
 import com.worklog.config.KstDates;
+import com.worklog.notify.RemindPolicy;
 import com.worklog.stats.dto.DailyStatsResponse;
 import com.worklog.vscode.VscodeSessionRepository;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -22,9 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StatsService {
 
-    /** 방치 세션 판정 기준 — F7-2 리마인드와 같은 값을 쓴다 (결정 ⑭). */
-    private static final Duration STALE_AFTER = Duration.ofHours(6);
-
     private final ActivityRepository activityRepository;
     private final VscodeSessionRepository sessionRepository;
 
@@ -40,7 +37,8 @@ public class StatsService {
         long commitsToday = today.getOrDefault(ActivityType.COMMIT, 0L);
         long commitsYesterday = countsFor(date.minusDays(1)).getOrDefault(ActivityType.COMMIT, 0L);
 
-        OffsetDateTime staleThreshold = OffsetDateTime.now().minus(STALE_AFTER);
+        // 리마인드(F7-2)와 같은 기준을 쓴다. 값이 어긋나면 화면과 알림이 따로 논다.
+        OffsetDateTime staleThreshold = RemindPolicy.staleThreshold(OffsetDateTime.now());
 
         Map<ActivityType, Long> unmapped = unmappedFor(date);
 

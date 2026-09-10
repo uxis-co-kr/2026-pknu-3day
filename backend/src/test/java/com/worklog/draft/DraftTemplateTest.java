@@ -155,6 +155,24 @@ class DraftTemplateTest {
     }
 
     @Test
+    @DisplayName("계획 메모가 여러 줄이면 줄마다 불릿이 된다 — 확장이 여러 건을 줄바꿈으로 이어 보낸다")
+    void splitsMultiLinePlanNote() {
+        VscodeSession s = session();
+        s.setPlanNote("출석 중복 검증 마무리\n관리자 콘솔 뼈대\n\n리마인드 문구 확인");
+
+        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
+
+        List<String> plans = md.lines()
+                .dropWhile(l -> !l.startsWith("## 계획 / TODO"))
+                .skip(1)
+                .takeWhile(l -> l.startsWith("- "))
+                .toList();
+
+        assertThat(plans).containsExactly(
+                "- 출석 중복 검증 마무리", "- 관리자 콘솔 뼈대", "- 리마인드 문구 확인");
+    }
+
+    @Test
     @DisplayName("비어 있는 섹션도 자리를 남긴다 — 사용자가 직접 채울 수 있게")
     void keepsEmptySections() {
         String md = DraftTemplate.render(DAY, "배태일", List.of(commit("abc", "요약")), List.of());

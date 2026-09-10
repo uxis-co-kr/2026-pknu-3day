@@ -53,4 +53,16 @@ public interface VscodeSessionRepository extends JpaRepository<VscodeSession, Lo
             + " where s.workDate = :workDate and (s.lastCommitAt is null or s.lastCommitAt < :threshold)")
     long countStale(
             @Param("workDate") LocalDate workDate, @Param("threshold") OffsetDateTime threshold);
+
+    /**
+     * 리마인드 대상 후보 (F7-2). 줄 수 조건은 JSONB 안을 봐야 하므로 SQL 로 걸지 않고
+     * 그날 세션을 모두 읽어 {@link com.worklog.notify.RemindPolicy} 로 판정한다.
+     * 하루치 세션은 팀 규모에서 수십 건이라 이 편이 단순하다.
+     *
+     * <p>알림 문구에 리포·브랜치·사용자가 들어가므로 연관을 함께 읽는다.
+     */
+    @Query("select s from VscodeSession s"
+            + " left join fetch s.user left join fetch s.repo"
+            + " where s.workDate = :workDate")
+    List<VscodeSession> findAllForRemind(@Param("workDate") LocalDate workDate);
 }
