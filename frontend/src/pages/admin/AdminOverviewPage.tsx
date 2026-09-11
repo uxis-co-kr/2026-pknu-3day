@@ -117,42 +117,75 @@ export default function AdminOverviewPage() {
           <CardContent className="p-4">
             <p className="text-[13px] font-medium">수동 실행</p>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
-              수집은 10분마다, 요약은 1분마다 자동으로 돕니다. 아래는 기다리지 않고 지금 확인할 때
-              씁니다.
+              셋 다 스케줄러가 알아서 돌립니다 — 수집은 10분마다, 요약은 1분마다. 아래는 그때까지
+              기다리지 않고 지금 결과를 보고 싶을 때 씁니다.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                variant="outline" size="sm" disabled={syncAll.isPending}
-                onClick={() => void run(async () => {
-                  const r = await syncAll.mutateAsync(false)
-                  return `리포 ${r.repoCount}개의 동기화를 시작했습니다. 잠시 뒤 새로고침하세요.`
-                })}
-              >
-                <RefreshCw className={syncAll.isPending ? 'animate-spin' : undefined} />
-                전체 동기화
-              </Button>
-              <Button
-                variant="outline" size="sm" disabled={syncAll.isPending}
-                onClick={() => void run(async () => {
-                  const r = await syncAll.mutateAsync(true)
-                  return `리포 ${r.repoCount}개를 최근 7일까지 다시 훑습니다.`
-                })}
-              >
-                전체 재수집 (7일)
-              </Button>
-              <Button
-                variant="outline" size="sm" disabled={runSummaries.isPending}
-                onClick={() => void run(async () => {
-                  const r = await runSummaries.mutateAsync()
-                  return r.summarized > 0
-                    ? `${r.summarized}건을 요약했습니다.`
-                    : '요약할 활동이 없습니다.'
-                })}
-              >
-                <Sparkles />
-                요약 지금 실행
-              </Button>
-            </div>
+
+            {/*
+              버튼 이름만으로는 무엇이 도는지 알 수 없다. "전체 동기화" 와 "전체 재수집" 의
+              차이, "요약" 이 무엇을 요약하는지가 특히 그렇다. 버튼마다 무엇을·어디까지
+              도는지 한 줄로 붙인다.
+            */}
+            <ul className="mt-3 space-y-2.5">
+              <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                <Button
+                  variant="outline" size="sm" className="w-[148px] shrink-0 justify-start"
+                  disabled={syncAll.isPending}
+                  onClick={() => void run(async () => {
+                    const r = await syncAll.mutateAsync(false)
+                    return `리포 ${r.repoCount}개의 동기화를 시작했습니다. 잠시 뒤 새로고침하세요.`
+                  })}
+                >
+                  <RefreshCw className={syncAll.isPending ? 'animate-spin' : undefined} />
+                  전체 동기화
+                </Button>
+                <span className="flex-1 text-[13px] text-muted-foreground">
+                  등록된 리포 <b className="font-medium text-foreground">{data?.repoCount ?? 0}개</b>를 GitHub 에서
+                  다시 훑어 <b className="font-medium text-foreground">커밋 · PR · 머지</b>를 가져옵니다. 마지막
+                  동기화 시각에서 24시간까지 거슬러 봅니다 (늦게 푸시한 커밋을 놓치지 않으려고).
+                  각 리포를 등록한 사람의 GitHub 토큰으로 읽습니다.
+                </span>
+              </li>
+              <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                <Button
+                  variant="outline" size="sm" className="w-[148px] shrink-0 justify-start"
+                  disabled={syncAll.isPending}
+                  onClick={() => void run(async () => {
+                    const r = await syncAll.mutateAsync(true)
+                    return `리포 ${r.repoCount}개를 최근 7일까지 다시 훑습니다.`
+                  })}
+                >
+                  전체 재수집 (7일)
+                </Button>
+                <span className="flex-1 text-[13px] text-muted-foreground">
+                  같은 일을 하되 마지막 동기화 시각을 <b className="font-medium text-foreground">무시하고 최근
+                  7일</b>을 통째로 다시 봅니다. 리포를 새로 등록했거나 빠진 커밋이 있을 때 씁니다. 이미
+                  저장한 활동은 중복되지 않습니다.
+                </span>
+              </li>
+              <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                <Button
+                  variant="outline" size="sm" className="w-[148px] shrink-0 justify-start"
+                  disabled={runSummaries.isPending}
+                  onClick={() => void run(async () => {
+                    const r = await runSummaries.mutateAsync()
+                    return r.summarized > 0
+                      ? `${r.summarized}건을 요약했습니다.`
+                      : '요약할 활동이 없습니다.'
+                  })}
+                >
+                  <Sparkles />
+                  요약 지금 실행
+                </Button>
+                <span className="flex-1 text-[13px] text-muted-foreground">
+                  아직 요약이 없는 활동(위 <b className="font-medium text-foreground">요약 대기{' '}
+                  {data?.pendingSummaryCount ?? 0}건</b>)을 <b className="font-medium text-foreground">한 번에 최대
+                  20건</b>까지 LLM 에 보내 한 줄 요약을 채웁니다. 업무 일지가 이 요약을 재료로 씁니다.
+                  실패한 활동은 3번까지 다시 시도합니다.
+                </span>
+              </li>
+            </ul>
+
             {message && (
               <p className={
                 message.ok
@@ -163,8 +196,8 @@ export default function AdminOverviewPage() {
               </p>
             )}
             <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
-              <b>전체 재수집</b>은 마지막 동기화 시각을 무시하고 최근 7일을 다시 봅니다. 수집 대상을
-              늘렸거나 빠진 커밋이 있을 때 씁니다. 이미 저장한 활동은 중복되지 않습니다.
+              셋 다 <b>이미 저장된 활동을 지우거나 덮어쓰지 않습니다.</b> 동기화는 새 커밋만 더하고,
+              요약은 비어 있는 자리만 채웁니다. 여러 번 눌러도 안전합니다.
             </p>
           </CardContent>
         </Card>
