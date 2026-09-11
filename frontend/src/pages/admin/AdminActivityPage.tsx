@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import ActivityRow from '@/components/activity/ActivityRow'
 import Pagination from '@/components/common/Pagination'
 import { DraftStatusBadge } from '@/components/common/StatusBadge'
@@ -21,13 +20,11 @@ import { useAdminPeople } from './api'
  *
  * 사용자 화면(/people)은 "내 것"을 보는 화면이라 한 사람만 불러오고, 선택기도 그 응답으로 채운다.
  * 그걸 그대로 콘솔에 넣으면 관리자 본인 하나만 보인다. 여기서는 전원을 한 번에 불러
- * (1) 팀 합계, (2) 사람별 표, (3) 고른 사람의 일별 그래프와 그날 활동을 보여 준다.
+ * (1) 팀 합계, (2) 사람별 표, (3) 고른 날의 활동을 보여 준다.
  */
 type Period = 'week' | 'month' | 'custom'
 type Item = PeopleStats['items'][number]
 
-const BAR = '#93c5fd'
-const BAR_ACTIVE = '#2563eb'
 
 const ALL = 'all'
 
@@ -92,19 +89,6 @@ export default function AdminActivityPage() {
   const peoplePageCount = Math.max(1, Math.ceil(items.length / PER_PAGE))
   const peopleCurrent = Math.min(peoplePage, peoplePageCount - 1)
   const peopleRows = items.slice(peopleCurrent * PER_PAGE, (peopleCurrent + 1) * PER_PAGE)
-
-  // 전체를 골랐을 때의 일별 그래프는 사람별 시계열을 날짜로 합친다.
-  const series = useMemo(() => {
-    if (row) return row.series
-    const byDate = new Map<string, { date: string; commits: number; prs: number; merges: number }>()
-    items.forEach((i) => i.series.forEach((p) => {
-      const cur = byDate.get(p.date) ?? { date: p.date, commits: 0, prs: 0, merges: 0 }
-      cur.commits += p.commits; cur.prs += p.prs; cur.merges += p.merges
-      byDate.set(p.date, cur)
-    }))
-    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
-  }, [row, items])
-  const chart = series.map((p) => ({ ...p, label: p.date.slice(5).replace('-', '/') }))
 
   const dayActivities = useActivities({ date: openDate ?? today, userId: row?.user.id })
   const dayItems = dayActivities.data?.items ?? []
@@ -226,42 +210,21 @@ export default function AdminActivityPage() {
           </Card>
         )}
 
-        {/* 일별 그래프 */}
-        <Card className="rounded-lg p-5 shadow-none">
-          <h2 className="text-[13px] font-medium">
-            일별 커밋 수{row ? ` — ${nameOf(row)}` : ' — 전체'}
-            <span className="ml-2 font-normal text-muted-foreground">막대를 누르면 그날 활동을 봅니다</span>
-          </h2>
-          <div className="mt-4 h-[130px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chart} margin={{ top: 4, right: 4, bottom: 0, left: -20 }} barCategoryGap="30%"
-                onClick={(s) => {
-                  const d = (s as { activePayload?: { payload: { date: string } }[] })?.activePayload?.[0]?.payload.date
-                  if (d) setOpenDate(openDate === d ? null : d)
-                }}>
-                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <YAxis width={40} tickLine={false} axisLine={false} allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
-                  labelFormatter={(l) => `${l}`}
-                  formatter={(v: number, name: string) => [v, { commits: '커밋', prs: 'PR', merges: '머지' }[name] ?? name]} />
-                <Bar dataKey="commits" radius={[4, 4, 0, 0]} maxBarSize={48} className="cursor-pointer">
-                  {chart.map((p) => (
-                    <Cell key={p.date} fill={p.date === (openDate ?? today) ? BAR_ACTIVE : BAR} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
         {/* 그날 활동 — 사람을 골랐으면 그 사람, 전체면 전원 */}
         <Card className="rounded-lg shadow-none">
-          <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
             <h2 className="text-[13px] font-medium">
               {openDate ?? today} 활동{row ? ` — ${nameOf(row)}` : ' — 전체'}
             </h2>
+            {/* 막대그래프를 없애면서 날짜를 고를 길이 사라졌다. 날짜 입력으로 대신한다. */}
+            <Input
+              type="date"
+              value={openDate ?? today}
+              max={today}
+              className="h-[30px] w-[150px] text-[13px]"
+              onChange={(e) => setOpenDate(e.target.value)}
+            />
+            <span className="ml-auto" />
             {row && (() => {
               const p = row.series.find((x) => x.date === (openDate ?? today))
               return p?.draft ? <DraftStatusBadge status={p.draft.status} /> : <span className="text-[12px] text-muted-foreground">업무 일지 없음</span>
