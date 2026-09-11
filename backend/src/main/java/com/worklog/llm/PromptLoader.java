@@ -23,6 +23,9 @@ public class PromptLoader {
     /** 하루치 활동을 묶어 업무 일지를 쓰는 프롬프트 (F-1). */
     public static final String WORKLOG_SYSTEM = "worklog-system";
     public static final String WORKLOG_USER = "worklog-user";
+    /** 여러 날치 일지를 기간 하나로 요약하는 프롬프트 (채팅 기간 질문). */
+    public static final String RANGE_SUMMARY_SYSTEM = "range-summary-system";
+    public static final String RANGE_SUMMARY_USER = "range-summary-user";
 
     private static final String BASE_PATH = "llm/prompts/";
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-zA-Z0-9_]+)}");

@@ -12,6 +12,14 @@ import com.worklog.draft.Draft;
 import com.worklog.draft.DraftRepository;
 import com.worklog.draft.DraftStatus;
 import com.worklog.draft.DraftTemplate;
+import com.worklog.llm.LlmProvider;
+import com.worklog.llm.LlmProviderResolver;
+import com.worklog.llm.LlmRequest;
+import com.worklog.llm.LlmSettingService;
+import com.worklog.llm.MockLlmProvider;
+import com.worklog.llm.PromptLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.worklog.vscode.VscodeSession;
 import com.worklog.vscode.VscodeSessionRepository;
 import java.time.LocalDate;
@@ -33,12 +41,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WorkLogAnswerService {
 
+    private static final Logger log = LoggerFactory.getLogger(WorkLogAnswerService.class);
+
     private final UserRepository userRepository;
     private final PeopleDirectoryService peopleDirectoryService;
     private final DraftRepository draftRepository;
     private final ActivityRepository activityRepository;
     private final VscodeSessionRepository sessionRepository;
+    private final LlmProviderResolver llmResolver;
+    private final LlmSettingService llmSettings;
+    private final PromptLoader prompts;
     private final String frontendUrl;
+
+    /** 기간 질문의 상한. 이보다 길면 끝에서부터 이만큼만 본다 — 채팅 한 글에 담기는 양이 있다. */
+    static final int MAX_RANGE_DAYS = 31;
+    /** 답 하나의 글자 상한. Mattermost 는 16,383자까지 받는다. 여유를 둔다. */
+    static final int MAX_ANSWER_CHARS = 12_000;
 
     public WorkLogAnswerService(
             UserRepository userRepository,
@@ -46,12 +64,18 @@ public class WorkLogAnswerService {
             DraftRepository draftRepository,
             ActivityRepository activityRepository,
             VscodeSessionRepository sessionRepository,
+            LlmProviderResolver llmResolver,
+            LlmSettingService llmSettings,
+            PromptLoader prompts,
             @Value("${worklog.frontend-url}") String frontendUrl) {
         this.userRepository = userRepository;
         this.peopleDirectoryService = peopleDirectoryService;
         this.draftRepository = draftRepository;
         this.activityRepository = activityRepository;
         this.sessionRepository = sessionRepository;
+        this.llmResolver = llmResolver;
+        this.llmSettings = llmSettings;
+        this.prompts = prompts;
         this.frontendUrl = frontendUrl.endsWith("/")
                 ? frontendUrl.substring(0, frontendUrl.length() - 1)
                 : frontendUrl;
@@ -71,19 +95,162 @@ public class WorkLogAnswerService {
         LocalDate date = WorkLogQueryParser.dateIn(text);
         Map<String, Person> people = people();
 
-        Optional<String> name = WorkLogQueryParser.personIn(text, people.keySet());
-        if (name.isEmpty()) {
+        List<String> names = WorkLogQueryParser.peopleIn(text, people.keySet());
+        if (names.isEmpty()) {
             // "회의 요약 올립니다" 에 끼어들지 않는다. 분명히 일지를 물은 경우에만 쓰는 법을 알려 준다.
             return intent == WorkLogQueryParser.Intent.STRONG
                     ? Optional.of(unknownPerson(people))
                     : Optional.empty();
         }
-        Person person = people.get(name.get());
-        if (person.user() == null) {
-            return Optional.of("**%s** 님은 사원 명단에는 있지만 아직 WorkLog Drafter 계정이 없어 기록이 없습니다."
-                    .formatted(person.displayName()));
+        // 이름이 여럿이면 문장에 나온 순서대로 한 사람씩. 사원 명단 이름과 계정 이름이 같은 사람을
+        // 가리키면("조웅식", "UngsikJo") 한 번만 답한다.
+        Map<Object, Person> targets = new LinkedHashMap<>();
+        for (String name : names) {
+            Person p = people.get(name);
+            Object key = p.user() != null ? p.user().getId() : p.displayName();
+            targets.putIfAbsent(key, p);
         }
-        return Optional.of(render(person, date));
+        // "9월 8일~9월 10일", "이번 주", "최근 7일" 이면 기간으로 답한다.
+        Optional<WorkLogQueryParser.DateRange> range = WorkLogQueryParser.rangeIn(text);
+
+        StringBuilder out = new StringBuilder();
+        for (Person person : targets.values()) {
+            if (out.length() > 0) {
+                out.append("\n\n---\n\n");
+            }
+            if (person.user() == null) {
+                out.append("**%s** 님은 사원 명단에는 있지만 아직 WorkLog Drafter 계정이 없어 기록이 없습니다."
+                        .formatted(person.displayName()));
+            } else if (range.isPresent()) {
+                out.append(renderRange(person, range.get()));
+            } else {
+                out.append(render(person, date));
+            }
+            if (targets.size() > 1 && out.length() > MAX_ANSWER_CHARS) {
+                out.append("\n\n… _(너무 길어 여기서 줄였습니다. 사람이나 기간을 줄여 다시 물어봐 주세요)_");
+                break;
+            }
+        }
+        return Optional.of(out.toString());
+    }
+
+    /**
+     * 기간 답 — 날짜마다 그날의 일지(초안이 있으면 초안, 없으면 활동으로 조립)를 모으고,
+     * 실제 LLM 이 있으면 맨 위에 기간 전체 요약을 얹는다. 기록 없는 날은 건너뛴다.
+     */
+    private String renderRange(Person person, WorkLogQueryParser.DateRange requested) {
+        User user = person.user();
+        LocalDate to = requested.to();
+        LocalDate from = requested.from();
+        String clampNote = "";
+        if (requested.days() > MAX_RANGE_DAYS) {
+            from = to.minusDays(MAX_RANGE_DAYS - 1L);
+            clampNote = "\n_(기간이 길어 마지막 %d일만 봤습니다)_".formatted(MAX_RANGE_DAYS);
+        }
+
+        Map<LocalDate, Draft> draftsByDate = new LinkedHashMap<>();
+        for (Draft d : draftRepository.findLatestBetween(from, to)) {
+            if (d.getUser() != null && d.getUser().getId().equals(user.getId())) {
+                draftsByDate.putIfAbsent(d.getWorkDate(), d);
+            }
+        }
+
+        List<DaySection> days = new java.util.ArrayList<>();
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            Draft d = draftsByDate.get(date);
+            if (d != null) {
+                String label = d.getStatus() == DraftStatus.CONFIRMED ? "확정본" : "초안 v%d".formatted(d.getVersion());
+                days.add(new DaySection(date, label, body(d.getContentMd()), d.getId()));
+                continue;
+            }
+            List<Activity> activities = activityRepository.findForUserBetween(
+                    user.getId(), KstDates.startOf(date), KstDates.endOf(date));
+            List<VscodeSession> sessions = sessionRepository.findByUserIdAndWorkDate(user.getId(), date);
+            if (activities.isEmpty() && sessions.isEmpty()) {
+                continue;
+            }
+            String md = DraftTemplate.render(date, person.displayName(), activities, sessions);
+            days.add(new DaySection(date, "초안 미생성 — 활동 %d건".formatted(activities.size()), body(md), null));
+        }
+
+        long dayCount = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+        if (days.isEmpty()) {
+            return "**%s · %s ~ %s** — 기록된 활동이 없습니다.%s".formatted(person.displayName(), from, to, clampNote);
+        }
+
+        StringBuilder out = new StringBuilder();
+        out.append("**%s · %s ~ %s 업무 일지** _(%d일 중 %d일 기록)_%s\n"
+                .formatted(person.displayName(), from, to, dayCount, days.size(), clampNote));
+
+        rangeSummary(user, person.displayName(), from, to, dayCount, days)
+                .ifPresent(summary -> out.append("\n**기간 요약**\n").append(summary).append("\n"));
+
+        for (DaySection day : days) {
+            out.append("\n### %s _(%s)_\n".formatted(day.date(), day.label()));
+            out.append(day.body()).append('\n');
+            if (day.draftId() != null) {
+                out.append("🔗 %s/drafts/%d\n".formatted(frontendUrl, day.draftId()));
+            }
+            if (out.length() > MAX_ANSWER_CHARS) {
+                out.append("\n… _(너무 길어 여기서 줄였습니다. 기간을 좁혀 다시 물어봐 주세요)_");
+                break;
+            }
+        }
+        return out.toString().strip();
+    }
+
+    /**
+     * 기간 전체를 LLM 이 3~6줄로. 실제 모델이 없으면(mock) 얹지 않고, 실패해도 답은 나간다.
+     * 어느 모델을 쓸지는 그 사람의 설정(F9)을 따른다.
+     */
+    private Optional<String> rangeSummary(
+            User user, String name, LocalDate from, LocalDate to, long dayCount, List<DaySection> days) {
+        try {
+            LlmProvider provider = llmResolver.resolve(llmSettings.providerOf(user.getId()));
+            if (provider == null || MockLlmProvider.ID.equals(provider.id())) {
+                return Optional.empty();
+            }
+            StringBuilder joined = new StringBuilder();
+            for (DaySection d : days) {
+                joined.append("[").append(d.date()).append(" · ").append(d.label()).append("]\n")
+                        .append(d.body()).append("\n\n");
+            }
+            Map<String, String> vars = new java.util.HashMap<>();
+            vars.put("name", name);
+            vars.put("from", from.toString());
+            vars.put("to", to.toString());
+            vars.put("dayCount", String.valueOf(dayCount));
+            vars.put("recordedDays", String.valueOf(days.size()));
+            vars.put("days", joined.toString().strip());
+            String text = provider.complete(new LlmRequest(
+                    prompts.load(PromptLoader.RANGE_SUMMARY_SYSTEM),
+                    prompts.render(PromptLoader.RANGE_SUMMARY_USER, vars),
+                    LlmRequest.DEFAULT_TEMPERATURE,
+                    600,
+                    vars));
+            return text == null || text.isBlank() ? Optional.empty() : Optional.of(text.strip());
+        } catch (Exception e) {
+            log.warn("{} 의 {}~{} 기간 요약이 LLM 으로 실패해 날짜별 일지만 준다: {}", name, from, to, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** 기간 답의 하루. draftId 는 초안에서 왔을 때만. */
+    record DaySection(LocalDate date, String label, String body, Long draftId) {}
+
+    /**
+     * 초안 하나를 채팅용으로 — 대표 채널의 "예" 에 답할 때 (V10.1). 사람이 물은 것과 같은 모양이다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> answerDraft(Long draftId) {
+        return draftRepository.findById(draftId).map(d -> {
+            String label = d.getStatus() == DraftStatus.CONFIRMED
+                    ? "확정본"
+                    : "초안 v%d — 아직 확정 전".formatted(d.getVersion());
+            return header(displayName(d.getUser()), d.getWorkDate(), label)
+                    + body(d.getContentMd())
+                    + "\n\n🔗 %s/drafts/%d".formatted(frontendUrl, d.getId());
+        });
     }
 
     private String render(Person person, LocalDate date) {

@@ -1,0 +1,4 @@
+작성자: {name}
+기간: {from} ~ {to} ({dayCount}일 중 {recordedDays}일 기록)
+
+{days}

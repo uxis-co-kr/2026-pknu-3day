@@ -37,9 +37,16 @@ public class ChatBotSettingsService {
      * @param enabled 켜져 있는지. 꺼져 있으면 나머지 값이 있어도 봇은 돌지 않는다
      * @param watched 읽을 채널 id. null 이면 전부
      * @param source 어디서 왔는지 — 화면에 알려 준다 (db / env / none)
+     * @param primaryChannelId 업무 일지 요약 알림을 받는 대표 채널 (V10.1). null 이면 전역 웹훅으로
      */
     public record Effective(
-            String baseUrl, String loginId, String password, boolean enabled, Set<String> watched, String source) {
+            String baseUrl, String loginId, String password, boolean enabled, Set<String> watched, String source,
+            String primaryChannelId) {
+
+        /** 대표 채널 없이 쓰던 곳을 위한 생성자. */
+        public Effective(String baseUrl, String loginId, String password, boolean enabled, Set<String> watched, String source) {
+            this(baseUrl, loginId, password, enabled, watched, source, null);
+        }
 
         public boolean configured() {
             return enabled && baseUrl != null && !baseUrl.isBlank()
@@ -63,7 +70,8 @@ public class ChatBotSettingsService {
                     encryptor.decrypt(s.getPasswordEnc()),
                     Boolean.TRUE.equals(s.getEnabled()),
                     parse(s.getWatchedChannelIds()),
-                    "db");
+                    "db",
+                    s.getPrimaryChannelId());
         }
         if (env.isConfigured()) {
             return new Effective(env.getBaseUrl(), env.getLoginId(), env.getPassword(), true, null, "env");
@@ -131,6 +139,29 @@ public class ChatBotSettingsService {
             watched.remove(channelId);
         }
         s.setWatchedChannelIds(String.join(",", watched));
+        repository.save(s);
+        return effective();
+    }
+
+    /**
+     * 대표 채널을 정한다 (null 이면 해제). 사원이 [Mattermost 전송] 을 누르면 이 채널로 알림이 간다.
+     * 봇이 들어가 있는 채널이어야 쓸 수 있다 — 아닌 id 는 400.
+     */
+    @Transactional
+    public Effective setPrimaryChannel(String channelId, Set<String> allKnownChannelIds) {
+        String id = channelId == null || channelId.isBlank() ? null : channelId.trim();
+        if (id != null && allKnownChannelIds != null && !allKnownChannelIds.contains(id)) {
+            throw com.worklog.config.ApiException.badRequest(
+                    "UNKNOWN_CHANNEL", "봇 계정이 들어가 있는 채널만 대표 채널로 정할 수 있습니다.");
+        }
+        ChatBotSetting s = repository.findFirstByOrderByIdAsc().orElseGet(() -> {
+            ChatBotSetting n = new ChatBotSetting();
+            n.setBaseUrl(env.getBaseUrl());
+            n.setLoginId(env.getLoginId());
+            n.setPasswordEnc(encryptor.encrypt(env.getPassword() == null ? "" : env.getPassword()));
+            return n;
+        });
+        s.setPrimaryChannelId(id);
         repository.save(s);
         return effective();
     }

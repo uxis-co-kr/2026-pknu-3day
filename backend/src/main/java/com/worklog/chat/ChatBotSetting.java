@@ -41,6 +41,10 @@ public class ChatBotSetting {
     @Column(name = "watched_channel_ids", columnDefinition = "text")
     private String watchedChannelIds;
 
+    /** 업무 일지 요약 알림이 가는 대표 채널 (V10.1). NULL 이면 전역 웹훅. */
+    @Column(name = "primary_channel_id", length = 100)
+    private String primaryChannelId;
+
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
