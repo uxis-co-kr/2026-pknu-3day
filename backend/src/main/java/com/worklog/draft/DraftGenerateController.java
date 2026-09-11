@@ -1,6 +1,7 @@
 package com.worklog.draft;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.config.ApiException;
 import com.worklog.config.KstDates;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -23,10 +24,47 @@ import org.springframework.web.bind.annotation.RestController;
 public class DraftGenerateController {
 
     private final DraftGenerator draftGenerator;
+    private final PeriodDraftGenerator periodGenerator;
 
-    public DraftGenerateController(DraftGenerator draftGenerator) {
+    public DraftGenerateController(DraftGenerator draftGenerator, PeriodDraftGenerator periodGenerator) {
         this.draftGenerator = draftGenerator;
+        this.periodGenerator = periodGenerator;
     }
+
+    /**
+     * 주간 업무일지 AI 생성 (V15). 그 기간의 하루치 일지를 묶어 다시 쓴다.
+     *
+     * <p>하루치와 달리 204 가 없다 — 재료가 없으면 400 으로 무엇이 없는지 말한다. 빈 일지를
+     * 만들어 두면 사람이 지워야 한다.
+     */
+    @PostMapping("/generate/weekly")
+    public ResponseEntity<GenerateResponse> generateWeekly(
+            @AuthenticationPrincipal AuthenticatedUser principal,
+            @RequestBody PeriodRequest request) {
+        Long userId = request.userId() == null ? principal.id() : request.userId();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(GenerateResponse.from(periodGenerator.weekly(userId, request.from(), request.to())));
+    }
+
+    /**
+     * 저장소별 업무일지 AI 생성 (V15). 그 기간 그 저장소의 커밋·PR 을 묶어 쓴다.
+     *
+     * @param request {@code mineOnly} 가 true 면 내 활동만, false 면 그 저장소의 팀 전체
+     */
+    @PostMapping("/generate/repo")
+    public ResponseEntity<GenerateResponse> generateRepo(
+            @AuthenticationPrincipal AuthenticatedUser principal,
+            @RequestBody PeriodRequest request) {
+        Long userId = request.userId() == null ? principal.id() : request.userId();
+        if (request.repoId() == null) {
+            throw ApiException.badRequest("REPO_REQUIRED", "저장소를 골라 주세요.");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(GenerateResponse.from(
+                periodGenerator.byRepo(userId, request.repoId(), request.from(), request.to(), request.mineOnly())));
+    }
+
+    /** 주간·저장소별 생성 요청. {@code repoId} 는 저장소별에만 쓴다. */
+    public record PeriodRequest(LocalDate from, LocalDate to, Long userId, Long repoId, boolean mineOnly) {}
 
     /**
      * @return 201 + 생성된 초안, 활동이 없으면 204 (PRD F3)

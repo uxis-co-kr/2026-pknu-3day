@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import DraftWorkspace from '@/components/draft/DraftWorkspace'
+import PeriodDraftWorkspace from '@/components/draft/PeriodDraftWorkspace'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useActivities, useDraftRange, useDrafts, useMe, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import {
@@ -18,8 +20,17 @@ import {
  * <p>일지는 "생성" 을 눌렀을 때만 만들어진다. 서버가 그날의 깃허브 내역과 VSCode 내역을
  * 함께 모아 쓴다 (PRD F3).
  */
+/** 일별·주간·저장소별 — 셋 다 AI 생성·저장·Mattermost 전송까지 같은 방식으로 쓴다 (V15). */
+type Kind = 'daily' | 'weekly' | 'repo'
+
+const KIND_TAB =
+  'h-[32px] rounded-none border-b-2 border-transparent px-4 text-[13px] shadow-none'
+  + ' data-[state=active]:border-primary data-[state=active]:bg-transparent'
+  + ' data-[state=active]:text-primary data-[state=active]:shadow-none'
+
 export default function DraftsPage() {
   const navigate = useNavigate()
+  const [kind, setKind] = useState<Kind>('daily')
   const { date } = useSelectedDate()
   const { data: me } = useMe()
 
@@ -44,6 +55,23 @@ export default function DraftsPage() {
 
   return (
     <div className="space-y-4">
+      <Tabs value={kind} onValueChange={(v) => setKind(v as Kind)}>
+        <TabsList className="h-auto w-full justify-start rounded-none border-b bg-transparent p-0">
+          <TabsTrigger value="daily" className={KIND_TAB}>일별</TabsTrigger>
+          <TabsTrigger value="weekly" className={KIND_TAB}>주간 업무일지</TabsTrigger>
+          <TabsTrigger value="repo" className={KIND_TAB}>저장소별 업무일지</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {kind !== 'daily' && (
+        <PeriodDraftWorkspace
+          kind={kind}
+          userId={me?.id}
+          displayName={me?.name ?? me?.login}
+        />
+      )}
+
+      {kind === 'daily' && (<>
       {/*
         * 일지가 없어도 편집기를 띄운다 — 이 화면에 들어온 목적이 쓰는 것이기 때문이다.
         * 저장하기 전에는 서버에 아무것도 만들지 않는다 (열어만 보고 나간 날에 빈 일지가
@@ -107,6 +135,7 @@ export default function DraftsPage() {
           ))
         )}
       </Card>
+      </>)}
     </div>
   )
 }

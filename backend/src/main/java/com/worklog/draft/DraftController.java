@@ -48,17 +48,21 @@ public class DraftController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) DraftStatus status) {
+            @RequestParam(required = false) DraftStatus status,
+            @RequestParam(required = false) DraftKind kind) {
         if (date == null && (from == null || to == null)) {
             throw ApiException.badRequest(
                     "DATE_REQUIRED", "date 또는 from·to 를 함께 주어야 합니다.");
         }
         // MEMBER 는 자기 것만 (DataScope).
         Long scoped = DataScope.userIdFor(principal, userId);
-        if (date == null) {
-            return draftService.listBetween(from, to, scoped, status);
-        }
-        return draftService.list(date, scoped, status);
+        // 종류를 주면 그것만 (V15). 안 주면 하루치만 준다 — 기존 화면이 주간·저장소별을
+        // 날짜 목록에 섞어 보여 주면 안 된다.
+        DraftKind wanted = kind == null ? DraftKind.DAILY : kind;
+        List<DraftSummaryResponse> rows = date == null
+                ? draftService.listBetween(from, to, scoped, status)
+                : draftService.list(date, scoped, status);
+        return rows.stream().filter(r -> r.kind() == wanted).toList();
     }
 
     /**

@@ -27,6 +27,13 @@ public class PromptLoader {
     public static final String WORKLOG_SYSTEM = "worklog-system";
     public static final String WORKLOG_USER = "worklog-user";
     /** 여러 날치 일지를 기간 하나로 요약하는 프롬프트 (채팅 기간 질문). */
+    /** 기간(주간) 업무 일지 — 하루치들을 묶어 다시 쓴다 (V15). */
+    public static final String WEEKLY_WORKLOG_SYSTEM = "weekly-worklog-system";
+    public static final String WEEKLY_WORKLOG_USER = "weekly-worklog-user";
+    /** 저장소별 업무 일지 (V15). */
+    public static final String REPO_WORKLOG_SYSTEM = "repo-worklog-system";
+    public static final String REPO_WORKLOG_USER = "repo-worklog-user";
+
     public static final String RANGE_SUMMARY_SYSTEM = "range-summary-system";
     public static final String RANGE_SUMMARY_USER = "range-summary-user";
 
