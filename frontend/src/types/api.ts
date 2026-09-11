@@ -19,6 +19,13 @@ export interface Me {
   loginId?: string
   role?: 'MEMBER' | 'ADMIN'
   mustChangePassword?: boolean
+  /**
+   * 관리자 콘솔 말고는 볼 것이 없는 계정 (9/11).
+   *
+   * <p>사원도 아니고 GitHub 도 붙어 있지 않아 일반 화면에 보여 줄 기록이 하나도 없다.
+   * 관리자를 **겸하는 팀원**은 자기 기록이 있으므로 이 값이 false 다.
+   */
+  consoleOnly?: boolean
 }
 
 export interface UserRef extends Me {}

@@ -176,6 +176,9 @@ public class PeopleDirectoryService {
                 ctx.sessionsByUser().getOrDefault(userId, 0L) > 0,
                 ctx.apiKeysByUser().getOrDefault(userId, 0L),
                 ctx.sessionsByUser().getOrDefault(userId, 0L),
+                // 행 수가 아니라 저장소 수다. 같은 저장소라도 브랜치·날짜가 다르면 행이 는다 —
+                // 그 수를 "저장소" 라고 적으면 두 곳에서 일한 사람이 셋으로 보인다 (9/11).
+                repos.stream().filter(r -> r.sessionCount() > 0).count(),
                 user.getEmpSeq(),
                 ctx.activityByUser().getOrDefault(userId, 0L),
                 user.getCreatedAt(),

@@ -133,7 +133,7 @@ function RepoList({ account }: { account: AdminAccount }) {
               </Badge>
             )}
             <span className="ml-auto tabular-nums text-muted-foreground">
-              활동 {r.activityCount} · VS {r.sessionCount}
+              활동 {r.activityCount} · VS 기록 {r.sessionCount}
             </span>
           </a>
         ))}
@@ -208,7 +208,9 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
                       linked={acc.vscodeLinked}
                       note={
                         acc.vscodeLinked
-                          ? `세션 ${acc.sessionCount}`
+                          // 행 수가 아니라 저장소 수다 — 같은 저장소도 브랜치·날짜마다 행이
+                          // 늘어, 그 수를 적으면 두 곳에서 일한 사람이 셋으로 보인다 (9/11).
+                          ? `저장소 ${acc.sessionRepoCount}`
                           : acc.apiKeyCount > 0
                             ? '키만 발급됨'
                             : undefined

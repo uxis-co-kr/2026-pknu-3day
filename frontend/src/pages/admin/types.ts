@@ -57,7 +57,10 @@ export interface AdminAccount {
   vscodeLinked: boolean
   /** 발급한 API Key 수. 키는 있는데 세션이 없으면 "발급만 함" 이다 */
   apiKeyCount: number
+  /** VS Code 에서 보내 온 세션 행 수 (사용자·저장소·브랜치·날짜로 한 행). */
   sessionCount: number
+  /** 그중 몇 곳의 저장소에서 보냈는지. 행 수는 브랜치·날짜마다 늘어난다. */
+  sessionRepoCount: number
   empSeq: number | null
   activityCount: number
   joinedAt: string

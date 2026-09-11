@@ -45,7 +45,10 @@ public record PeopleDirectoryResponse(
             boolean githubLinked,
             boolean vscodeLinked,
             long apiKeyCount,
+            /** VS Code 에서 보내 온 세션 행 수 (사용자·저장소·브랜치·날짜로 한 행). */
             long sessionCount,
+            /** 그중 <b>몇 곳의 저장소</b>에서 보냈는지. 행 수는 브랜치·날짜마다 늘어난다. */
+            long sessionRepoCount,
             Long empSeq,
             long activityCount,
             OffsetDateTime joinedAt,
