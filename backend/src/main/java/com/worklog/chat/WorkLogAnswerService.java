@@ -48,6 +48,7 @@ public class WorkLogAnswerService {
     private final DraftRepository draftRepository;
     private final ActivityRepository activityRepository;
     private final VscodeSessionRepository sessionRepository;
+    private final com.worklog.draft.DraftGenerator draftGenerator;
     private final LlmProviderResolver llmResolver;
     private final LlmSettingService llmSettings;
     private final PromptLoader prompts;
@@ -64,6 +65,7 @@ public class WorkLogAnswerService {
             DraftRepository draftRepository,
             ActivityRepository activityRepository,
             VscodeSessionRepository sessionRepository,
+            com.worklog.draft.DraftGenerator draftGenerator,
             LlmProviderResolver llmResolver,
             LlmSettingService llmSettings,
             PromptLoader prompts,
@@ -73,6 +75,7 @@ public class WorkLogAnswerService {
         this.draftRepository = draftRepository;
         this.activityRepository = activityRepository;
         this.sessionRepository = sessionRepository;
+        this.draftGenerator = draftGenerator;
         this.llmResolver = llmResolver;
         this.llmSettings = llmSettings;
         this.prompts = prompts;
@@ -88,6 +91,10 @@ public class WorkLogAnswerService {
      */
     @Transactional(readOnly = true)
     public Optional<String> answer(String text) {
+        return answerInternal(text).map(Reply::text);
+    }
+
+    private Optional<Reply> answerInternal(String text) {
         WorkLogQueryParser.Intent intent = WorkLogQueryParser.intentOf(text);
         if (intent == WorkLogQueryParser.Intent.NONE) {
             return Optional.empty();
@@ -99,7 +106,7 @@ public class WorkLogAnswerService {
         if (names.isEmpty()) {
             // "회의 요약 올립니다" 에 끼어들지 않는다. 분명히 일지를 물은 경우에만 쓰는 법을 알려 준다.
             return intent == WorkLogQueryParser.Intent.STRONG
-                    ? Optional.of(unknownPerson(people))
+                    ? Optional.of(Reply.of(unknownPerson(people)))
                     : Optional.empty();
         }
         // 이름이 여럿이면 문장에 나온 순서대로 한 사람씩. 사원 명단 이름과 계정 이름이 같은 사람을
@@ -114,6 +121,9 @@ public class WorkLogAnswerService {
         Optional<WorkLogQueryParser.DateRange> range = WorkLogQueryParser.rangeIn(text);
 
         StringBuilder out = new StringBuilder();
+        // 한 사람·하루를 물었을 때만 "만들어 드릴까요" 를 묻는다. 여럿이면 ✅ 하나로
+        // 무엇을 만들지 정할 수 없고, 기간은 주간 일지라 사람이 화면에서 만드는 편이 맞다.
+        Reply offer = null;
         for (Person person : targets.values()) {
             if (out.length() > 0) {
                 out.append("\n\n---\n\n");
@@ -124,14 +134,20 @@ public class WorkLogAnswerService {
             } else if (range.isPresent()) {
                 out.append(renderRange(person, range.get()));
             } else {
-                out.append(render(person, date));
+                Reply one = renderReply(person, date);
+                out.append(one.text());
+                if (one.offersToCreate() && targets.size() == 1) {
+                    offer = one;
+                }
             }
             if (targets.size() > 1 && out.length() > MAX_ANSWER_CHARS) {
                 out.append("\n\n… _(너무 길어 여기서 줄였습니다. 사람이나 기간을 줄여 다시 물어봐 주세요)_");
                 break;
             }
         }
-        return Optional.of(out.toString());
+        return Optional.of(offer == null
+                ? Reply.of(out.toString())
+                : new Reply(out.toString(), offer.offerUserId(), offer.offerDate()));
     }
 
     /**
@@ -239,6 +255,19 @@ public class WorkLogAnswerService {
     record DaySection(LocalDate date, String label, String body, Long draftId) {}
 
     /**
+     * 채팅에서 "만들어 드릴까요" 에 "예" 가 왔을 때 그 자리에서 만든다 (9/11).
+     *
+     * <p>화면의 AI 생성과 같은 길을 쓴다 — 답과 화면이 다른 글이면 어느 쪽이 맞는지 헷갈린다.
+     * <b>자동 생성됨</b>으로 표시한다. 본인이 쓴 글이 아니고, 본인이 손대면 그때부터 사람 글이 된다.
+     *
+     * @return 만든 초안 id. 재료가 없어 만들지 못하면 비어 있다
+     */
+    @Transactional
+    public Optional<Long> createDraft(Long userId, LocalDate workDate) {
+        return draftGenerator.generate(userId, workDate, true).map(com.worklog.draft.Draft::getId);
+    }
+
+    /**
      * 초안 하나를 채팅용으로 — 대표 채널의 "예" 에 답할 때 (V14). 사람이 물은 것과 같은 모양이다.
      */
     @Transactional(readOnly = true)
@@ -253,7 +282,46 @@ public class WorkLogAnswerService {
         });
     }
 
+    /**
+     * 채팅 한 마디에 대한 답.
+     *
+     * @param text 채널에 쓸 글
+     * @param offerUserId 일지가 없어 <b>만들어 드릴까요</b> 를 물을 때 그 사람. 아니면 null
+     * @param offerDate 그 날
+     */
+    public record Reply(String text, Long offerUserId, LocalDate offerDate) {
+
+        static Reply of(String text) {
+            return new Reply(text, null, null);
+        }
+
+        public boolean offersToCreate() {
+            return offerUserId != null && offerDate != null;
+        }
+    }
+
+    /**
+     * {@link #answer(String)} 와 같지만, 일지가 없을 때 <b>만들지 말지 물어보는</b> 답을 낼 수 있다.
+     *
+     * <p>봇이 이 값을 받아 ✅ ❌ 를 달고, "예" 면 그 자리에서 일지를 만든다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Reply> reply(String text) {
+        return answerInternal(text);
+    }
+
     private String render(Person person, LocalDate date) {
+        return renderReply(person, date).text();
+    }
+
+    /**
+     * 그날 일지. 없으면 <b>만들어 드릴까요</b> 를 묻는다 (9/11).
+     *
+     * <p>전에는 활동으로 그 자리에서 조립해 보여 줬다. 보기에는 같지만 <b>어디에도 남지 않아</b>
+     * 물을 때마다 다시 만들어졌고, 정작 그 사람 화면에는 일지가 없었다. 이제 묻고, 그러라고 하면
+     * 진짜 일지로 만든다.
+     */
+    private Reply renderReply(Person person, LocalDate date) {
         User user = person.user();
         Optional<Draft> draft = draftRepository.findFirstByUserIdAndWorkDateOrderByVersionDesc(user.getId(), date);
         if (draft.isPresent()) {
@@ -261,21 +329,25 @@ public class WorkLogAnswerService {
             String label = d.getStatus() == DraftStatus.CONFIRMED
                     ? "확정본"
                     : "초안 v%d — 아직 확정 전".formatted(d.getVersion());
-            return header(person.displayName(), date, label)
+            return Reply.of(header(person.displayName(), date, label)
                     + body(d.getContentMd())
-                    + "\n\n🔗 %s/drafts/%d".formatted(frontendUrl, d.getId());
+                    + "\n\n🔗 %s/drafts/%d".formatted(frontendUrl, d.getId()));
         }
 
         List<Activity> activities = activityRepository.findForUserBetween(
                 user.getId(), KstDates.startOf(date), KstDates.endOf(date));
         List<VscodeSession> sessions = sessionRepository.findByUserIdAndWorkDate(user.getId(), date);
         if (activities.isEmpty() && sessions.isEmpty()) {
-            return "**%s · %s** — 기록된 활동이 없습니다.".formatted(person.displayName(), date);
+            // 만들 재료가 없으니 물어볼 것도 없다.
+            return Reply.of("**%s · %s** — 기록된 활동이 없습니다. 만들 재료가 없습니다."
+                    .formatted(person.displayName(), date));
         }
-        // 초안 템플릿을 그대로 빌려 쓴다. 채팅 답과 초안이 다르게 생기면 어느 쪽이 맞는지 헷갈린다.
-        String md = DraftTemplate.render(date, person.displayName(), activities, sessions);
-        return header(person.displayName(), date, "초안 미생성 — 지금 집계 (활동 %d건)".formatted(activities.size()))
-                + body(md);
+        return new Reply(
+                "**%s · %s** — 아직 업무 일지가 없습니다. 활동 %d건·기록 %d건이 있으니 **지금 만들어 드릴까요?**\n"
+                        .formatted(person.displayName(), date, activities.size(), sessions.size())
+                        + "아래 ✅ 를 누르시면 만듭니다. ❌ 는 그만둡니다. (**예**/**아니오**라고 답해도 됩니다)",
+                user.getId(),
+                date);
     }
 
     private static String header(String name, LocalDate date, String label) {

@@ -78,7 +78,41 @@ public class MattermostBot {
      * @param botEmojis 봇이 미리 달아 둔 이모지. 봇 계정이 사람 계정과 같을 때
      *     (시연이 그렇다) 사람이 누르면 <b>토글로 사라지므로</b>, 사라진 것도 답으로 본다
      */
-    record PendingConfirm(Long draftId, long since, String postId, Set<String> botEmojis) {}
+    /** ✅ 를 눌렀을 때 할 일. */
+    enum ConfirmAction {
+        /** 만들어 둔 일지의 요약본을 채널에 올린다 (전송 알림 뒤). */
+        SEND_SUMMARY,
+        /** 아직 없는 일지를 지금 만든다 (채팅으로 물었는데 없을 때). */
+        CREATE_DRAFT
+    }
+
+    /**
+     * @param draftId SEND_SUMMARY 일 때 보낼 일지
+     * @param userId CREATE_DRAFT 일 때 누구 것을 만들지
+     * @param workDate CREATE_DRAFT 일 때 어느 날
+     */
+    record PendingConfirm(
+            ConfirmAction action,
+            Long draftId,
+            Long userId,
+            java.time.LocalDate workDate,
+            long since,
+            String postId,
+            Set<String> botEmojis,
+            /**
+             * 봇이 달아 둔 반응을 <b>한 번이라도 실제로 읽었는지</b>.
+             *
+             * <p>같은 계정이 누르면 반응이 토글로 사라지는데, 그 "사라짐" 을 답으로 읽는다.
+             * 그런데 달자마자 읽으면 아직 반영되지 않아 비어 보일 수 있고, 그것을 사라진 것으로
+             * 보면 <b>아무도 누르지 않았는데 예로 처리된다.</b> 한 번 본 뒤부터만 센다.
+             */
+            boolean armed) {
+
+        /** 봇 반응을 확인했다고 표시한 사본. 레코드라 바꾸지 않고 새로 만든다. */
+        PendingConfirm arm() {
+            return new PendingConfirm(action, draftId, userId, workDate, since, postId, botEmojis, true);
+        }
+    }
 
     public MattermostBot(ChatBotSettingsService settings, MattermostClient client, WorkLogAnswerService answers) {
         this.settings = settings;
@@ -187,17 +221,11 @@ public class MattermostBot {
             if (draftId != null) {
                 // 사람이 누르기만 하면 되도록 봇이 ✅ ❌ 를 미리 달아 둔다. 실패해도 알림 자체는 나갔으니
                 // 글로 쓴 예/아니오로 받으면 된다.
-                Set<String> added = new LinkedHashSet<>();
-                for (String emoji : List.of(YES_EMOJI, NO_EMOJI)) {
-                    try {
-                        client.addReaction(cfg.baseUrl(), token, myUserId, postId, emoji);
-                        added.add(emoji);
-                    } catch (Exception e) {
-                        log.warn("반응 {} 을 달지 못했다: {}", emoji, describe(e));
-                    }
-                }
+                Set<String> added = attachConfirmReactions(cfg, postId);
                 // 뒤에 오는 반응·예/아니오는 이 알림에 대한 답이다. 새 알림이 오면 그것으로 바뀐다.
-                pendingConfirms.put(channelId, new PendingConfirm(draftId, System.currentTimeMillis(), postId, added));
+                pendingConfirms.put(channelId, new PendingConfirm(
+                        ConfirmAction.SEND_SUMMARY, draftId, null, null,
+                        System.currentTimeMillis(), postId, added, false));
             }
             return true;
         } catch (Exception e) {
@@ -223,6 +251,27 @@ public class MattermostBot {
             log.warn("채널 {} 에 쓰지 못했다: {}", channelId, describe(e));
             return false;
         }
+    }
+
+    /**
+     * 글에 ✅ ❌ 를 미리 달아 둔다 — 사람은 누르기만 하면 된다.
+     *
+     * @return 실제로 달린 이모지. 실패해도 알림·답은 이미 나갔으니 글로 쓴 예/아니오로 받는다
+     */
+    private Set<String> attachConfirmReactions(ChatBotSettingsService.Effective cfg, String postId) {
+        Set<String> added = new LinkedHashSet<>();
+        if (postId == null) {
+            return added;
+        }
+        for (String emoji : List.of(YES_EMOJI, NO_EMOJI)) {
+            try {
+                client.addReaction(cfg.baseUrl(), token, myUserId, postId, emoji);
+                added.add(emoji);
+            } catch (Exception e) {
+                log.warn("반응 {} 을 달지 못했다: {}", emoji, describe(e));
+            }
+        }
+        return added;
     }
 
     /** 지금 알고 있는 채널 id — 채널별 읽기 설정을 명시 목록으로 바꿀 때 쓴다. */
@@ -302,11 +351,19 @@ public class MattermostBot {
                 }
             }
             if (yes == null && !pending.botEmojis().isEmpty()) {
-                // 봇이 달아 둔 것이 사라졌다 = 같은 계정의 사람이 눌러 토글했다
+                // 봇이 달아 둔 것이 사라졌다 = 같은 계정의 사람이 눌러 토글했다.
                 Set<String> still = new LinkedHashSet<>();
                 reactions.stream()
                         .filter(r -> r.user_id() != null && r.user_id().equals(myUserId))
                         .forEach(r -> still.add(r.emoji_name()));
+                if (!pending.armed()) {
+                    // 아직 한 번도 못 봤다. 지금 보이면 그때부터 "사라짐" 을 센다 — 달자마자
+                    // 읽으면 반영 전이라 비어 보이고, 그걸 답으로 읽으면 아무도 안 눌렀는데 실행된다.
+                    if (still.containsAll(pending.botEmojis())) {
+                        pendingConfirms.put(channelId, pending.arm());
+                    }
+                    continue;
+                }
                 if (pending.botEmojis().contains(YES_EMOJI) && !still.contains(YES_EMOJI)) {
                     yes = true;
                 } else if (pending.botEmojis().contains(NO_EMOJI) && !still.contains(NO_EMOJI)) {
@@ -317,13 +374,18 @@ public class MattermostBot {
                 continue;
             }
             pendingConfirms.remove(channelId);
-            respondToConfirm(cfg, channelId, pending.draftId(), yes);
+            respondToConfirm(cfg, channelId, pending, yes);
         }
     }
 
     /** 예/아니오 답 하나를 처리한다 — 반응으로 왔든 글로 왔든 같다. */
     private void respondToConfirm(
-            ChatBotSettingsService.Effective cfg, String channelId, Long draftId, boolean yes) {
+            ChatBotSettingsService.Effective cfg, String channelId, PendingConfirm pending, boolean yes) {
+        if (pending.action() == ConfirmAction.CREATE_DRAFT) {
+            respondToCreate(cfg, channelId, pending, yes);
+            return;
+        }
+        Long draftId = pending.draftId();
         if (!yes) {
             log.info("요약본 전송 취소 — 초안 {}", draftId);
             client.createPost(cfg.baseUrl(), token, channelId, "전송을 취소했습니다.");
@@ -338,6 +400,38 @@ public class MattermostBot {
         client.createPost(cfg.baseUrl(), token, channelId, "요약본을 전송합니다.");
         client.createPost(cfg.baseUrl(), token, channelId, summary.get());
         stats.computeIfAbsent(channelId, k -> new ChannelStat()).record();
+    }
+
+    /**
+     * "지금 만들어 드릴까요" 에 대한 답.
+     *
+     * <p>만든 일지는 <b>자동 생성됨</b>으로 표시된다 — 본인이 쓴 글이 아니고, 본인이 나중에
+     * 손대면 그때부터 사람이 쓴 일지가 된다. 만드는 데 사내 모델로 10~30초 걸린다.
+     */
+    private void respondToCreate(
+            ChatBotSettingsService.Effective cfg, String channelId, PendingConfirm pending, boolean yes) {
+        if (!yes) {
+            log.info("일지 생성 취소 — 사용자 {} 의 {}", pending.userId(), pending.workDate());
+            client.createPost(cfg.baseUrl(), token, channelId, "만들지 않았습니다.");
+            return;
+        }
+        client.createPost(cfg.baseUrl(), token, channelId, "업무 일지를 만들고 있습니다. 잠시만 기다려 주세요…");
+        try {
+            Optional<Long> made = answers.createDraft(pending.userId(), pending.workDate());
+            if (made.isEmpty()) {
+                client.createPost(cfg.baseUrl(), token, channelId, "만들 재료가 없어 만들지 못했습니다.");
+                return;
+            }
+            log.info("채팅으로 일지 생성 — 사용자 {} 의 {} (초안 {})", pending.userId(), pending.workDate(), made.get());
+            client.createPost(cfg.baseUrl(), token, channelId, "업무 일지를 만들었습니다.");
+            answers.answerDraft(made.get())
+                    .ifPresent(text -> client.createPost(cfg.baseUrl(), token, channelId, text));
+            stats.computeIfAbsent(channelId, k -> new ChannelStat()).record();
+        } catch (Exception e) {
+            log.warn("채팅으로 일지를 만들지 못했다: {}", e.getMessage());
+            client.createPost(cfg.baseUrl(), token, channelId,
+                    "만들지 못했습니다 — " + (e.getMessage() == null ? "알 수 없는 오류" : e.getMessage()));
+        }
     }
 
     private void pollChannel(ChatBotSettingsService.Effective cfg, MattermostClient.MmChannel channel) {
@@ -359,12 +453,20 @@ public class MattermostBot {
             if (handleConfirmReply(cfg, channel, post)) {
                 continue;
             }
-            Optional<String> answer = answers.answer(post.message());
-            if (answer.isEmpty()) {
+            Optional<WorkLogAnswerService.Reply> reply = answers.reply(post.message());
+            if (reply.isEmpty()) {
                 continue;
             }
             log.info("채팅 질의 응답 — #{}: {}", channel.display_name(), post.message());
-            client.createPost(cfg.baseUrl(), token, channel.id(), answer.get());
+            WorkLogAnswerService.Reply r = reply.get();
+            String postId = client.createPost(cfg.baseUrl(), token, channel.id(), r.text());
+            // 일지가 없어 "만들어 드릴까요" 를 물었으면 그 글에 ✅ ❌ 를 달고 답을 기다린다 (9/11).
+            if (r.offersToCreate()) {
+                Set<String> added = attachConfirmReactions(cfg, postId);
+                pendingConfirms.put(channel.id(), new PendingConfirm(
+                        ConfirmAction.CREATE_DRAFT, null, r.offerUserId(), r.offerDate(),
+                        System.currentTimeMillis(), postId, added, false));
+            }
             stats.computeIfAbsent(channel.id(), k -> new ChannelStat()).record();
         }
         if (answered.size() > 5_000) {
@@ -394,7 +496,7 @@ public class MattermostBot {
         String reply = normalizeReply(post.message());
         if (YES.contains(reply) || NO.contains(reply)) {
             pendingConfirms.remove(channel.id());
-            respondToConfirm(cfg, channel.id(), pending.draftId(), YES.contains(reply));
+            respondToConfirm(cfg, channel.id(), pending, YES.contains(reply));
             return true;
         }
         return false; // 예/아니오가 아니다 — 대기는 그대로 두고 보통 글로 본다

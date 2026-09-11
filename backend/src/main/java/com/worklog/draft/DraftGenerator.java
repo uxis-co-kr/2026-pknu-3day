@@ -6,7 +6,6 @@ import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.config.ApiException;
 import com.worklog.config.KstDates;
-import com.worklog.notify.NotifyService;
 import com.worklog.vscode.VscodeSession;
 import com.worklog.vscode.VscodeSessionRepository;
 import java.time.LocalDate;
@@ -31,7 +30,6 @@ public class DraftGenerator {
     private final VscodeSessionRepository sessionRepository;
     private final DraftRepository draftRepository;
     private final UserRepository userRepository;
-    private final NotifyService notifyService;
     private final WorklogWriter worklogWriter;
 
     public DraftGenerator(
@@ -39,13 +37,11 @@ public class DraftGenerator {
             VscodeSessionRepository sessionRepository,
             DraftRepository draftRepository,
             UserRepository userRepository,
-            NotifyService notifyService,
             WorklogWriter worklogWriter) {
         this.activityRepository = activityRepository;
         this.sessionRepository = sessionRepository;
         this.draftRepository = draftRepository;
         this.userRepository = userRepository;
-        this.notifyService = notifyService;
         this.worklogWriter = worklogWriter;
     }
 
@@ -109,6 +105,9 @@ public class DraftGenerator {
         // 초안을 만들었다고 알리지는 않는다 (9/11 결정). 사원이 AI 생성을 누를 때마다
         // 관리자 채널에 글이 쌓였는데, 아직 사람이 손대지 않은 초안이라 알릴 것이 못 된다.
         // 알림은 사원이 [Mattermost 전송] 을 눌렀을 때 한 번만 나간다 (NotifyService.notifyDraftSummarized).
+        // 그래서 여기서는 NotifyService 를 아예 받지 않는다 — 받아 두면 쓰지도 않는 의존이 남고,
+        // 채팅으로 일지를 만들 수 있게 되면서 고리가 된다
+        // (MattermostBot → WorkLogAnswerService → DraftGenerator → NotifyService → MattermostBot).
         return Optional.of(saved);
     }
 

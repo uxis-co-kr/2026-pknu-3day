@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.worklog.activity.Activity;
@@ -16,7 +15,6 @@ import com.worklog.activity.ActivityType;
 import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.github.Repo;
-import com.worklog.notify.NotifyService;
 import com.worklog.vscode.VscodeSession;
 import com.worklog.vscode.VscodeSessionRepository;
 import java.time.LocalDate;
@@ -35,7 +33,6 @@ class DraftGeneratorTest {
     private ActivityRepository activityRepository;
     private VscodeSessionRepository sessionRepository;
     private DraftRepository draftRepository;
-    private NotifyService notifyService;
     private DraftGenerator generator;
 
     @BeforeEach
@@ -44,7 +41,6 @@ class DraftGeneratorTest {
         sessionRepository = mock(VscodeSessionRepository.class);
         draftRepository = mock(DraftRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
-        notifyService = mock(NotifyService.class);
 
         User user = new User();
         user.setId(USER_ID);
@@ -59,7 +55,6 @@ class DraftGeneratorTest {
                 sessionRepository,
                 draftRepository,
                 userRepository,
-                notifyService,
                 templateWriter());
     }
 
@@ -108,8 +103,8 @@ class DraftGeneratorTest {
         assertThat(draft.getContentMd()).contains("# 2026-09-10 업무 일지 — 배태일");
         assertThat(draft.getSourceActivityIds()).containsExactly(101L, 102L);
         assertThat(draft.getSourceSessionIds()).isEmpty();
-        // 초안을 만든 것 자체는 알리지 않는다 (9/11). 알림은 [Mattermost 전송] 을 눌렀을 때만.
-        verifyNoInteractions(notifyService);
+        // 초안을 만든 것 자체는 알리지 않는다 (9/11). 알림은 [Mattermost 전송] 을 눌렀을 때만 —
+        // 그래서 DraftGenerator 는 NotifyService 를 아예 받지 않는다.
     }
 
     /**
@@ -200,7 +195,6 @@ class DraftGeneratorTest {
     @DisplayName("이름이 없으면 GitHub login 을 쓴다")
     void fallsBackToLogin() {
         UserRepository userRepository = mock(UserRepository.class);
-        notifyService = mock(NotifyService.class);
         User noName = new User();
         noName.setId(USER_ID);
         noName.setLogin("taeil");
@@ -213,7 +207,6 @@ class DraftGeneratorTest {
                 sessionRepository,
                 draftRepository,
                 userRepository,
-                notifyService,
                 templateWriter());
 
         assertThat(g.generate(USER_ID, DAY).orElseThrow().getContentMd())

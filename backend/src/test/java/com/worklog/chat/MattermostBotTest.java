@@ -41,8 +41,10 @@ class MattermostBotTest {
         when(client.login(eq(BASE), eq("worklog-bot"), eq("pw"))).thenReturn("tok");
         when(client.me(BASE, "tok")).thenReturn(new MmUser("bot-id", "worklog-bot"));
         when(client.myChannels(BASE, "tok", "bot-id")).thenReturn(List.of(new MmChannel("ch1", "test", "테스트 채널", "O")));
-        when(answers.answer(anyString())).thenReturn(Optional.empty());
-        when(answers.answer("조웅식 오늘 업무일지")).thenReturn(Optional.of("답"));
+        // 봇은 reply() 를 쓴다 — 일지가 없으면 "만들어 드릴까요" 를 낼 수 있어서다 (9/11).
+        when(answers.reply(anyString())).thenReturn(Optional.empty());
+        when(answers.reply("조웅식 오늘 업무일지"))
+                .thenReturn(Optional.of(new WorkLogAnswerService.Reply("답", null, null)));
     }
 
     private MmPost post(String id, String user, String text, long at) {
@@ -192,6 +194,14 @@ class MattermostBotTest {
         bot.poll();
         bot.postToPrimaryChannel("알림", 7L);
 
+        // 먼저 봇이 단 둘을 실제로 한 번 읽어야 한다 — 달자마자 비어 보이는 것을 "사라졌다" 로
+        // 읽으면 아무도 안 눌렀는데 전송된다.
+        when(client.reactions(BASE, "tok", "post1")).thenReturn(List.of(
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.YES_EMOJI, 1),
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.NO_EMOJI, 1)));
+        bot.poll();
+        verify(client, never()).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+
         // ✅ 가 사라졌다 = 같은 계정의 사람이 눌러 토글했다
         when(client.reactions(BASE, "tok", "post1")).thenReturn(List.of(
                 new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.NO_EMOJI, 1)));
@@ -199,6 +209,53 @@ class MattermostBotTest {
 
         verify(client).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
         verify(client).createPost(BASE, "tok", "ch1", "요약본");
+    }
+
+    @Test
+    @DisplayName("일지가 없다고 답하면 ✅ ❌ 를 달고, '예' 면 그 자리에서 만들어 보여 준다")
+    void offersAndCreatesDraft() {
+        long later = System.currentTimeMillis() + 10_000;
+        when(answers.reply("조웅식 오늘 업무일지")).thenReturn(Optional.of(
+                new WorkLogAnswerService.Reply("아직 업무 일지가 없습니다. 지금 만들어 드릴까요?", 1L, java.time.LocalDate.of(2026, 9, 11))));
+        when(client.createPost(eq(BASE), eq("tok"), eq("ch1"), anyString())).thenReturn("q1");
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p1", "manager", "조웅식 오늘 업무일지", later)));
+
+        bot.poll();
+
+        // 물어본 글에 ✅ ❌ 를 달아 둔다
+        verify(client).addReaction(BASE, "tok", "bot-id", "q1", MattermostBot.YES_EMOJI);
+        verify(client).addReaction(BASE, "tok", "bot-id", "q1", MattermostBot.NO_EMOJI);
+        verify(client, never()).createPost(BASE, "tok", "ch1", "업무 일지를 만들었습니다.");
+
+        // "예" → 만든다
+        when(answers.createDraft(1L, java.time.LocalDate.of(2026, 9, 11))).thenReturn(Optional.of(42L));
+        when(answers.answerDraft(42L)).thenReturn(Optional.of("**조웅식 · 2026-09-11 업무 일지** …"));
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p2", "manager", "예", later + 1)));
+        bot.poll();
+
+        verify(client).createPost(BASE, "tok", "ch1", "업무 일지를 만들었습니다.");
+        verify(client).createPost(BASE, "tok", "ch1", "**조웅식 · 2026-09-11 업무 일지** …");
+    }
+
+    @Test
+    @DisplayName("'아니오' 면 만들지 않는다")
+    void declinesToCreate() {
+        long later = System.currentTimeMillis() + 10_000;
+        when(answers.reply("조웅식 오늘 업무일지")).thenReturn(Optional.of(
+                new WorkLogAnswerService.Reply("지금 만들어 드릴까요?", 1L, java.time.LocalDate.of(2026, 9, 11))));
+        when(client.createPost(eq(BASE), eq("tok"), eq("ch1"), anyString())).thenReturn("q1");
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p1", "manager", "조웅식 오늘 업무일지", later)));
+        bot.poll();
+
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p2", "manager", "아니오", later + 1)));
+        bot.poll();
+
+        verify(client).createPost(BASE, "tok", "ch1", "만들지 않았습니다.");
+        verify(answers, never()).createDraft(any(), any());
     }
 
     @Test

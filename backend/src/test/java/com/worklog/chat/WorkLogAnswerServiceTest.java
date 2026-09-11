@@ -37,6 +37,7 @@ class WorkLogAnswerServiceTest {
     private ActivityRepository activities;
     private VscodeSessionRepository sessions;
     private WorkLogAnswerService service;
+    private com.worklog.draft.DraftGenerator generator;
     private User ungsik;
 
     @BeforeEach
@@ -49,8 +50,9 @@ class WorkLogAnswerServiceTest {
         com.worklog.llm.LlmProviderResolver resolver = mock(com.worklog.llm.LlmProviderResolver.class);
         when(resolver.resolve(any())).thenReturn(new com.worklog.llm.MockLlmProvider());
         com.worklog.llm.LlmSettingService llmSettings = mock(com.worklog.llm.LlmSettingService.class);
+        generator = mock(com.worklog.draft.DraftGenerator.class);
         service = new WorkLogAnswerService(
-                users, people, drafts, activities, sessions, resolver, llmSettings,
+                users, people, drafts, activities, sessions, generator, resolver, llmSettings,
                 new com.worklog.llm.PromptLoader(), "http://front/");
 
         ungsik = new User();
@@ -96,8 +98,8 @@ class WorkLogAnswerServiceTest {
     }
 
     @Test
-    @DisplayName("초안이 없으면 활동으로 그 자리에서 조립하고, 초안을 만들지는 않는다")
-    void answersFromActivitiesWithoutSavingDraft() {
+    @DisplayName("초안이 없으면 만들지 말지 묻는다 — 묻기만 하고 만들지는 않는다")
+    void offersToCreateWhenMissing() {
         Repo repo = new Repo();
         repo.setFullName("uxis/worklog");
         Activity a = new Activity();
@@ -109,10 +111,13 @@ class WorkLogAnswerServiceTest {
         a.setOccurredAt(OffsetDateTime.now());
         when(activities.findForUserBetween(eq(1L), any(), any())).thenReturn(List.of(a));
 
-        String answer = service.answer("조웅식 어제 업무일지").orElseThrow();
+        WorkLogAnswerService.Reply reply = service.reply("조웅식 어제 업무일지").orElseThrow();
 
-        assertThat(answer).contains("초안 미생성").contains("활동 1건");
-        assertThat(answer).contains("로그인 405 를 고쳤다");
+        // 그 자리에서 조립해 보여 주던 것을 "만들어 드릴까요" 로 바꿨다 (9/11) — 보여 주기만 하면
+        // 어디에도 남지 않아 물을 때마다 다시 만들어지고 정작 그 사람 화면에는 일지가 없었다.
+        assertThat(reply.text()).contains("아직 업무 일지가 없습니다").contains("활동 1건");
+        assertThat(reply.offersToCreate()).isTrue();
+        assertThat(reply.offerUserId()).isEqualTo(1L);
         org.mockito.Mockito.verify(drafts, org.mockito.Mockito.never()).save(any());
     }
 
