@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, FileDiff, GitCommitHorizontal, ListTodo,
-  MessagesSquare, NotebookPen,
+  MessagesSquare, NotebookPen, Save,
 } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import PlanMarkdown from '@/components/common/PlanMarkdown'
@@ -158,6 +158,7 @@ function SessionDetail({ session }: { session: VscodeSession }) {
   // 없었거나(한 번도 push 하지 않은 브랜치), 미푸시를 보내기 전 확장·서버가 남긴 기록이거나.
   // 그래서 "셀 수 없음" 이라고 단정하지 않고 "알 수 없음" 으로 적는다.
   const unpushed = session.unpushedCommits ?? null
+  const unsaved = session.unsavedFiles ?? []
 
   return (
     <div className="border-b px-4 py-3 last:border-b-0">
@@ -221,16 +222,33 @@ function SessionDetail({ session }: { session: VscodeSession }) {
           ))}
         </Group>
 
-        <Group label="저장 이벤트" count={session.editTimeline.length} Icon={Clock}>
-          {session.editTimeline.map((e) => (
-            <div key={e.path} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate">{e.path}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground/70">
-                {e.saveCount}회 · {formatTime(e.lastSavedAt)}
-              </span>
+        {/* 고쳐 놓고 저장하지 않은 파일. 디스크에 없으니 diff 에도 없다 — 여기가 유일한 출처다. */}
+        <Group label="미저장 파일" count={unsaved.length} Icon={Save}>
+          {unsaved.map((f) => (
+            <div key={f.path} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate">{f.path}</span>
+              {f.dirtySince && (
+                <span className="shrink-0 tabular-nums text-muted-foreground/70">
+                  {formatTime(f.dirtySince)}부터
+                </span>
+              )}
             </div>
           ))}
         </Group>
+
+        {/* 2026-09-11 부터 모으지 않는다. 그전 기록에만 남아 있어, 있을 때만 보여 준다. */}
+        {session.editTimeline.length > 0 && (
+          <Group label="저장 이벤트 (지난 기록)" count={session.editTimeline.length} Icon={Clock}>
+            {session.editTimeline.map((e) => (
+              <div key={e.path} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate">{e.path}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground/70">
+                  {e.saveCount}회 · {formatTime(e.lastSavedAt)}
+                </span>
+              </div>
+            ))}
+          </Group>
+        )}
       </div>
     </div>
   )

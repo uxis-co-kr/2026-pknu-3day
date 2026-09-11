@@ -53,6 +53,7 @@ class VscodeSessionServiceTest {
                 List.of(new TodoItem("src/api/attendance.ts", 42, "중복 출석 검증")),
                 planNote,
                 List.of(),
+                List.of(new UnsavedFile("src/api/attendance.ts", null)),
                 List.of(new AiSessionSummary(
                         "sess-1",
                         "출석 중복 검증",
@@ -83,7 +84,7 @@ class VscodeSessionServiceTest {
     @DisplayName("셀 수 없는 미푸시(null)를 빈 배열로 바꾸지 않는다 — 0개와 뜻이 다르다")
     void keepsUncountableUnpushedAsNull() {
         SessionRequest noUpstream = new SessionRequest(
-                REMOTE, BRANCH, WORK_DATE, List.of(), List.of(), null, List.of(), List.of(), null, null);
+                REMOTE, BRANCH, WORK_DATE, List.of(), List.of(), null, List.of(), List.of(), List.of(), null, null);
 
         assertThat(service.upsert(USER_ID, noUpstream).getUnpushedCommits()).isNull();
     }
@@ -173,7 +174,7 @@ class VscodeSessionServiceTest {
         when(repos.findByFullName("withly/unknown")).thenReturn(Optional.empty());
         SessionRequest unknown = new SessionRequest(
                 "https://github.com/withly/unknown.git", BRANCH, WORK_DATE,
-                List.of(), List.of(), null, List.of(), List.of(), null, null);
+                List.of(), List.of(), null, List.of(), List.of(), List.of(), null, null);
         assertThat(service.upsert(USER_ID, unknown).getRepo()).isNull();
     }
 }

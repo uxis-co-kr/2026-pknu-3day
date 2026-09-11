@@ -18,7 +18,10 @@ public record SessionResponse(
         List<UncommittedFile> uncommittedFiles,
         List<TodoItem> todos,
         String planNote,
+        /** 파일별 저장 이벤트. 2026-09-11 이전 기록에만 들어 있다. */
         List<EditTimelineEntry> editTimeline,
+        /** 고쳐 놓고 저장하지 않은 파일 (V12). */
+        List<UnsavedFile> unsavedFiles,
         /** 그 폴더에서 오간 AI 대화 (V9). 없으면 빈 배열. */
         List<AiSessionSummary> aiSessions,
         /** 미푸시 커밋 (V11). null 이면 업스트림이 없어 셀 수 없다는 뜻이다. */
@@ -41,6 +44,7 @@ public record SessionResponse(
                 s.getTodos(),
                 s.getPlanNote(),
                 s.getEditTimeline(),
+                s.getUnsavedFiles(),
                 s.getAiSessions(),
                 s.getUnpushedCommits(),
                 s.getSummary(),

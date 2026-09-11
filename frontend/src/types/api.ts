@@ -137,6 +137,19 @@ export interface AiSessionSummary {
   summary?: string | null
 }
 
+/**
+ * 고쳐 놓고 저장하지 않은 파일 하나.
+ *
+ * <p>예전에는 저장 이벤트(파일별 저장 횟수)를 모았다. 그런데 VS Code 의 저장 이벤트는
+ * 편집기에서 저장할 때만 와서, 파일을 디스크에 곧바로 쓰는 AI 도구의 변경은 한 건도
+ * 남지 않았다 — 사람이 손으로 저장한 것만 모으는 목록이었다.
+ */
+export interface UnsavedFile {
+  path: string
+  /** 고치기 시작해 저장하지 않은 채 지난 시각. 확장을 다시 켠 뒤면 없다. */
+  dirtySince?: string | null
+}
+
 /** 미푸시 커밋 하나. GitHub 활동으로는 잡히지 않는다 — 원격에 없으니 API 에 안 나온다. */
 export interface UnpushedCommit {
   /** 짧은 해시 */
@@ -162,7 +175,10 @@ export interface VscodeSession {
   uncommittedFiles: UncommittedFile[]
   todos: TodoItem[]
   planNote: string | null
+  /** 파일별 저장 이벤트. 2026-09-11 이전 기록에만 들어 있다 — 지금은 `unsavedFiles` 를 모은다. */
   editTimeline: EditTimelineEntry[]
+  /** 고쳐 놓고 아직 저장하지 않은 파일. git 에 잡히지 않는 유일한 구간이다. */
+  unsavedFiles?: UnsavedFile[]
   /** 커밋에도 미커밋 변경에도 남지 않는 작업의 단서. */
   aiSessions: AiSessionSummary[]
   /**

@@ -108,6 +108,12 @@
         "subject": "refactor: 출석 서비스 의존성 정리",
         "at": "2026-09-09T14:05:39+09:00"
       }
+    ],
+    "unsavedFiles": [
+      {
+        "path": "src/api/attendance.ts",
+        "dirtySince": "2026-09-09T16:02:11+09:00"
+      }
     ]
   },
   {
@@ -154,6 +160,7 @@
     "lastCommitAt": "2026-09-09T17:00:00+09:00",
     "reportedAt": "2026-09-09T17:45:00+09:00",
     "aiSessions": [],
-    "unpushedCommits": null
+    "unpushedCommits": null,
+    "unsavedFiles": []
   }
 ]

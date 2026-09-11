@@ -4,7 +4,7 @@ import * as vscode from 'vscode'
 import { collectAiSessions } from './aiSessions'
 import * as git from './git'
 import { log } from './log'
-import type { EditTimelineEntry, SessionPayload, TodoItem, UncommittedFile } from './types'
+import type { SessionPayload, TodoItem, UncommittedFile, UnsavedFile } from './types'
 
 /** PRD F6-1 — diff 는 파일당 200줄까지만 보낸다. */
 const DIFF_LINE_LIMIT = 200
@@ -48,21 +48,13 @@ const BLOCK_CLOSE = /\*\/|-->/
  */
 const PROSE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt', '.rst', '.adoc'])
 
-interface Save {
-  firstSavedAt: string
-  lastSavedAt: string
-  saveCount: number
-}
-
 /**
- * 재시작해도 남아야 하는 값. 저장 이벤트와 계획 메모는 git 에서 다시 뽑을 수 없어,
- * 메모리에만 두면 VS Code 를 끄는 순간 사라진다. 서버는 editTimeline 을 통째로
- * 덮어쓰므로 그 상태로 전송하면 그날 쌓인 기록까지 지워진다.
+ * 재시작해도 남아야 하는 값. 계획 문서는 git 에서 다시 뽑을 수 없어, 메모리에만 두면
+ * VS Code 를 끄는 순간 사라진다.
  */
 interface PersistedState {
   /** 어느 날짜의 기록인지. 날이 바뀌면 통째로 버린다. */
   date: string
-  saves: Record<string, Save>
   /** 폴더 절대 경로 → 그 폴더의 계획 문서. 폴더마다 하는 일이 다르다. */
   plans: Record<string, string>
 }
@@ -88,8 +80,14 @@ export interface StateStore {
  * 서버는 (user, remoteUrl, branch, workDate) 로 UPSERT 하므로 각각 별개 세션이 된다.
  */
 export class Collector {
-  /** 파일 저장 이벤트. 키는 절대 경로 — 폴더별로 나눠 담으려면 상대 경로로는 부족하다. */
-  private readonly saves = new Map<string, Save>()
+  /**
+   * 고치기 시작한 뒤 아직 저장하지 않은 파일 → 처음 고친 시각. 키는 절대 경로다.
+   *
+   * <p>무엇이 저장되지 않았는지는 {@link vscode.workspace.textDocuments} 가 늘 정확히
+   * 알고 있다. 여기 담는 것은 <b>언제부터</b> 그랬는지뿐이라, 재시작하면 비워도 된다 —
+   * 그때는 시각 없이 목록만 보낸다.
+   */
+  private readonly dirtySince = new Map<string, string>()
 
   /**
    * 폴더별 오늘 계획. <b>문서 한 통이 그 폴더의 오늘 계획 하나다.</b>
@@ -140,17 +138,14 @@ export class Collector {
     return this.lastUnpushed
   }
 
-  recordSave(fsPath: string, at: Date = new Date()): void {
-    this.rolloverIfNeeded()
-    const iso = at.toISOString()
-    const prev = this.saves.get(fsPath)
-    if (prev) {
-      prev.lastSavedAt = iso
-      prev.saveCount += 1
-    } else {
-      this.saves.set(fsPath, { firstSavedAt: iso, lastSavedAt: iso, saveCount: 1 })
-    }
-    this.persist()
+  /** 파일을 고치기 시작했다. 이미 세고 있으면 처음 시각을 그대로 둔다. */
+  markDirty(fsPath: string, at: Date = new Date()): void {
+    if (!this.dirtySince.has(fsPath)) this.dirtySince.set(fsPath, at.toISOString())
+  }
+
+  /** 저장했거나 되돌렸다. 더 이상 미저장이 아니다. */
+  markSaved(fsPath: string): void {
+    this.dirtySince.delete(fsPath)
   }
 
   /**
@@ -226,7 +221,7 @@ export class Collector {
         todos,
         // 서버 계약은 문자열 한 칸이다 (PRD 7). 계획 문서를 그대로 담아 보낸다.
         planNote: plan || undefined,
-        editTimeline: this.timelineFor(cwd),
+        unsavedFiles: this.unsavedIn(cwd),
         lastCommitAt,
         aiSessions,
         // 업스트림이 없으면 담지 않는다. 빈 배열로 보내면 "미푸시 없음" 이 돼 버린다.
@@ -295,9 +290,8 @@ export class Collector {
   private rolloverIfNeeded(): void {
     const today = todayKst()
     if (today === this.stateDate) return
-    log(`업무 일자가 ${this.stateDate} → ${today} 로 바뀌어 저장 기록과 계획을 비웁니다`)
+    log(`업무 일자가 ${this.stateDate} → ${today} 로 바뀌어 계획을 비웁니다`)
     this.stateDate = today
-    this.saves.clear()
     this.plans.clear()
     this.persist()
   }
@@ -305,7 +299,6 @@ export class Collector {
   private persist(): void {
     void this.store?.update(STATE_KEY, {
       date: this.stateDate,
-      saves: Object.fromEntries(this.saves),
       plans: Object.fromEntries(this.plans),
     } satisfies PersistedState)
   }
@@ -317,24 +310,35 @@ export class Collector {
       log(`저장된 기록이 ${saved.date} 것이라 쓰지 않습니다 (오늘은 ${this.stateDate})`)
       return
     }
-    for (const [fsPath, save] of Object.entries(saved.saves ?? {})) this.saves.set(fsPath, save)
     for (const [folder, saved0] of Object.entries(saved.plans ?? {})) {
       // 계획을 줄 단위로 세던 판은 배열로 저장했다. 그날 적어 둔 것을 잃지 않게 이어 붙인다.
       const text = Array.isArray(saved0) ? saved0.join('\n') : saved0
       if (typeof text === 'string' && text.trim()) this.plans.set(folder, text)
     }
-    log(`저장 기록 ${this.saves.size}건, 계획 ${this.plans.size}개 폴더를 되살렸습니다`)
+    log(`계획 ${this.plans.size}개 폴더를 되살렸습니다`)
   }
 
-  /** 이 폴더 안에서 저장된 파일만, git 기준 상대 경로로 바꿔 담는다 (PRD F6-5). */
-  private timelineFor(cwd: string): EditTimelineEntry[] {
+  /**
+   * 이 폴더 안에서 <b>고쳐 놓고 저장하지 않은</b> 파일 (PRD F6-5 를 대신한다).
+   *
+   * <p>편집기가 들고 있는 문서를 그대로 본다 — 저장하지 않은 내용은 디스크에 없으니
+   * git 도, 우리가 따로 센 기록도 알 수 없다. 여기가 유일한 출처다.
+   *
+   * <p>이름 없는 문서(Untitled)는 뺀다. 어느 폴더의 일인지 정할 수 없다.
+   */
+  private unsavedIn(cwd: string): UnsavedFile[] {
     const prefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep
-    const entries: EditTimelineEntry[] = []
-    for (const [fsPath, save] of this.saves) {
+    const files: UnsavedFile[] = []
+    for (const doc of vscode.workspace.textDocuments) {
+      if (!doc.isDirty || doc.isUntitled || doc.uri.scheme !== 'file') continue
+      const fsPath = doc.uri.fsPath
       if (!fsPath.startsWith(prefix)) continue
-      entries.push({ path: fsPath.slice(prefix.length).split(path.sep).join('/'), ...save })
+      files.push({
+        path: fsPath.slice(prefix.length).split(path.sep).join('/'),
+        dirtySince: this.dirtySince.get(fsPath),
+      })
     }
-    return entries
+    return files
   }
 }
 
