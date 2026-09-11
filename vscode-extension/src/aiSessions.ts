@@ -55,7 +55,10 @@ async function listSessionFiles(cwd: string): Promise<SessionFile[]> {
   try {
     names = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
   } catch {
-    return [] // Claude Code 를 쓰지 않는 폴더이거나 기록이 없다.
+    // Claude Code 를 쓰지 않는 폴더이면 정상이다. 다만 이름 규칙이 어긋나도 여기로 오므로
+    // 한 줄 남긴다 — 조용히 0건이면 "대화를 안 했나 보다" 로 읽혀 버그가 숨는다.
+    log(`AI 대화 기록 폴더가 없습니다: ${dir}`)
+    return []
   }
 
   const files: SessionFile[] = []
@@ -117,14 +120,25 @@ function newestPerOrigin(files: SessionFile[]): SessionFile[] {
   return kept
 }
 
-/** `/Users/me/work/app` → `-Users-me-work-app` */
 /** 그 폴더의 그 대화가 담긴 기록 파일. 사이드바에서 문서를 열 때 쓴다. */
 export function sessionFilePath(cwd: string, id: string): string {
   return path.join(ROOT, encodeCwd(cwd), `${id}.jsonl`)
 }
 
+/**
+ * `/Users/me/work/app_v2` → `-Users-me-work-app-v2`
+ *
+ * <p>Claude Code 는 폴더 이름에서 <b>영숫자와 `-` 가 아닌 글자를 모두 `-` 로</b> 바꾼다.
+ * 슬래시만 바꾸면 밑줄·점·공백이 든 경로에서 엉뚱한 폴더를 찾는다 — `git_collector` 의
+ * 기록은 `-…-git-collector` 에 있는데 `-…-git_collector` 를 뒤지고는 조용히 빈 목록을
+ * 돌려줬다. 그 저장소의 AI 대화가 통째로 빠져 있었고, 밑줄이 없는 저장소에서는 멀쩡해서
+ * 눈에 띄지 않았다.
+ *
+ * <p>확인: `/Users/ungsik/Desktop/CodeAtlas/CodeAtlas.git` → `-Users-ungsik-Desktop-CodeAtlas-CodeAtlas-git`
+ * (점도 `-` 가 된다). 위 sessionFilePath 도 같은 규칙을 써야 문서가 열린다.
+ */
 function encodeCwd(cwd: string): string {
-  return cwd.replace(/[/\\]/g, '-')
+  return cwd.replace(/[^A-Za-z0-9-]/g, '-')
 }
 
 /**
