@@ -149,6 +149,26 @@ export default function DraftWorkspace({
 
   const sourceActivities = draft?.sourceActivities ?? evidence?.activities ?? []
   const sourceSessions = draft?.sourceSessions ?? evidence?.sessions ?? []
+
+  /**
+   * 근거는 **이 초안이 만들어질 때 쓴 재료**다 (`sourceSessionIds`). 그래서 초안을 만든 뒤에
+   * 들어온 기록 — 오후에 새 저장소를 열었다든지 — 은 여기 없다. 화면에는 "1저장소" 인데
+   * VSCode 내역 탭에는 둘이 보이는 일이 그래서 생긴다.
+   *
+   * <p>스냅샷을 라이브로 바꾸면 "이 초안의 근거" 라는 말이 거짓이 된다. 대신 그 사이에 더
+   * 들어온 것이 있으면 몇 건인지와 어떻게 반영하는지를 알려 준다.
+   */
+  const behind = (() => {
+    if (!draft || !evidence) return undefined
+    const moreSessions = evidence.sessions.length - sourceSessions.length
+    const moreActivities = evidence.activities.length - sourceActivities.length
+    if (moreSessions <= 0 && moreActivities <= 0) return undefined
+    const parts = [
+      moreSessions > 0 ? `저장소 ${moreSessions}곳` : null,
+      moreActivities > 0 ? `GitHub 활동 ${moreActivities}건` : null,
+    ].filter(Boolean)
+    return `이 초안을 만든 뒤 ${parts.join(' · ')}이 더 들어왔습니다. AI 생성을 다시 누르면 반영됩니다.`
+  })()
   const author = draft ? sourceActivities[0]?.user?.name : displayName
   const busy = save.isPending || notify.isPending || regenerate.isPending || createBlank.isPending
 
@@ -290,7 +310,12 @@ export default function DraftWorkspace({
         </DialogContent>
       </Dialog>
 
-      <EvidencePanel activities={sourceActivities} sessions={sourceSessions} onJump={jumpTo} />
+      <EvidencePanel
+        activities={sourceActivities}
+        sessions={sourceSessions}
+        behind={behind}
+        onJump={jumpTo}
+      />
     </div>
   )
 }

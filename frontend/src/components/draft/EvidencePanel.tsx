@@ -17,10 +17,12 @@ import type { Activity, ActivityType, VscodeSession } from '@/types/api'
  * <p>행을 누르면 에디터에서 그 근거가 적힌 줄로 이동한다.
  */
 export default function EvidencePanel({
-  activities, sessions, onJump,
+  activities, sessions, behind, onJump,
 }: {
   activities: Activity[]
   sessions: VscodeSession[]
+  /** 이 초안을 만든 뒤로 더 들어온 기록이 있으면 그 안내. 없으면 undefined */
+  behind?: string
   onJump: (needles: string[]) => void
 }) {
   const byTime = [...activities].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt))
@@ -55,9 +57,19 @@ export default function EvidencePanel({
           {activities.length === 0 && <Empty />}
         </Source>
 
-        <Source label="VS 활동" count={sessions.length} unit="세션">
+        {/*
+          한 줄이 저장소 하나다 (서버는 사용자·저장소·브랜치·날짜로 한 행을 만든다).
+          VSCode 내역 탭도 이것을 "저장소" 로 세므로 이름을 맞춘다 — 같은 것을 두 화면이
+          다르게 부르면 숫자가 달라 보인다.
+        */}
+        <Source label="VS 활동" count={sessions.length} unit="저장소">
           {sessions.map((s) => <SessionEvidence key={s.id} session={s} onJump={onJump} />)}
           {sessions.length === 0 && <Empty />}
+          {behind && (
+            <p className="mt-2 rounded border border-dashed px-2.5 py-2 text-[12px] text-muted-foreground">
+              {behind}
+            </p>
+          )}
         </Source>
 
         <p className="pt-3 text-[12px] text-muted-foreground/70">
