@@ -2,7 +2,7 @@
   "name": "worklog-drafter",
   "displayName": "WorkLog Drafter",
   "description": "커밋되지 않은 작업과 오늘의 계획을 모아 WorkLog Drafter 서버로 보낸다.",
-  "version": "0.3.2",
+  "version": "0.5.0",
   "publisher": "withly",
   "private": true,
   "license": "UNLICENSED",
@@ -18,7 +18,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onUri"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -37,6 +38,11 @@
         "command": "worklog.refresh",
         "title": "WorkLog: 새로고침",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "worklog.connect",
+        "title": "WorkLog: 대시보드 연결 (연결 코드 붙여넣기)",
+        "icon": "$(plug)"
       },
       {
         "command": "worklog.setApiKey",
@@ -60,7 +66,8 @@
         "worklog.apiKey": {
           "type": "string",
           "default": "",
-          "description": "설정 > API Key 에서 발급한 개인 키 (wl_ 로 시작)."
+          "markdownDeprecationMessage": "**여기에 키를 적지 않습니다.** 키는 편집기의 비밀 저장소에 둡니다 — 여기 남아 있던 값은 확장이 한 번 옮기고 지웁니다. 연결은 대시보드 설정 > API 연동의 **VS Code 에 연결** 버튼이나 명령 팔레트 → `WorkLog: 대시보드 연결` 로 합니다.",
+          "description": "(더 이상 쓰지 않음) 예전에 개인 키를 평문으로 두던 자리."
         },
         "worklog.intervalMinutes": {
           "type": "number",
@@ -105,14 +112,19 @@
           "group": "navigation@2"
         },
         {
-          "command": "worklog.setServerUrl",
+          "command": "worklog.connect",
           "when": "view == worklog.session",
           "group": "navigation@3"
         },
         {
-          "command": "worklog.setApiKey",
+          "command": "worklog.setServerUrl",
           "when": "view == worklog.session",
           "group": "navigation@4"
+        },
+        {
+          "command": "worklog.setApiKey",
+          "when": "view == worklog.session",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -129,7 +141,8 @@
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package --no-dependencies",
-    "preview": "node scripts/preview.cjs"
+    "preview": "node scripts/preview.cjs",
+    "test": "npm run compile && node --test test/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import GithubLinkCard from '@/components/settings/GithubLinkCard'
 import PasswordPage from '@/pages/PasswordPage'
@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useApiKeys, useIssueApiKey, useRevokeApiKey } from '@/api/hooks'
+import { connectCode, editorConnectLink } from '@/lib/connect'
 import { formatRelative } from '@/lib/date'
 import type { IssuedApiKey } from '@/types/api'
 
@@ -37,13 +38,14 @@ export default function SettingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [issued, setIssued] = useState<IssuedApiKey | null>(null)
-  const [copied, setCopied] = useState(false)
+  /** 무엇을 방금 복사했는지. 키와 연결 코드가 각각 따로 체크 표시를 낸다. */
+  const [copied, setCopied] = useState<'key' | 'code' | null>(null)
 
 
   function openDialog() {
     setLabel('')
     setIssued(null)
-    setCopied(false)
+    setCopied(null)
     setDialogOpen(true)
   }
 
@@ -118,15 +120,44 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <code className="flex-1 truncate rounded-md border bg-muted px-3 py-2 text-[12px]">{issued.key}</code>
                 <Button
-                  variant="outline" size="icon" className="size-9" aria-label="복사"
+                  variant="outline" size="icon" className="size-9" aria-label="키 복사"
                   onClick={() => {
                     void navigator.clipboard.writeText(issued.key)
-                    setCopied(true)
+                    setCopied('key')
                   }}
                 >
-                  {copied ? <Check className="text-status-confirmed" /> : <Copy />}
+                  {copied === 'key' ? <Check className="text-status-confirmed" /> : <Copy />}
                 </Button>
               </div>
+
+              {/*
+                * 여기서 끝내면 사람이 키를 들고 편집기로 건너가 주소부터 적어야 한다. 주소는
+                * 이 화면이 이미 알고 있으므로(backendBaseUrl), 주소와 키를 한 덩어리로 확장에
+                * 넘긴다 — 누르면 편집기가 뜨고, 뜨지 않는 자리를 위해 코드도 같이 준다.
+                */}
+              <div className="mt-1 flex items-center gap-2">
+                <Button asChild size="sm" className="h-[34px] flex-1">
+                  <a href={editorConnectLink(issued.key)}>
+                    <ExternalLink /> VS Code 에 연결
+                  </a>
+                </Button>
+                <Button
+                  variant="outline" size="sm" className="h-[34px] flex-1"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(connectCode(issued.key))
+                    setCopied('code')
+                  }}
+                >
+                  {copied === 'code' ? <Check className="text-status-confirmed" /> : <Copy />}
+                  {copied === 'code' ? '복사했습니다' : '연결 코드 복사'}
+                </Button>
+              </div>
+              <p className="text-[12px] leading-relaxed text-muted-foreground">
+                버튼을 누르면 서버 주소와 키가 확장에 한 번에 들어갑니다. 편집기가 뜨지 않으면
+                (원격 접속·브라우저가 막는 경우) <b>연결 코드</b>를 복사해 편집기에서 명령 팔레트
+                → <code>WorkLog: 대시보드 연결</code> 에 붙여 넣으세요.
+                Cursor 를 쓴다면 <a className="underline" href={editorConnectLink(issued.key, 'cursor')}>이 링크</a>입니다.
+              </p>
               <DialogFooter>
                 <Button size="sm" className="h-[34px]" onClick={() => setDialogOpen(false)}>닫기</Button>
               </DialogFooter>
