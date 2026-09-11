@@ -70,7 +70,7 @@ public class VscodeSession {
     @Column(nullable = false, columnDefinition = "jsonb")
     private List<TodoItem> todos = new ArrayList<>();
 
-    /** 명령 팔레트 "WorkLog: 오늘 계획 기록" 으로 적은 메모. */
+    /** 확장의 계획 문서에 적은 오늘 계획. markdown 한 통이 하루 계획 하나다. */
     @Column(name = "plan_note", columnDefinition = "text")
     private String planNote;
 
@@ -83,10 +83,15 @@ public class VscodeSession {
     @Column(name = "ai_sessions", nullable = false, columnDefinition = "jsonb")
     private List<AiSessionSummary> aiSessions = new ArrayList<>();
 
-    /** 커밋했지만 아직 푸시하지 않은 구간 (V11). 확장이 보낸다. */
+    /**
+     * 커밋했지만 아직 push 하지 않은 커밋 (V11).
+     *
+     * <p>{@code null} 은 <b>셀 수 없음</b>이다 — 한 번도 push 하지 않은 브랜치는 비교할
+     * 업스트림이 없다. 빈 배열(미푸시 없음)과 뜻이 다르므로 기본값을 주지 않는다.
+     */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "unpushed_commits", nullable = false, columnDefinition = "jsonb")
-    private List<UnpushedCommit> unpushedCommits = new ArrayList<>();
+    @Column(name = "unpushed_commits", columnDefinition = "jsonb")
+    private List<UnpushedCommit> unpushedCommits;
 
     @Column(columnDefinition = "text")
     private String summary;

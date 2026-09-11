@@ -1,8 +1,8 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { open, readdir, readFile, stat } from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { log } from './log'
-import type { AiSessionSummary, AiTurn, IdleAiSession } from './types'
+import type { AiSessionSummary, AiTurn } from './types'
 
 /**
  * 이 폴더에서 오간 AI 대화(Claude Code)를 읽어 요약 재료를 만든다.
@@ -30,6 +30,92 @@ const MAX_ANSWER_LEN = 300
 const MAX_TITLE_LEN = 40
 /** 세션 파일이 커도 끝부분만 읽는다 — 오늘 대화는 뒤에 있다. */
 const TAIL_BYTES = 2 * 1024 * 1024
+/** 대화가 시작된 시각을 찾을 만큼만 앞에서 읽는다. 첫 줄 하나면 되지만 길 수도 있다. */
+const HEAD_BYTES = 64 * 1024
+
+/**
+ * 폴더 안의 대화 파일 하나.
+ *
+ * <p>파일 하나가 대화 하나는 아니다 — 이어 쓰거나 갈라 쓰면 Claude Code 는 <b>지금까지의
+ * 대화를 통째로 복사한 새 파일</b>을 만들고 세션 id 도 새로 붙인다. 옛 파일은 그대로 남는다.
+ * 그래서 파일만 세면 Claude Code 사이드바에 하나로 보이는 대화가 여기서는 둘, 셋으로 늘어난다.
+ */
+interface SessionFile {
+  path: string
+  id: string
+  /** 이 대화가 시작된 시각. 복사본끼리는 이 값이 밀리초까지 같다 — 묶는 열쇠다. */
+  origin: string | undefined
+  mtimeMs: number
+}
+
+/** 폴더의 대화 파일을 모두 훑어 시작점까지 읽어 둔다. */
+async function listSessionFiles(cwd: string): Promise<SessionFile[]> {
+  const dir = path.join(ROOT, encodeCwd(cwd))
+  let names: string[]
+  try {
+    names = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
+  } catch {
+    return [] // Claude Code 를 쓰지 않는 폴더이거나 기록이 없다.
+  }
+
+  const files: SessionFile[] = []
+  for (const name of names) {
+    const file = path.join(dir, name)
+    try {
+      const info = await stat(file)
+      files.push({ path: file, id: path.basename(name, '.jsonl'), origin: await originOf(file), mtimeMs: info.mtimeMs })
+    } catch (e) {
+      log(`AI 세션 ${name} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  return files
+}
+
+/** 파일 앞부분에서 첫 시각을 뽑는다. 대화가 시작된 때이고, 복사본끼리 같다. */
+async function originOf(file: string): Promise<string | undefined> {
+  const handle = await open(file, 'r')
+  try {
+    const buffer = Buffer.alloc(HEAD_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, HEAD_BYTES, 0)
+    for (const line of buffer.subarray(0, bytesRead).toString('utf8').split('\n')) {
+      if (!line.startsWith('{')) continue
+      let entry: SessionEntry
+      try {
+        entry = JSON.parse(line) as SessionEntry
+      } catch {
+        continue // 마지막 조각이 잘렸다. 앞 줄에서 못 찾았으면 그냥 포기한다.
+      }
+      if (entry.timestamp) return entry.timestamp
+    }
+  } finally {
+    await handle.close()
+  }
+  return undefined
+}
+
+/**
+ * 같은 대화에서 갈라져 나온 파일은 <b>마지막에 손댄 것 하나만</b> 남긴다.
+ *
+ * <p>새 파일은 옛 파일의 내용을 통째로 안고 있으므로, 마지막 것만 봐도 잃는 것이 없다.
+ * 시작점을 읽지 못한 파일은 묶지 않는다 — 남남일 수도 있는 것을 합치는 쪽이 더 나쁘다.
+ */
+function newestPerOrigin(files: SessionFile[]): SessionFile[] {
+  const newest = new Map<string, SessionFile>()
+  const loose: SessionFile[] = []
+  for (const file of files) {
+    if (!file.origin) {
+      loose.push(file)
+      continue
+    }
+    const prev = newest.get(file.origin)
+    if (!prev || prev.mtimeMs < file.mtimeMs) newest.set(file.origin, file)
+  }
+  const kept = [...loose, ...newest.values()]
+  if (kept.length < files.length) {
+    log(`AI 대화 ${files.length}개 파일 중 ${files.length - kept.length}개는 같은 대화의 옛 사본이라 뺍니다`)
+  }
+  return kept
+}
 
 /** `/Users/me/work/app` → `-Users-me-work-app` */
 function encodeCwd(cwd: string): string {
@@ -37,25 +123,34 @@ function encodeCwd(cwd: string): string {
 }
 
 /**
+ * 보낼 대화 — <b>오늘 질문을 올린 것</b>과 <b>지금 열려 있는 빈 곳이 아닌 것</b>.
+ *
+ * <p>둘을 합치는 이유는 서로 메우기 때문이다. 오늘 물었으면 닫았더라도 오늘 한 일이니
+ * 남아야 하고(닫는 순간 그날 기록이 서버에서 지워지면 안 된다), 열어 둔 채 아직 묻지
+ * 않았거나 어제 묻던 대화는 지금 붙들고 있는 일이니 함께 보이는 편이 맞다.
+ *
+ * <p>예전에는 뒤쪽을 "보내지 않음" 으로 따로 붙였다. 이제 같은 목록에 들어간다.
+ *
  * @param cwd 워크스페이스 폴더의 절대 경로
- * @param workDate YYYY-MM-DD (KST). 그날 오간 것만 모은다.
+ * @param workDate YYYY-MM-DD (KST)
  */
 export async function collectAiSessions(cwd: string, workDate: string): Promise<AiSessionSummary[]> {
-  const dir = path.join(ROOT, encodeCwd(cwd))
-  let files: string[]
-  try {
-    files = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
-  } catch {
-    return [] // Claude Code 를 쓰지 않는 폴더이거나 기록이 없다.
-  }
-
+  const open = await openSessionIds(cwd)
   const out: AiSessionSummary[] = []
-  for (const file of files) {
+  for (const file of newestPerOrigin(await listSessionFiles(cwd))) {
     try {
-      const summary = await readSession(path.join(dir, file), workDate)
-      if (summary) out.push(summary)
+      const today = await readSession(file.path, workDate)
+      if (today) {
+        out.push(today)
+        continue
+      }
+      // 오늘 질문이 없어도 열려 있으면 싣는다. 날짜를 걸지 않고 읽어 마지막 오간 것을 담는다
+      // — 질문이 하나도 없는 대화는 readSession 이 undefined 를 준다(빈 곳은 뺀다).
+      if (!open.has(file.id)) continue
+      const whole = await readSession(file.path)
+      if (whole) out.push(whole)
     } catch (e) {
-      log(`AI 세션 ${file} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+      log(`AI 세션 ${file.id} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
   // 마지막으로 말한 세션이 앞에 오게.
@@ -63,93 +158,69 @@ export async function collectAiSessions(cwd: string, workDate: string): Promise<
   return out
 }
 
-/** 오늘 것이 아닌 대화를 사이드바에 몇 개까지 붙일지. */
-const MAX_IDLE = 8
-/** 며칠 전 것까지 보여 줄지. 그보다 오래된 대화는 지금 하는 일과 관계가 없다. */
-const IDLE_DAYS = 14
-/** 제목과 질문 하나만 찾으면 되므로 끝부분만 조금 읽는다. */
-const IDLE_TAIL_BYTES = 256 * 1024
+/** 켜져 있는 Claude Code 세션이 저마다 남기는 곳. 끝나면 파일도 사라진다. */
+const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions')
+
+/** {@link SESSIONS_DIR} 안의 파일. 필요한 것만 적는다. */
+interface RunningSession {
+  pid?: number
+  sessionId?: string
+  cwd?: string
+}
 
 /**
- * **오늘 질문이 없어 보내지 않는** 대화. 사이드바에만 쓴다.
+ * 이 폴더에서 <b>지금 열려 있는</b> 대화의 id.
  *
- * <p>Claude Code 사이드바는 <b>열어 둔 대화</b>를 보여 주고 여기는 <b>오늘 한 일</b>을
- * 보여 주니, 두 목록이 어긋나 보인다. 어제 열어 둔 대화가 사이드바에는 있는데 여기에는
- * 없으니 빠진 것처럼 읽힌다. 그래서 그런 대화도 <b>보내지 않는다고 적어</b> 함께 보인다.
- *
- * <p>질문이 하나도 없는 대화는 뺀다 — 빈 세션은 그날 한 일이 아니다.
+ * <p>기록 파일(`~/.claude/projects/…/*.jsonl`)은 대화를 닫아도 그대로 남는다. 그것만 보고는
+ * 지금 열린 대화와 지난 대화를 가릴 수 없어, 며칠 전에 닫은 대화가 사이드바에 계속 붙어
+ * 있었다. Claude Code 는 켜져 있는 세션마다 `~/.claude/sessions/<n>.json` 을 두고 거기에
+ * 대화 id 와 작업 폴더를 적어 둔다 — 그것을 본다.
  */
-export async function collectIdleAiSessions(
-  cwd: string,
-  sent: ReadonlySet<string>,
-): Promise<IdleAiSession[]> {
-  const dir = path.join(ROOT, encodeCwd(cwd))
-  let files: string[]
+async function openSessionIds(cwd: string): Promise<Set<string>> {
+  const ids = new Set<string>()
+  let names: string[]
   try {
-    files = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
+    names = (await readdir(SESSIONS_DIR)).filter((f) => f.endsWith('.json'))
   } catch {
-    return []
+    return ids // Claude Code 가 켜져 있지 않다.
   }
 
-  const cutoff = Date.now() - IDLE_DAYS * 24 * 60 * 60 * 1000
-  const out: IdleAiSession[] = []
-  for (const file of files) {
-    // 오늘 질문이 있어 이미 위에 오른 대화는 빼고 나머지를 본다. 오늘 열어만 두고 아무
-    // 것도 묻지 않은 대화가 여기 들어온다 — 사이드바에는 있는데 여기에 없던 것들이다.
-    if (sent.has(path.basename(file, '.jsonl'))) continue
+  for (const name of names) {
     try {
-      const found = await readIdleSession(path.join(dir, file), cutoff)
-      if (found) out.push(found)
-    } catch (e) {
-      log(`AI 세션 ${file} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-  out.sort((a, b) => b.lastAt.localeCompare(a.lastAt))
-  return out.slice(0, MAX_IDLE)
-}
-
-async function readIdleSession(file: string, cutoff: number): Promise<IdleAiSession | undefined> {
-  const info = await stat(file)
-  if (info.mtime.getTime() < cutoff) return undefined
-
-  const buffer = await readFile(file)
-  const text = buffer.subarray(Math.max(0, buffer.length - IDLE_TAIL_BYTES)).toString('utf8')
-
-  let title: string | undefined
-  let asked: string | undefined
-  /** 마지막으로 물어본 시각. 파일 수정 시각은 대화가 아니어도 바뀐다(열기만 해도). */
-  let askedAt: string | undefined
-  for (const line of text.split('\n')) {
-    if (!line.startsWith('{')) continue
-    let entry: SessionEntry
-    try {
-      entry = JSON.parse(line) as SessionEntry
+      const info = JSON.parse(await readFile(path.join(SESSIONS_DIR, name), 'utf8')) as RunningSession
+      // 다른 폴더에서 켠 대화는 이 저장소의 일이 아니다.
+      if (!info.sessionId || info.cwd !== cwd) continue
+      // 갑자기 꺼지면 파일이 남을 수 있다. 프로세스가 살아 있는지 확인한다.
+      if (info.pid !== undefined && !isAlive(info.pid)) continue
+      ids.add(info.sessionId)
     } catch {
-      continue
+      continue // 쓰는 중이라 반쯤 적힌 파일일 수 있다.
     }
-    if (entry.type === 'ai-title') {
-      title = entry.aiTitle?.trim() || title
-      continue
-    }
-    if (entry.type !== 'user' || entry.isMeta || entry.isSidechain) continue
-    const said1 = said(entry.message?.content)
-    if (!said1) continue
-    asked ??= said1
-    if (entry.timestamp) askedAt = entry.timestamp
   }
-  // 질문이 하나도 없으면 뺀다 — 빈 세션은 그날 한 일이 아니다.
-  if (!asked) return undefined
-  return {
-    id: path.basename(file, '.jsonl'),
-    title: title ?? clip(asked, MAX_TITLE_LEN),
-    lastAt: askedAt ?? info.mtime.toISOString(),
+  return ids
+}
+
+/** 그 프로세스가 살아 있는지. 신호 0 은 보내지 않고 존재만 확인한다. */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    // 남의 프로세스면 EPERM 이 온다 — 없는 것이 아니라 못 건드리는 것이다.
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
   }
 }
 
-async function readSession(file: string, workDate: string): Promise<AiSessionSummary | undefined> {
+/**
+ * 세션 파일 하나를 요약한다.
+ *
+ * @param workDate 주면 그날 오간 것만 센다. 주지 않으면 (열려 있는 대화를 실을 때)
+ *                 날짜를 가리지 않고 마지막까지 오간 것을 담는다.
+ */
+async function readSession(file: string, workDate?: string): Promise<AiSessionSummary | undefined> {
   const info = await stat(file)
   // 그날 손대지 않은 세션은 열지 않는다.
-  if (kstDate(info.mtime.toISOString()) < workDate) return undefined
+  if (workDate && kstDate(info.mtime.toISOString()) < workDate) return undefined
 
   const buffer = await readFile(file)
   const text = buffer.subarray(Math.max(0, buffer.length - TAIL_BYTES)).toString('utf8')
@@ -183,7 +254,7 @@ async function readSession(file: string, workDate: string): Promise<AiSessionSum
     }
 
     const at = entry.timestamp
-    if (!at || kstDate(at) !== workDate) continue
+    if (!at || (workDate && kstDate(at) !== workDate)) continue
     if (entry.isMeta || entry.isSidechain) continue
 
     if (entry.type === 'user') {

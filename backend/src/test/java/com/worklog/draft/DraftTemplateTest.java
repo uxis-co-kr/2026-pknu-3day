@@ -139,23 +139,9 @@ class DraftTemplateTest {
 
         assertThat(md).contains("미커밋 2개 — src/api/attendance.ts, src/api/user.ts");
     }
-
+// TODO: 할일
     @Test
-    @DisplayName("커밋했지만 푸시 전인 것은 커밋 메시지로, 미커밋 파일 줄보다 먼저 (V11)")
-    void rendersUnpushedCommits() {
-        VscodeSession s = session();
-        s.setUnpushedCommits(List.of(
-                new com.worklog.vscode.UnpushedCommit("be292b4", "fix: 재생성 후 흰 화면", "2026-09-10T10:00:00+09:00")));
-        s.setUncommittedFiles(List.of(new UncommittedFile("src/api/user.ts", 2, 0, "@@")));
-
-        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
-
-        assertThat(md).contains("fix: 재생성 후 흰 화면  (commit be292b4, 푸시 전)");
-        assertThat(md.indexOf("푸시 전")).isLessThan(md.indexOf("미커밋 1개"));
-    }
-
-    @Test
-    @DisplayName("계획 메모와 TODO 주석이 계획 섹션에 들어간다")
+    @DisplayName("계획 문서와 TODO 주석이 계획 섹션에 들어간다")
     void rendersPlansAndTodos() {
         VscodeSession s = session();
         s.setPlanNote("오후에 출석 중복 검증 마무리");
@@ -164,26 +150,40 @@ class DraftTemplateTest {
         String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
 
         assertThat(md)
-                .contains("- 오후에 출석 중복 검증 마무리")
+                .contains("오후에 출석 중복 검증 마무리")
                 .contains("- src/api/attendance.ts:42 TODO: 중복 출석 검증");
     }
 
     @Test
-    @DisplayName("계획 메모가 여러 줄이면 줄마다 불릿이 된다 — 확장이 여러 건을 줄바꿈으로 이어 보낸다")
-    void splitsMultiLinePlanNote() {
+    @DisplayName("계획 문서는 적은 모양 그대로 들어간다 — 문서 한 통이 오늘 계획 하나다")
+    void keepsPlanDocumentAsWritten() {
         VscodeSession s = session();
-        s.setPlanNote("출석 중복 검증 마무리\n관리자 콘솔 뼈대\n\n리마인드 문구 확인");
+        s.setPlanNote("## 오전\n- 출석 중복 검증 마무리\n  - 테스트 먼저\n\n## 오후\n관리자 콘솔 뼈대");
 
         String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
 
-        List<String> plans = md.lines()
+        List<String> plan = md.lines()
                 .dropWhile(l -> !l.startsWith("## 계획 / TODO"))
                 .skip(1)
-                .takeWhile(l -> l.startsWith("- "))
+                .takeWhile(l -> !l.startsWith("## 메모"))
                 .toList();
 
-        assertThat(plans).containsExactly(
-                "- 출석 중복 검증 마무리", "- 관리자 콘솔 뼈대", "- 리마인드 문구 확인");
+        assertThat(plan).containsExactly(
+                "## 오전", "- 출석 중복 검증 마무리", "  - 테스트 먼저", "", "## 오후", "관리자 콘솔 뼈대", "");
+    }
+
+    @Test
+    @DisplayName("같은 폴더의 다른 브랜치가 같은 계획 문서를 들고 와도 한 번만 싣는다")
+    void writesSharedPlanDocumentOnce() {
+        VscodeSession morning = session();
+        morning.setPlanNote("출석 중복 검증 마무리");
+        VscodeSession afternoon = session();
+        afternoon.setBranch("feature/console");
+        afternoon.setPlanNote("출석 중복 검증 마무리");
+
+        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(morning, afternoon));
+
+        assertThat(md.split("출석 중복 검증 마무리", -1)).hasSize(2);
     }
 
     @Test

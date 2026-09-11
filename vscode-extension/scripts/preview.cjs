@@ -46,7 +46,7 @@ const { Collector } = require(path.join(outDir, 'collector.js'))
 
 async function main() {
   const collector = new Collector()
-  if (planNote) collector.addPlanNote(planNote, target)
+  if (planNote) collector.setPlan(planNote, target)
 
   const payloads = await collector.collect(!flags.has('--no-diff'))
 
@@ -61,7 +61,10 @@ async function main() {
     console.log(`branch      ${p.branch}`)
     console.log(`workDate    ${p.workDate}   (KST)`)
     console.log(`lastCommit  ${p.lastCommitAt ?? '(없음)'}`)
-    console.log(`planNote    ${p.planNote ?? '(없음)'}`)
+    // 계획은 이제 문서 한 통이다. 여러 줄이면 줄마다 자리를 맞춰 적는다.
+    const planLines = (p.planNote ?? '(없음)').split('\n')
+    console.log(`planNote    ${planLines[0]}`)
+    for (const line of planLines.slice(1)) console.log(`            ${line}`)
 
     console.log(`\n미커밋 ${p.uncommittedFiles.length}개`)
     for (const f of p.uncommittedFiles) {

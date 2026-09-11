@@ -5,12 +5,12 @@ import type { Collector } from './collector'
 import type { UnpushedCommit } from './git'
 import { Uploader } from './uploader'
 import type { RemoteSession } from './uploader'
-import type { AiSessionSummary, AiTurn, IdleAiSession, SessionPayload, TodoItem, UncommittedFile } from './types'
+import type { AiSessionSummary, AiTurn, SessionPayload, TodoItem, UncommittedFile } from './types'
 
 /**
  * 사이드바 뷰 — 지금 무엇이 서버로 갈지 보여 준다 (PRD X3, BACKLOG 1-14).
  *
- * <p>상태바는 "미커밋 N파일" 한 줄뿐이라, 무엇이 수집됐는지 확인하려면 전송한 뒤
+ * <p>상태바는 "미커밋 파일 N개" 한 줄뿐이라, 무엇이 수집됐는지 확인하려면 전송한 뒤
  * DB 나 대시보드를 봐야 했다. 이 뷰는 전송 전에 목록 그대로 보여 준다.
  *
  * <p>수집은 화면을 열거나 새로고침할 때만 한다. diff 본문은 화면에 쓰지 않으므로
@@ -85,18 +85,10 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
       const cwd = this.collector.folderOf(p)
       const name = repoName(p.remoteUrl)
 
-      const notes = this.collector.planNotesOf(cwd)
-      const children: Node[] = [
-        group(
-          `계획 ${notes.length}건`,
-          'note',
-          notes.map((n) => planNode(n, cwd)),
-          notes.length > 0,
-        ),
-      ]
-      children.push(group(`미커밋 ${p.uncommittedFiles.length}개`, 'diff', p.uncommittedFiles.map((f) => fileNode(f, cwd))))
+      const children: Node[] = [planNode(this.collector.planOf(cwd), cwd)]
+      children.push(group(`미커밋 파일 ${p.uncommittedFiles.length}개`, 'diff', p.uncommittedFiles.map((f) => fileNode(f, cwd))))
       children.push(unpushedGroup(this.collector.unpushedOf(p)))
-      children.push(aiGroup(p.aiSessions, this.collector.idleAiOf(p)))
+      children.push(aiGroup(p.aiSessions))
       children.push(group(`TODO ${p.todos.length}개`, 'checklist', p.todos.map((t) => todoNode(t, cwd))))
       children.push(
         group(
@@ -130,29 +122,35 @@ type History =
  * 결과다. 보낸 것이 들어갔는지 확인하는 자리다.
  */
 function historyNode(history: History, openRemotes: string[]): Node {
-  const node: Node = group('서버에 저장된 내역', 'cloud', historyChildren(history, openRemotes))
+  // 지금 열어 둔 저장소의 것만 본다. 다른 저장소 기록까지 섞이면 확인하려던 것이 묻힌다.
+  const mine = history.kind === 'loaded' ? ofOpenRepos(history.sessions, openRemotes) : []
+  const node: Node = group('서버에 저장된 내역', 'cloud', historyChildren(history, mine))
   node.kind = 'history'
   // 다시 그려도 펼친 상태가 유지되도록 id 를 고정한다.
   node.item.id = 'worklog.history'
   node.item.tooltip = `펼치면 서버에 저장된 최근 ${HISTORY_DAYS}일치 내 기록을 불러옵니다`
   if (history.kind === 'loaded') {
-    node.item.description = `최근 ${HISTORY_DAYS}일 · ${history.sessions.length}건`
+    // 머리글도 **걸러 낸 뒤**의 수다. 예전에는 받아 온 전체를 적어, 펼치면 다른 저장소를
+    // 뺀 목록이 나와 숫자와 맞지 않았다.
+    node.item.description = `최근 ${HISTORY_DAYS}일 · ${mine.length}건`
   } else if (history.kind === 'failed') {
     node.item.description = history.reason
   }
   return node
 }
 
-function historyChildren(history: History, openRemotes: string[]): Node[] {
+/** 지금 열어 둔 저장소의 기록만 고른다. 주소 모양(ssh·https)이 달라도 같은 저장소다. */
+function ofOpenRepos(sessions: RemoteSession[], openRemotes: string[]): RemoteSession[] {
+  const names = new Set(openRemotes.map(repoName))
+  return sessions.filter((s) => names.has(repoName(s.remoteUrl)))
+}
+
+function historyChildren(history: History, mine: RemoteSession[]): Node[] {
   if (history.kind === 'idle') return [leaf('펼치면 불러옵니다', 'ellipsis')]
   if (history.kind === 'loading') return [leaf('불러오는 중…', 'sync')]
   if (history.kind === 'failed') {
     return [leaf(history.reason, 'warning', '서버 주소와 API Key 를 확인하세요')]
   }
-
-  // 지금 열어 둔 저장소의 것만 본다. 다른 저장소 기록까지 섞이면 확인하려던 것이 묻힌다.
-  const names = new Set(openRemotes.map(repoName))
-  const mine = history.sessions.filter((s) => names.has(repoName(s.remoteUrl)))
   if (mine.length === 0) {
     return [leaf('이 저장소로 보낸 기록이 없습니다', 'info')]
   }
@@ -170,19 +168,19 @@ function historyChildren(history: History, openRemotes: string[]): Node[] {
         sessions.map((s) => remoteSessionNode(s)),
         workDate === todayKst(),
       )
-      day.item.description = `저장소 ${sessions.length} · 미커밋 ${files}파일`
+      day.item.description = `브랜치 ${sessions.length} · 미커밋 파일 ${files}개`
       return day
     })
 }
 
 function remoteSessionNode(s: RemoteSession): Node {
   const ai = s.aiSessions ?? []
-  const plans = (s.planNote ?? '').split('\n').map((p) => p.trim()).filter(Boolean)
+  const plan = (s.planNote ?? '').trim()
   const children: Node[] = [
-    leaf(`미커밋 ${s.uncommittedFiles.length}개`, 'diff'),
+    leaf(`미커밋 파일 ${s.uncommittedFiles.length}개`, 'diff'),
     leaf(`TODO ${s.todos.length}개`, 'checklist'),
     leaf(`저장 이벤트 ${s.editTimeline.length}개`, 'history'),
-    group(`계획 ${plans.length}건`, 'note', plans.map((p) => leaf(p, 'circle-small-filled'))),
+    group('계획', 'note', planLines(plan)),
     group(
       `AI 대화 ${ai.length}세션`,
       'comment-discussion',
@@ -210,7 +208,7 @@ export type Status =
 
 function statusLabel(s: Status): string {
   if (s.kind === 'idle') return '아직 전송하지 않음'
-  if (s.kind === 'sent') return `전송 완료 ${time(s.at.toISOString())} · 미커밋 ${s.files}파일`
+  if (s.kind === 'sent') return `전송 완료 ${time(s.at.toISOString())} · 미커밋 파일 ${s.files}개`
   return `전송 실패 ${time(s.at.toISOString())} · ${s.reason}`
 }
 
@@ -254,51 +252,64 @@ function group(label: string, icon: string, children: Node[], expanded = false):
  */
 function unpushedGroup(commits: UnpushedCommit[] | undefined): Node {
   if (commits === undefined) {
-    return leaf('미푸시 — 셀 수 없음', 'cloud', '업스트림이 없습니다. 한 번도 푸시하지 않은 브랜치입니다')
+    return leaf('미푸시 커밋 — 셀 수 없음', 'cloud', '업스트림이 없습니다. 한 번도 푸시하지 않은 브랜치입니다')
   }
   return group(
-    `미푸시 ${commits.length}개`,
+    `미푸시 커밋 ${commits.length}개`,
     'cloud-upload',
     commits.map((c) => leaf(c.subject, 'git-commit', `${c.sha} · ${time(c.at)}`, c.sha)),
   )
 }
 
-/** 계획 한 줄. 우클릭으로 지울 수 있게 contextValue·note·folder 를 달아 둔다. */
-function planNode(note: string, folder: string | undefined): Node & { note: string; folder?: string } {
-  const node = leaf(note, 'circle-small-filled') as Node & { note: string; folder?: string }
+/**
+ * 오늘 계획 — <b>문서를 여는 한 줄</b>이다. 내용은 여기에 펼치지 않는다.
+ *
+ * <p>계획은 markdown 문서 한 통이라(하루에 하나), 트리에 줄 목록으로 옮기면 제목도
+ * 들여쓰기도 뭉개진 채 사이드바만 길어졌다. 제대로 읽으려면 어차피 문서를 열어야 했다.
+ * 그래서 <b>두 번 누르면 문서가 열린다</b> — 읽는 자리와 고치는 자리를 하나로 둔다.
+ * 한 번 누르는 것은 고르기다. 탐색기에서 파일을 여는 몸짓과 같게 뒀다.
+ *
+ * <p>적어 뒀을 때는 아무 표시도 붙이지 않는다. "적어 둠" 같은 꼬리표는 한 줄을 차지하면서
+ * 아무것도 알려 주지 않는다. <b>비었을 때만</b> 그렇다고 적는다.
+ *
+ * <p>건수도 세지 않는다. 한 줄이 계획 하나가 아니게 된 지금은 아무 뜻도 없는 숫자다.
+ */
+function planNode(plan: string, folder: string | undefined): Node & { folder?: string } {
+  const node = leaf(
+    '계획',
+    'note',
+    '두 번 누르면 오늘 계획 문서를 엽니다',
+    plan ? undefined : '미작성',
+  ) as Node & { folder?: string }
+  node.item.command = { command: 'worklog.planClicked', title: '계획 열기', arguments: [{ folder }] }
+  // 우클릭·연필(inline)로도 같은 자리에 닿는다.
   node.item.contextValue = 'worklog.plan'
-  node.note = note
   node.folder = folder
   return node
 }
 
 /**
- * 이 폴더에서 오간 AI 대화.
+ * 서버에 저장된 계획을 줄로 펴 놓는다.
  *
- * <p>커밋에도 미커밋 변경에도 남지 않는 작업이다 — 무엇을 어떻게 할지 묻고 정한 과정.
+ * <p>여기만 남긴다. 위쪽 "오늘 보낼 내용" 과 달리 <b>열어 볼 문서가 없는</b> 기록이라,
+ * 펼쳐 보여 주지 않으면 무엇을 보냈는지 VS Code 안에서 확인할 길이 없다.
  */
-function aiGroup(sessions: AiSessionSummary[], idle: IdleAiSession[]): Node {
-  return group(
-    `AI 대화 ${sessions.length}세션`,
-    'comment-discussion',
-    [...sessions.map((s) => sessionNode(s)), ...idle.map((s) => idleNode(s))],
-  )
+function planLines(plan: string): Node[] {
+  return plan
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim())
+    .map((l) => leaf(l, 'circle-small-filled', plan))
 }
 
 /**
- * 오늘 질문이 없어 **보내지 않는** 대화.
+ * 이 폴더에서 오간 AI 대화 — 오늘 질문을 올린 것과 지금 열어 둔 것.
  *
- * <p>Claude Code 사이드바에는 있는데 여기에 없으면 빠진 것처럼 보인다. 그렇다고 그냥
- * 끼워 넣으면 보내지도 않을 것을 "오늘 보낼 내용" 에 올리는 셈이라, 보내지 않는다고 적는다.
+ * <p>커밋에도 미커밋 변경에도 남지 않는 작업이다 — 무엇을 어떻게 할지 묻고 정한 과정.
+ * 여기 있는 것은 모두 서버로 간다. "보내지 않음" 으로 따로 붙이던 줄은 없앴다.
  */
-function idleNode(s: IdleAiSession): Node {
-  const node = leaf(
-    s.title,
-    'circle-slash',
-    `${s.title}\n\n오늘 질문이 없어 보내지 않습니다 (마지막 ${day(s.lastAt)})`,
-    `${day(s.lastAt)} · 보내지 않음`,
-  )
-  return node
+function aiGroup(sessions: AiSessionSummary[]): Node {
+  return group(`AI 대화 ${sessions.length}세션`, 'comment-discussion', sessions.map((s) => sessionNode(s)))
 }
 
 /** "9/10" */
@@ -310,8 +321,10 @@ function day(iso: string): string {
 /** 세션 하나. 시각만으로는 무슨 대화였는지 알 수 없어 제목을 앞에 세운다. */
 function sessionNode(s: AiSessionSummary): Node {
   const node = group(s.title, 'comment', s.turns.map((t) => turnNode(t)))
+  // 열어 두기만 한 대화는 마지막으로 오간 것이 어제일 수 있다. 시각만 적으면 오늘로 읽힌다.
+  const when = day(s.lastAt) === day(new Date().toISOString()) ? '' : `${day(s.lastAt)} `
   // 담은 것은 12개까지지만 실제로 물어본 횟수를 보여 준다.
-  node.item.description = `${time(s.firstAt)}–${time(s.lastAt)} · ${s.promptCount}개`
+  node.item.description = `${when}${time(s.firstAt)}–${time(s.lastAt)} · ${s.promptCount}개`
   node.item.tooltip = s.turns.length < s.promptCount
     ? `${s.title}\n\n${s.promptCount}개 중 최근 ${s.turns.length}개만 보냅니다`
     : s.title

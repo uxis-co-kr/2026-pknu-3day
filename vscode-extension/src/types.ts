@@ -13,8 +13,23 @@ export interface SessionPayload {
   editTimeline: EditTimelineEntry[]
   /** ISO-8601. 마지막 커밋 시각을 못 읽으면 생략한다. */
   lastCommitAt?: string
-  /** 이 폴더에서 오늘 오간 AI 대화. 기록이 없으면 빈 배열. */
+  /** 이 폴더에서 오늘 오간, 또는 지금 열어 둔 AI 대화. 기록이 없으면 빈 배열. */
   aiSessions: AiSessionSummary[]
+  /**
+   * 커밋했지만 아직 push 하지 않은 커밋.
+   *
+   * <p>업스트림이 없어 <b>셀 수 없으면</b> 생략한다 — 빈 배열(미푸시 없음)과 뜻이 다르다.
+   */
+  unpushedCommits?: UnpushedCommit[]
+}
+
+/** 미푸시 커밋 하나. GitHub 수집기가 보지 못하는 구간이다 (원격에 없으니 API 에 안 나온다). */
+export interface UnpushedCommit {
+  /** 짧은 해시 */
+  sha: string
+  subject: string
+  /** ISO-8601 커밋 시각 */
+  at: string
 }
 
 export interface UncommittedFile {
@@ -47,7 +62,7 @@ export interface AiSessionSummary {
   /** ISO-8601 */
   firstAt: string
   lastAt: string
-  /** 그날 실제로 물어본 횟수. {@link turns} 는 잘리지만 이 값은 전부 센다. */
+  /** 실제로 물어본 횟수. {@link turns} 는 잘리지만 이 값은 전부 센다. */
   promptCount: number
   /** 질문과 그 답변. 최근 것부터 일정 개수까지만 담는다. */
   turns: AiTurn[]
@@ -60,18 +75,6 @@ export interface AiTurn {
   prompt: string
   /** 그 질문에 대한 마지막 답변. 아직 답하는 중이면 없다. */
   answer?: string
-}
-
-/**
- * 오늘 질문이 없어 **보내지 않는** 대화. 사이드바 표시 전용이라 payload 에 담지 않는다.
- *
- * <p>Claude Code 사이드바에는 있는데 여기에는 없어 빠진 것처럼 보이던 대화들이다.
- */
-export interface IdleAiSession {
-  id: string
-  title: string
-  /** 마지막으로 손댄 시각 (세션 파일의 수정 시각). ISO-8601 */
-  lastAt: string
 }
 
 export interface EditTimelineEntry {

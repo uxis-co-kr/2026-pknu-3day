@@ -44,9 +44,8 @@ public final class RemindPolicy {
         List<UnpushedCommit> unpushed = session.getUnpushedCommits();
         if (unpushed != null) {
             for (UnpushedCommit c : unpushed) {
-                OffsetDateTime at = c.committedAtOrNull();
-                if (at != null && (last == null || at.isAfter(last))) {
-                    last = at;
+                if (c != null && c.at() != null && (last == null || c.at().isAfter(last))) {
+                    last = c.at();
                 }
             }
         }

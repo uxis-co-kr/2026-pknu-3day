@@ -62,9 +62,30 @@ class VscodeSessionServiceTest {
                         List.of(
                                 new AiTurn("2026-09-09T10:00:00+09:00", "출석 중복 검증 로직 봐 줘", "같은 날 두 번 찍히면…"),
                                 new AiTurn("2026-09-09T11:00:00+09:00", "테스트도 붙여 줘", null)),
+                        null,
                         null)),
-                List.of(new UnpushedCommit("be292b4", "fix: 재생성 후 흰 화면", "2026-09-09T11:30:00+09:00")),
+                List.of(new UnpushedCommit(
+                        "9f2c1ab", "feat: 출석 중복 검증", OffsetDateTime.parse("2026-09-09T11:30:00+09:00"))),
                 OffsetDateTime.parse("2026-09-09T12:00:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("미푸시 커밋을 그대로 저장한다 — GitHub 수집기가 보지 못하는 구간이다")
+    void keepsUnpushedCommits() {
+        VscodeSession saved = service.upsert(USER_ID, request("오늘 계획"));
+
+        assertThat(saved.getUnpushedCommits()).singleElement()
+                .extracting(UnpushedCommit::sha, UnpushedCommit::subject)
+                .containsExactly("9f2c1ab", "feat: 출석 중복 검증");
+    }
+
+    @Test
+    @DisplayName("셀 수 없는 미푸시(null)를 빈 배열로 바꾸지 않는다 — 0개와 뜻이 다르다")
+    void keepsUncountableUnpushedAsNull() {
+        SessionRequest noUpstream = new SessionRequest(
+                REMOTE, BRANCH, WORK_DATE, List.of(), List.of(), null, List.of(), List.of(), null, null);
+
+        assertThat(service.upsert(USER_ID, noUpstream).getUnpushedCommits()).isNull();
     }
 
     @Test
@@ -79,30 +100,6 @@ class VscodeSessionServiceTest {
                 .containsExactly("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘");
         assertThat(ai.turns().get(0).answer()).isEqualTo("같은 날 두 번 찍히면…");
         assertThat(ai.turns().get(1).answer()).isNull();
-    }
-
-    @Test
-    @DisplayName("미푸시 커밋을 저장한다. sha 없는 것은 버리고 50건까지만 (V11)")
-    void keepsUnpushedCommits() {
-        VscodeSession saved = service.upsert(USER_ID, request(null));
-        assertThat(saved.getUnpushedCommits()).hasSize(1);
-        assertThat(saved.getUnpushedCommits().get(0).subject()).isEqualTo("fix: 재생성 후 흰 화면");
-
-        List<UnpushedCommit> many = new java.util.ArrayList<>();
-        many.add(new UnpushedCommit("", "sha 없음", null));
-        for (int i = 0; i < 60; i++) {
-            many.add(new UnpushedCommit("c%03d".formatted(i), "커밋 " + i, "2026-09-09T10:00:00+09:00"));
-        }
-        SessionRequest big = new SessionRequest(
-                REMOTE, BRANCH, WORK_DATE, List.of(), List.of(), null, List.of(), List.of(), many, null);
-        assertThat(service.upsert(USER_ID, big).getUnpushedCommits())
-                .hasSize(VscodeSessionService.MAX_UNPUSHED)
-                .noneMatch(c -> c.sha().isBlank());
-
-        // 확장이 업스트림을 못 찾아 null 로 보내면 빈 배열
-        SessionRequest none = new SessionRequest(
-                REMOTE, BRANCH, WORK_DATE, List.of(), List.of(), null, List.of(), List.of(), null, null);
-        assertThat(service.upsert(USER_ID, none).getUnpushedCommits()).isEmpty();
     }
 
     @Test
@@ -176,7 +173,7 @@ class VscodeSessionServiceTest {
         when(repos.findByFullName("withly/unknown")).thenReturn(Optional.empty());
         SessionRequest unknown = new SessionRequest(
                 "https://github.com/withly/unknown.git", BRANCH, WORK_DATE,
-                List.of(), List.of(), null, List.of(), List.of(), List.of(), null);
+                List.of(), List.of(), null, List.of(), List.of(), null, null);
         assertThat(service.upsert(USER_ID, unknown).getRepo()).isNull();
     }
 }

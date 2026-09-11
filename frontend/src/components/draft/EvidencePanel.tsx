@@ -94,8 +94,10 @@ const ACTIVITY_KINDS: { type: ActivityType; label: string; Icon: typeof GitMerge
 
 /** 세션 하나를 네 갈래로 펼친다. 서버가 초안에 쓰는 재료와 같은 구분이다. */
 function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: (needles: string[]) => void }) {
-  // 계획 메모는 확장이 여러 건을 줄바꿈으로 이어 보낸다 (서버 계약은 문자열 한 칸).
-  const plans = (session.planNote ?? '').split('\n').map((p) => p.trim()).filter(Boolean)
+  // 계획은 확장이 markdown 문서 한 통으로 보낸다 — 하루에 하나라 건수를 세지 않는다.
+  // 초안으로 건너뛰려면 줄 단위로 잡아야 해서, 보여 줄 때만 줄로 나눈다.
+  const plan = (session.planNote ?? '').trim()
+  const planLines = plan.split('\n').map((p) => p.trim()).filter(Boolean)
 
   return (
     <div className="mb-1 last:mb-0">
@@ -124,8 +126,8 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
         ))}
       </Category>
 
-      <Category label="계획" count={plans.length} Icon={NotebookPen}>
-        {plans.map((p) => (
+      <Category label="계획" empty={!plan} Icon={NotebookPen}>
+        {planLines.map((p) => (
           <Row key={p} onClick={() => onJump([p])}>
             <span className="min-w-0 flex-1 truncate italic">{p}</span>
           </Row>
@@ -179,30 +181,34 @@ function Source({ label, count, unit, children }: {
 }
 
 /** 갈래 안의 세부 카테고리. 비어 있으면 접힌 채 개수 0 만 보인다. */
-function Category({ label, count, Icon, children }: {
+function Category({ label, count, empty, Icon, children }: {
   label: string
-  count: number
+  /** 몇 건인지. 세는 것이 뜻이 있을 때만 준다 — 계획은 문서 한 통이라 세지 않는다. */
+  count?: number
+  /** 셀 수 없는 갈래에서 접힘·"없음" 을 가리는 값. count 를 주면 필요 없다. */
+  empty?: boolean
   Icon: typeof GitMerge
   children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(count > 0)
+  const has = !(empty ?? count === 0)
+  const [open, setOpen] = useState(has)
   return (
     <div className="mb-1 last:mb-0">
       <button
         type="button"
-        onClick={() => count > 0 && setOpen(!open)}
-        disabled={count === 0}
+        onClick={() => has && setOpen(!open)}
+        disabled={!has}
         className={cn(
           'flex w-full items-center gap-1.5 rounded py-0.5 text-[12px] text-muted-foreground',
-          count > 0 ? 'hover:bg-muted/60' : 'cursor-default opacity-50',
+          has ? 'hover:bg-muted/60' : 'cursor-default opacity-50',
         )}
       >
-        <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && count > 0 && 'rotate-90')} />
+        <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && has && 'rotate-90')} />
         <Icon className="size-3 shrink-0" />
         <span>{label}</span>
-        <span className="tabular-nums">{count}</span>
+        {count !== undefined && <span className="tabular-nums">{count}</span>}
       </button>
-      {open && count > 0 && <div className="pl-[18px]">{children}</div>}
+      {open && has && <div className="pl-[18px]">{children}</div>}
     </div>
   )
 }

@@ -21,7 +21,7 @@ public record SessionResponse(
         List<EditTimelineEntry> editTimeline,
         /** 그 폴더에서 오간 AI 대화 (V9). 없으면 빈 배열. */
         List<AiSessionSummary> aiSessions,
-        /** 아직 원격에 없는 커밋 (V11). 없으면 빈 배열. */
+        /** 미푸시 커밋 (V11). null 이면 업스트림이 없어 셀 수 없다는 뜻이다. */
         List<UnpushedCommit> unpushedCommits,
         String summary,
         OffsetDateTime lastCommitAt,

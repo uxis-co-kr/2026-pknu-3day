@@ -1,17 +1,52 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { collectAiSessions, collectIdleAiSessions } from './aiSessions'
+import { collectAiSessions } from './aiSessions'
 import * as git from './git'
 import { log } from './log'
-import type { EditTimelineEntry, IdleAiSession, SessionPayload, TodoItem, UncommittedFile } from './types'
+import type { EditTimelineEntry, SessionPayload, TodoItem, UncommittedFile } from './types'
 
 /** PRD F6-1 — diff 는 파일당 200줄까지만 보낸다. */
 const DIFF_LINE_LIMIT = 200
 /** 추적되지 않는 새 파일을 읽어들일 상한. 이보다 크면 줄 수만 세고 본문은 싣지 않는다. */
 const MAX_READ_BYTES = 1024 * 1024
 
-const TODO_PATTERN = /\b(TODO|FIXME)\s*:\s*(.+?)\s*$/
+/**
+ * 셀 표식은 `TODO:` 하나다. `FIXME:` 는 세지 않는다 — 둘을 같이 세면 무엇이 몇 건인지
+ * 흐려진다. 한 가지만 놓고 "오늘 남겨 둔 할 일" 로 읽는 편이 낫다.
+ */
+const TODO_PATTERN = /\bTODO\s*:\s*(.+?)\s*$/
+
+/**
+ * 표식 앞에 이것만 있어야 한다 — 블록 주석의 시작.
+ *
+ * <p>문서 파일에서도 `<!-- TODO: … -->` 는 주석이라 여기에 둔다.
+ */
+const BLOCK_LEAD = /(?:\/\*+|<!--)[ \t]*$/
+
+/**
+ * 표식 앞에 이것만 있어야 한다 — 한 줄 주석의 시작. `//!`, `///` 같은 문서 주석 표식도 받는다.
+ *
+ * <p>문서 파일에서는 인정하지 않는다. `#` 는 제목이고 `--` 는 밑줄이다.
+ */
+const LINE_LEAD = /(?:\/\/+|#+|--+|;+|%+)!*[ \t]*$/
+
+/**
+ * 블록 주석 안에서 표식 앞에 허용되는 것 — 줄머리 장식(`*`)과 공백뿐.
+ *
+ * <p>자바독의 ` * TODO: …` 는 받고, ` * 설명인데 TODO: …` 는 받지 않는다.
+ */
+const BLOCK_BODY_LEAD = /^[ \t]*\**[ \t]*$/
+
+/** 여러 줄 주석. 언어마다 다르지만 이 둘이면 코드에서 만나는 것 대부분을 덮는다. */
+const BLOCK_OPEN = /\/\*|<!--/
+const BLOCK_CLOSE = /\*\/|-->/
+
+/**
+ * 주석 표식이 문서 문법과 겹치는 파일. `#` 는 제목이고 `--` 는 밑줄이라, 여기서는
+ * 한 줄 주석을 인정하지 않는다 — `<!-- … -->` 만 주석으로 본다.
+ */
+const PROSE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt', '.rst', '.adoc'])
 
 interface Save {
   firstSavedAt: string
@@ -28,8 +63,8 @@ interface PersistedState {
   /** 어느 날짜의 기록인지. 날이 바뀌면 통째로 버린다. */
   date: string
   saves: Record<string, Save>
-  /** 폴더 절대 경로 → 그 폴더의 계획. 폴더마다 하는 일이 다르다. */
-  plans: Record<string, string[]>
+  /** 폴더 절대 경로 → 그 폴더의 계획 문서. 폴더마다 하는 일이 다르다. */
+  plans: Record<string, string>
 }
 
 const STATE_KEY = 'worklog.session.v1'
@@ -38,8 +73,6 @@ const STATE_KEY = 'worklog.session.v1'
 interface LocalInfo {
   cwd: string
   unpushed?: git.UnpushedCommit[]
-  /** 오늘 질문이 없어 보내지 않는 대화. 사이드바에만 보인다. */
-  idleAi: IdleAiSession[]
 }
 
 /** {@link vscode.Memento} 와 같은 모양. 테스트·미리보기에서는 주지 않는다. */
@@ -59,12 +92,16 @@ export class Collector {
   private readonly saves = new Map<string, Save>()
 
   /**
-   * 폴더별 계획. 하루에 여러 번 적을 수 있고 적은 순서대로 쌓인다.
+   * 폴더별 오늘 계획. <b>문서 한 통이 그 폴더의 오늘 계획 하나다.</b>
    *
-   * <p>예전에는 계획 하나를 모든 폴더가 나눠 썼다. 그래서 다른 폴더를 열어도 같은 계획이
-   * 붙었다 — 회사 일 계획이 개인 프로젝트 세션에 실려 갔다.
+   * <p>예전에는 한 줄을 계획 하나로 세어 여러 건으로 쌓았다. 그러다 보니 제목·들여쓰기
+   * 같은 markdown 구조가 줄 단위로 흩어졌다 — 계획은 원래 문서로 쓰는 것이라, 하루에
+   * 한 통이면 족하다.
+   *
+   * <p>폴더별로 나눠 두는 것은 그대로다. 하나로 합치면 회사 일 계획이 개인 프로젝트
+   * 세션에 실려 간다.
    */
-  private plans = new Map<string, string[]>()
+  private plans = new Map<string, string>()
 
   /** 마지막으로 되살리거나 비운 날짜. 자정을 넘기면 초기화하는 기준이다. */
   private stateDate = todayKst()
@@ -98,11 +135,6 @@ export class Collector {
     return this.locals.get(payload)?.unpushed
   }
 
-  /** 오늘 질문이 없어 보내지 않는 대화. 사이드바가 "보내지 않음" 으로 함께 보여 준다. */
-  idleAiOf(payload: SessionPayload): IdleAiSession[] {
-    return this.locals.get(payload)?.idleAi ?? []
-  }
-
   /** 마지막 수집에서 센 미푸시 커밋 수. 셀 수 없으면 undefined. */
   get unpushedCount(): number | undefined {
     return this.lastUnpushed
@@ -122,57 +154,25 @@ export class Collector {
   }
 
   /**
-   * 계획 메모를 하나 더한다. 같은 문구를 두 번 적으면 무시한다.
+   * 그 폴더의 오늘 계획 문서를 통째로 바꾼다.
    *
-   * @param folder 어느 폴더의 계획인지. 폴더가 하나뿐이면 생략할 수 있다.
+   * <p>계획 문서를 저장할 때 부른다 — 문서가 곧 그 폴더의 오늘 계획 전부이므로, 문서에서
+   * 지운 것은 계획에서도 지워져야 한다. 빈 문서는 "오늘 계획을 비웠다" 는 뜻이다.
    */
-  addPlanNote(note: string, folder?: string): void {
-    this.rolloverIfNeeded()
-    const key = folder ?? this.soleFolder()
-    const trimmed = note.trim()
-    if (!key || !trimmed) return
-    const list = this.plans.get(key) ?? []
-    if (list.includes(trimmed)) return
-    this.plans.set(key, [...list, trimmed])
-    this.persist()
-  }
-
-  /**
-   * 그 폴더의 계획을 통째로 바꾼다.
-   *
-   * <p>임시 문서에서 적을 때 쓴다 — 문서가 곧 그 폴더의 계획 전부이므로, 문서에서 지운
-   * 줄은 계획에서도 지워져야 한다. 한 줄씩 더하는 {@link addPlanNote} 로는 삭제를
-   * 표현할 수 없다 (BACKLOG2_client C-2).
-   */
-  setPlanNotes(notes: string[], folder?: string): void {
+  setPlan(markdown: string, folder?: string): void {
     this.rolloverIfNeeded()
     const key = folder ?? this.soleFolder()
     if (!key) return
-    const cleaned: string[] = []
-    for (const note of notes) {
-      const trimmed = note.trim()
-      // 같은 문구를 두 번 적으면 한 번만 남긴다 — addPlanNote 와 같은 규칙이다.
-      if (trimmed && !cleaned.includes(trimmed)) cleaned.push(trimmed)
-    }
-    if (cleaned.length === 0) this.plans.delete(key)
-    else this.plans.set(key, cleaned)
+    const text = markdown.trim()
+    if (!text) this.plans.delete(key)
+    else this.plans.set(key, text)
     this.persist()
   }
 
-  removePlanNote(note: string, folder?: string): void {
+  /** 그 폴더의 오늘 계획 문서. 없으면 빈 문자열. 폴더를 주지 않으면 폴더가 하나일 때만 답한다. */
+  planOf(folder?: string): string {
     const key = folder ?? this.soleFolder()
-    if (!key) return
-    const list = this.plans.get(key) ?? []
-    const i = list.indexOf(note)
-    if (i < 0) return
-    this.plans.set(key, list.filter((_, at) => at !== i))
-    this.persist()
-  }
-
-  /** 그 폴더의 계획. 폴더를 주지 않으면 폴더가 하나일 때만 답한다. */
-  planNotesOf(folder?: string): string[] {
-    const key = folder ?? this.soleFolder()
-    return key ? [...(this.plans.get(key) ?? [])] : []
+    return (key && this.plans.get(key)) || ''
   }
 
   /** 워크스페이스에 git 폴더가 하나뿐이면 그 경로. 여럿이면 undefined. */
@@ -214,11 +214,9 @@ export class Collector {
       const todos = await this.scanTodos(cwd, changed)
       const workDate = todayKst()
       const aiSessions = await collectAiSessions(cwd, workDate)
-      // 오늘 질문이 있는 대화를 먼저 고르고, 나머지를 "보내지 않음" 으로 따로 모은다.
-      const idleAi = await collectIdleAiSessions(cwd, new Set(aiSessions.map((a) => a.id)))
       total += uncommittedFiles.length
 
-      const plans = this.plans.get(cwd) ?? []
+      const plan = this.plans.get(cwd) ?? ''
 
       const payload: SessionPayload = {
         remoteUrl,
@@ -226,13 +224,15 @@ export class Collector {
         workDate,
         uncommittedFiles,
         todos,
-        // 서버 계약은 문자열 한 칸이다 (PRD 7). 여러 줄로 담아 보낸다.
-        planNote: plans.length > 0 ? plans.join('\n') : undefined,
+        // 서버 계약은 문자열 한 칸이다 (PRD 7). 계획 문서를 그대로 담아 보낸다.
+        planNote: plan || undefined,
         editTimeline: this.timelineFor(cwd),
         lastCommitAt,
         aiSessions,
+        // 업스트림이 없으면 담지 않는다. 빈 배열로 보내면 "미푸시 없음" 이 돼 버린다.
+        unpushedCommits: unpushed,
       }
-      this.locals.set(payload, { cwd, unpushed, idleAi })
+      this.locals.set(payload, { cwd, unpushed })
       if (unpushed) unpushedTotal = (unpushedTotal ?? 0) + unpushed.length
       payloads.push(payload)
     }
@@ -274,20 +274,16 @@ export class Collector {
   }
 
   /**
-   * 변경된 파일 안의 TODO/FIXME (PRD F6-3).
+   * 변경된 파일 안의 TODO (PRD F6-3).
    *
-   * text 에는 표식과 콜론을 뺀 내용만 담는다. 화면이 "TODO · {text}" 로 그리기 때문에
-   * 표식을 그대로 두면 "TODO · TODO: ..." 가 된다.
+   * <p>파일마다 {@link findTodos} 로 주석 안의 것만 고른다.
    */
   private async scanTodos(cwd: string, changed: git.ChangedFile[]): Promise<TodoItem[]> {
     const todos: TodoItem[] = []
     for (const file of changed) {
       const lines = await readLines(path.join(cwd, file.path))
       if (!lines) continue
-      lines.forEach((line, i) => {
-        const m = TODO_PATTERN.exec(line)
-        if (m) todos.push({ path: file.path, line: i + 1, text: m[2] })
-      })
+      todos.push(...findTodos(file.path, lines))
     }
     return todos
   }
@@ -322,12 +318,12 @@ export class Collector {
       return
     }
     for (const [fsPath, save] of Object.entries(saved.saves ?? {})) this.saves.set(fsPath, save)
-    for (const [folder, list] of Object.entries(saved.plans ?? {})) {
-      // 예전 판은 계획을 배열 하나로 저장했다. 그때 것은 폴더를 알 수 없어 버린다.
-      if (Array.isArray(list)) this.plans.set(folder, [...list])
+    for (const [folder, saved0] of Object.entries(saved.plans ?? {})) {
+      // 계획을 줄 단위로 세던 판은 배열로 저장했다. 그날 적어 둔 것을 잃지 않게 이어 붙인다.
+      const text = Array.isArray(saved0) ? saved0.join('\n') : saved0
+      if (typeof text === 'string' && text.trim()) this.plans.set(folder, text)
     }
-    const planCount = [...this.plans.values()].reduce((n, l) => n + l.length, 0)
-    log(`저장 기록 ${this.saves.size}건, 계획 ${planCount}건을 되살렸습니다`)
+    log(`저장 기록 ${this.saves.size}건, 계획 ${this.plans.size}개 폴더를 되살렸습니다`)
   }
 
   /** 이 폴더 안에서 저장된 파일만, git 기준 상대 경로로 바꿔 담는다 (PRD F6-5). */
@@ -340,6 +336,70 @@ export class Collector {
     }
     return entries
   }
+}
+
+/**
+ * 파일 한 개에서 <b>`TODO:` 로 시작하는 주석</b>만 고른다 (PRD F6-3).
+ *
+ *
+ * <p>두 가지를 거른다. 하나는 주석이 아닌 것 — 문자열 리터럴이나 문서 본문의 `TODO:` 는
+ * 코드에 남겨 둔 할 일이 아니다. 다른 하나는 <b>주석 중간에 지나가듯 적힌 것</b> —
+ * `// 지금은 이렇게 두지만 TODO: 나중에 고치기` 같은 설명문까지 세면, 사이드바와 업무
+ * 일지의 TODO 수가 실제로 남겨 둔 할 일보다 부풀었다. 표식이 주석 <b>맨 앞</b>에 와야 한다.
+ *
+ * <p>text 에는 표식과 콜론을 뺀 내용만 담는다. 화면이 "TODO · {text}" 로 그리기 때문에
+ * 표식을 그대로 두면 "TODO · TODO: ..." 가 된다.
+ */
+export function findTodos(filePath: string, lines: string[]): TodoItem[] {
+  const prose = PROSE_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+  const todos: TodoItem[] = []
+  let inBlock = false
+  lines.forEach((line, i) => {
+    const m = TODO_PATTERN.exec(line)
+    if (m && startsComment(line, m.index, inBlock, prose)) {
+      todos.push({ path: filePath, line: i + 1, text: stripCloser(m[1]) })
+    }
+    inBlock = blockAfter(line, inBlock)
+  })
+  return todos
+}
+
+/**
+ * 그 줄의 `at` 자리에서 주석이 <b>시작되는지</b>. `inBlock` 은 줄이 시작될 때의 블록 상태다.
+ *
+ * <p>주석 안이기만 하면 되는 것이 아니라, 표식 앞에 주석 표식과 공백 말고는 아무것도
+ * 없어야 한다. 앞에 말이 붙어 있으면 남겨 둔 할 일이 아니라 설명문이다.
+ */
+function startsComment(line: string, at: number, inBlock: boolean, prose: boolean): boolean {
+  const before = line.slice(0, at)
+  // 블록 주석 안에서는 줄머리 장식만 허용한다. `*/` 나 `-->` 는 여기에 걸려 저절로 빠진다
+  // — 블록이 이미 닫혔다면 그 뒤는 주석이 아니다.
+  if (inBlock) return BLOCK_BODY_LEAD.test(before)
+  return BLOCK_LEAD.test(before) || (!prose && LINE_LEAD.test(before))
+}
+
+/** 이 줄을 지나고 나서도 블록 주석 안인지. 여닫이를 줄 끝까지 따라간다. */
+function blockAfter(line: string, inBlock: boolean): boolean {
+  let rest = line
+  let block = inBlock
+  for (;;) {
+    if (block) {
+      const close = rest.search(BLOCK_CLOSE)
+      if (close < 0) return true
+      rest = rest.slice(close + (rest.startsWith('-->', close) ? 3 : 2))
+      block = false
+    } else {
+      const open = rest.search(BLOCK_OPEN)
+      if (open < 0) return false
+      rest = rest.slice(open + (rest.startsWith('<!--', open) ? 4 : 2))
+      block = true
+    }
+  }
+}
+
+/** `<!-- TODO: 고치기 -->` 처럼 내용 뒤에 남는 주석 닫음표는 내용이 아니다. */
+function stripCloser(text: string): string {
+  return text.replace(/\s*(?:\*\/|-->)\s*$/, '')
 }
 
 function truncate(diff: string | undefined): string | undefined {

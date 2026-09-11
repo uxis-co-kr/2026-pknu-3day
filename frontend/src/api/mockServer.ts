@@ -77,11 +77,17 @@ function composeDraft(userId: number, date: string): string {
   })
   const wip = sess.map((s) => `- [${s.repo?.fullName ?? s.remoteUrl}] ${s.branch} — ${s.summary ?? '작업 중'} (미커밋)`)
   const todos = sess.flatMap((s) => s.todos.map((t) => `- ${t.text}`))
+  // 계획은 확장이 markdown 문서 한 통으로 보낸다. 적은 그대로 싣고 불릿을 덧붙이지 않는다
+  // (서버의 DraftTemplate 와 같다). 같은 폴더의 다른 브랜치는 같은 문서를 들고 온다.
+  const plans = [...new Set(sess.map((s) => (s.planNote ?? '').trim()).filter(Boolean))]
+  const plan = plans.length || todos.length
+    ? [...(plans.length ? [plans.join('\n\n')] : []), ...(todos.length ? [todos.join('\n')] : [])].join('\n\n')
+    : '- 없음'
   return [
     `# ${date} 업무 일지 — ${user?.name ?? ''}`, '',
     '## 완료한 작업', ...(done.length ? done : ['- 없음']), '',
     '## 진행 중 / 미커밋', ...(wip.length ? wip : ['- 없음']), '',
-    '## 계획 / TODO', ...(todos.length ? todos : ['- 없음']), '',
+    '## 계획 / TODO', plan, '',
     '## 메모', '(직접 작성)', '',
   ].join('\n')
 }

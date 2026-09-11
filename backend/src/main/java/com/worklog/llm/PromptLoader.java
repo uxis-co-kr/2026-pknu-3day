@@ -20,6 +20,9 @@ public class PromptLoader {
 
     public static final String COMMIT_SUMMARY_SYSTEM = "commit-summary-system";
     public static final String COMMIT_SUMMARY_USER = "commit-summary-user";
+    /** AI 대화 한 세션을 요약하는 프롬프트. */
+    public static final String AI_SESSION_SUMMARY_SYSTEM = "ai-session-summary-system";
+    public static final String AI_SESSION_SUMMARY_USER = "ai-session-summary-user";
     /** 하루치 활동을 묶어 업무 일지를 쓰는 프롬프트 (F-1). */
     public static final String WORKLOG_SYSTEM = "worklog-system";
     public static final String WORKLOG_USER = "worklog-user";

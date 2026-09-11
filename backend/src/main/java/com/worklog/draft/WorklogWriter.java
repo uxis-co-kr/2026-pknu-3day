@@ -11,7 +11,6 @@ import com.worklog.vscode.AiSessionSummary;
 import com.worklog.vscode.AiTurn;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
-import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -46,8 +45,6 @@ public class WorklogWriter {
     private static final int MAX_AI_PROMPTS_PER_SESSION = 6;
     /** 전체 AI 프롬프트 상한. */
     private static final int MAX_AI_PROMPTS = 20;
-    /** 세션 하나에서 프롬프트에 넣을 미푸시 커밋 수. */
-    private static final int MAX_UNPUSHED_PER_SESSION = 15;
 
     private final LlmProviderResolver resolver;
     private final LlmSettingService settingService;
@@ -145,13 +142,6 @@ public class WorklogWriter {
         for (VscodeSession s : sessions) {
             String repo = s.getRepo() != null ? s.getRepo().getFullName() : s.getRemoteUrl();
             sb.append("- [%s] %s 브랜치\n".formatted(repo, s.getBranch()));
-            // 커밋 메시지는 사람이 이미 쓴 요약이다. 미커밋 파일 목록보다 위에 둔다 (V11).
-            List<UnpushedCommit> unpushed = s.getUnpushedCommits();
-            if (unpushed != null) {
-                for (UnpushedCommit c : unpushed.stream().limit(MAX_UNPUSHED_PER_SESSION).toList()) {
-                    sb.append("  · 커밋(푸시 전) %s %s\n".formatted(c.shortSha(), nullToEmpty(c.subject())));
-                }
-            }
             List<UncommittedFile> files = s.getUncommittedFiles();
             if (files != null) {
                 for (UncommittedFile f : files.stream().limit(20).toList()) {
@@ -225,21 +215,20 @@ public class WorklogWriter {
         return byId.values();
     }
 
-    private static String nullToEmpty(String value) {
-        return value == null ? "" : value.strip();
-    }
-
+    /**
+     * 오늘 계획으로 적어 둔 문서. 확장이 markdown 한 통을 통째로 보낸다 — 하루에 하나다.
+     *
+     * <p>줄마다 불릿을 붙이지 않는다. 적은 모양(제목·목록·들여쓰기)이 곧 뜻이라, 그대로
+     * 넘겨야 모델이 무엇을 하려 했는지 읽는다. 같은 폴더의 다른 브랜치 세션은 같은 문서를
+     * 들고 오므로 한 번만 싣는다.
+     */
     private static String planLines(List<VscodeSession> sessions) {
         String plans = sessions.stream()
                 .map(VscodeSession::getPlanNote)
                 .filter(p -> p != null && !p.isBlank())
-                // 확장이 여러 건을 줄바꿈으로 이어 보낸다 (서버 계약은 문자열 한 칸).
-                .flatMap(p -> p.lines())
                 .map(String::strip)
-                .filter(p -> !p.isEmpty())
                 .distinct()
-                .map(p -> "- " + p)
-                .collect(Collectors.joining("\n"));
+                .collect(Collectors.joining("\n\n"));
         return plans.isEmpty() ? "(없음)" : plans;
     }
 

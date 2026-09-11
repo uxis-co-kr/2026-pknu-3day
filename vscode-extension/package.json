@@ -25,8 +25,8 @@
     "commands": [
       {
         "command": "worklog.recordPlan",
-        "title": "WorkLog: 계획 작성",
-        "icon": "$(note)"
+        "title": "WorkLog: 오늘 계획 작성·수정",
+        "icon": "$(edit)"
       },
       {
         "command": "worklog.sendNow",
@@ -37,11 +37,6 @@
         "command": "worklog.refresh",
         "title": "WorkLog: 새로고침",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "worklog.removePlan",
-        "title": "WorkLog: 계획 삭제",
-        "icon": "$(trash)"
       },
       {
         "command": "worklog.setApiKey",
@@ -105,24 +100,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "worklog.recordPlan",
+          "command": "worklog.refresh",
           "when": "view == worklog.session",
           "group": "navigation@2"
         },
         {
-          "command": "worklog.refresh",
-          "when": "view == worklog.session",
-          "group": "navigation@3"
-        },
-        {
           "command": "worklog.setApiKey",
           "when": "view == worklog.session",
-          "group": "navigation@4"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
-          "command": "worklog.removePlan",
+          "command": "worklog.recordPlan",
           "when": "view == worklog.session && viewItem == worklog.plan",
           "group": "inline"
         }

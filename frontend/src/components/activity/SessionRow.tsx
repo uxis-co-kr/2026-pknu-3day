@@ -38,9 +38,10 @@ export default function SessionRow({
             TODO {session.todos.length}건 — {session.todos[0].text}
           </p>
         ))}
-        {!dense && session.planNote && (
-          <p className="border-l-2 border-status-uncommitted/40 pl-2 text-[12px] italic text-muted-foreground">
-            &quot;{session.planNote}&quot;
+        {!dense && session.planNote?.trim() && (
+          /* 계획은 문서 한 통이다. 목록의 한 행에 다 펼칠 수는 없어 앞 세 줄만 보여 준다. */
+          <p className="line-clamp-3 whitespace-pre-wrap border-l-2 border-status-uncommitted/40 pl-2 text-[12px] italic text-muted-foreground">
+            {session.planNote.trim()}
           </p>
         )}
       </div>

@@ -36,12 +36,12 @@ class RemindPolicyTest {
         assertThat(RemindPolicy.isStale(s, NOW)).isTrue();
 
         s.setUnpushedCommits(List.of(new com.worklog.vscode.UnpushedCommit(
-                "be292b4", "fix", NOW.minusHours(1).toString())));
+                "be292b4", "fix", NOW.minusHours(1))));
         assertThat(RemindPolicy.isStale(s, NOW)).isFalse();
         assertThat(RemindPolicy.hoursSinceLastCommit(s, NOW)).isEqualTo(1);
 
-        // 파싱 안 되는 시각은 무시한다
-        s.setUnpushedCommits(List.of(new com.worklog.vscode.UnpushedCommit("x", "y", "")));
+        // 시각이 없는 항목은 무시한다
+        s.setUnpushedCommits(List.of(new com.worklog.vscode.UnpushedCommit("x", "y", null)));
         assertThat(RemindPolicy.isStale(s, NOW)).isTrue();
     }
 
