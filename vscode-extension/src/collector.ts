@@ -130,6 +130,28 @@ export class Collector {
     this.persist()
   }
 
+  /**
+   * 그 폴더의 계획을 통째로 바꾼다.
+   *
+   * <p>임시 문서에서 적을 때 쓴다 — 문서가 곧 그 폴더의 계획 전부이므로, 문서에서 지운
+   * 줄은 계획에서도 지워져야 한다. 한 줄씩 더하는 {@link addPlanNote} 로는 삭제를
+   * 표현할 수 없다 (BACKLOG2_client C-2).
+   */
+  setPlanNotes(notes: string[], folder?: string): void {
+    this.rolloverIfNeeded()
+    const key = folder ?? this.soleFolder()
+    if (!key) return
+    const cleaned: string[] = []
+    for (const note of notes) {
+      const trimmed = note.trim()
+      // 같은 문구를 두 번 적으면 한 번만 남긴다 — addPlanNote 와 같은 규칙이다.
+      if (trimmed && !cleaned.includes(trimmed)) cleaned.push(trimmed)
+    }
+    if (cleaned.length === 0) this.plans.delete(key)
+    else this.plans.set(key, cleaned)
+    this.persist()
+  }
+
   removePlanNote(note: string, folder?: string): void {
     const key = folder ?? this.soleFolder()
     if (!key) return

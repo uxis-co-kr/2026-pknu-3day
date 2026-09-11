@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { Collector } from './collector'
 import { initLog, log } from './log'
@@ -332,6 +334,120 @@ async function pickFolder(): Promise<string | undefined> {
 }
 
 /**
+ * 계획을 적는 임시 문서. 파일 경로 → 어느 폴더의 계획인지.
+ *
+ * <p>저장 이벤트를 받았을 때 이것이 계획 문서인지 사용자의 작업 파일인지 가른다.
+ */
+const planDocs = new Map<string, string>()
+
+/**
+ * 계획 문서의 파일 이름. 탭 제목이 되므로 폴더 이름을 그대로 쓴다.
+ *
+ * <p>워크스페이스에 이름이 같은 폴더가 둘 이상이면 경로 해시를 덧붙여 나눈다 — 같은
+ * 파일을 두 폴더가 나눠 쓰면 한쪽 계획이 다른 쪽을 덮는다.
+ */
+function planFileName(folder: string): string {
+  const base = path.basename(folder)
+  const twins = (vscode.workspace.workspaceFolders ?? []).filter(
+    (f) => path.basename(f.uri.fsPath) === base,
+  )
+  const safe = base.replace(/[\\/:*?"<>|]/g, '_') || 'workspace'
+  if (twins.length <= 1) return `${safe} 계획.md`
+  return `${safe} 계획 (${createHash('sha1').update(folder).digest('hex').slice(0, 6)}).md`
+}
+
+/**
+ * 계획 문서에서 계획 줄만 뽑는다.
+ *
+ * <p>안내 주석과 날짜 제목은 우리가 넣은 것이라 계획이 아니다. 목록 표식(`- `, `1. `,
+ * 체크박스)은 markdown 으로 적기 편하라고 둔 것이므로 떼어 낸다. 한 줄이 계획 하나다 —
+ * 사이드바가 줄 단위로 보여 주고 우클릭으로 한 줄씩 지울 수 있어야 한다.
+ */
+export function parsePlanDocument(text: string): string[] {
+  const notes: string[] = []
+  let inComment = false
+  for (const raw of text.split('\n')) {
+    let line = raw.trim()
+    if (inComment) {
+      const close = line.indexOf('-->')
+      if (close < 0) continue
+      line = line.slice(close + 3).trim()
+      inComment = false
+    }
+    line = line.replace(/<!--[\s\S]*?-->/g, ' ').trim()
+    const open = line.indexOf('<!--')
+    if (open >= 0) {
+      inComment = true
+      line = line.slice(0, open).trim()
+    }
+    if (!line || line.startsWith('#')) continue
+    const note = line
+      // 표식만 있고 내용이 없는 줄(빈 `- `)은 아래에서 걸러지도록 통째로 비운다.
+      .replace(/^([-*+]|\d+[.)])(\s+|$)/, '')
+      .replace(/^\[[ xX]\]\s*/, '')
+      .trim()
+    if (note) notes.push(note)
+  }
+  return notes
+}
+
+/** 문서 맨 위에 넣는 안내. 저장하는 법과 읽는 규칙을 그 자리에서 알려 준다. */
+function planHeader(folder: string): string {
+  return [
+    `<!-- ${path.basename(folder)} · 오늘 할 일을 적으세요.`,
+    '     저장(Cmd+S)하면 사이드바의 "계획" 과 오늘 업무 일지의 "계획 / TODO" 에 반영됩니다.',
+    '     한 줄이 계획 하나입니다. 빈 줄·이 주석·# 로 시작하는 줄은 빼고 보냅니다.',
+    '     지운 줄은 계획에서도 지워집니다. -->',
+  ].join('\n')
+}
+
+/**
+ * 계획을 임시 문서 탭에서 적는다 (BACKLOG2_client C-2).
+ *
+ * <p>예전에는 창 맨 위의 한 줄 입력(`showInputBox`)이었다. 긴 계획을 쓸 수 없고, 여러 건을
+ * 적으려면 명령을 그만큼 다시 불러야 했다. 여기서는 **진짜 파일**을 열어 준다 — 이름 없는
+ * 문서로 열면 `Cmd+S` 가 "다른 이름으로 저장" 창을 띄워, 저장할 때 받는다는 약속이 깨진다.
+ * 파일은 확장의 globalStorage 에 두므로 사용자의 저장소에는 남지 않는다.
+ */
+async function openPlanDocument(context: vscode.ExtensionContext): Promise<void> {
+  const folder = await pickFolder()
+  if (!folder) return
+
+  await vscode.workspace.fs.createDirectory(context.globalStorageUri)
+  const file = vscode.Uri.joinPath(context.globalStorageUri, planFileName(folder))
+  planDocs.set(file.fsPath, folder)
+
+  // 이미 열어 두고 고치는 중이면 덮어쓰지 않는다. 적던 내용이 사라지면 안 된다.
+  const open = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === file.fsPath)
+  if (open?.isDirty) {
+    await vscode.window.showTextDocument(open, { preview: false })
+    return
+  }
+
+  const notes = collector.planNotesOf(folder)
+  const body = notes.length > 0 ? notes.map((n) => `- ${n}`).join('\n') : '- '
+  const text = `${planHeader(folder)}\n\n${body}`
+  await vscode.workspace.fs.writeFile(file, new TextEncoder().encode(text))
+
+  const doc = await vscode.workspace.openTextDocument(file)
+  const editor = await vscode.window.showTextDocument(doc, { preview: false })
+  // 마지막 줄 끝에 커서를 둔다 — 열자마자 이어 적을 수 있게.
+  const end = doc.lineAt(doc.lineCount - 1).range.end
+  editor.selection = new vscode.Selection(end, end)
+  editor.revealRange(new vscode.Range(end, end))
+}
+
+/** 계획 문서를 저장했을 때. 문서가 곧 그 폴더의 계획 전부다. */
+function applyPlanDocument(doc: vscode.TextDocument, folder: string): void {
+  const notes = parsePlanDocument(doc.getText())
+  collector.setPlanNotes(notes, folder)
+  log(`계획 ${notes.length}건 (${folder})`)
+  void tree.refresh()
+  // 저장할 때마다 알림 창을 띄우면 성가시다. 상태바에 잠깐 보여 주는 정도로 둔다.
+  vscode.window.setStatusBarMessage(`WorkLog: 계획 ${notes.length}건을 저장했습니다.`, 3000)
+}
+
+/**
  * 사이드바만 주기적으로 다시 그린다 (보내지는 않는다).
  *
  * <p>AI 대화는 workspace 밖(`~/.claude/projects`)에 쌓여 파일 감시가 닿지 않는다. 전송은
@@ -381,6 +497,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.uri.scheme !== 'file') return
+      const planFolder = planDocs.get(doc.uri.fsPath)
+      if (planFolder) {
+        // 계획 문서는 사용자의 작업 파일이 아니다. 저장 이벤트로 세지 않는다.
+        applyPlanDocument(doc, planFolder)
+        return
+      }
       collector.recordSave(doc.uri.fsPath)
       scheduleTreeRefresh()
     }),
@@ -423,24 +545,7 @@ export function activate(context: vscode.ExtensionContext): void {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.recordPlan', async () => {
-      const folder = await pickFolder()
-      if (!folder) return
-
-      const count = collector.planNotesOf(folder).length
-      const note = await vscode.window.showInputBox({
-        title: 'WorkLog: 계획 추가',
-        prompt: count === 0
-          ? '오늘 무엇을 할 계획인지 한 줄로 적으세요. 업무 일지의 "계획 / TODO" 에 들어갑니다.'
-          : `이미 ${count}건 적었습니다. 덧붙일 계획을 적으세요.`,
-        placeHolder: '예) 오후에 출석 중복 검증 로직 마무리',
-      })
-      if (note !== undefined && note.trim()) {
-        collector.addPlanNote(note, folder)
-        log(`계획 추가 (${folder}): ${note.trim()}`)
-        void tree.refresh()
-      }
-    }),
+    vscode.commands.registerCommand('worklog.recordPlan', () => openPlanDocument(context)),
   )
 
   context.subscriptions.push(

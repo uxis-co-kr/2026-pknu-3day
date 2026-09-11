@@ -25,7 +25,7 @@
     "commands": [
       {
         "command": "worklog.recordPlan",
-        "title": "WorkLog: 계획 추가",
+        "title": "WorkLog: 계획 작성",
         "icon": "$(note)"
       },
       {
