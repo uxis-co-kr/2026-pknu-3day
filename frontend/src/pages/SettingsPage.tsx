@@ -92,7 +92,7 @@ export default function SettingsPage() {
         <Button size="sm" className="mt-4 h-[34px]" onClick={openDialog}>새 키 발급</Button>
       </Section>
 
-      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다.">
+      <Section title="리포지터리" description="여기 등록한 리포의 커밋·PR 만 수집합니다. 팀이 등록한 리포를 모두 보여 주고, 지우는 것은 등록한 사람만 할 수 있습니다.">
         <RepoSection />
       </Section>
 

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ApiError } from '@/api/apiClient'
-import { useDeleteRepo, useImportRepos, useKnownRepos, useMe, useRegisterRepo, useRepos, useSyncAllRepos, useSyncRepo } from '@/api/hooks'
+import { useDeleteRepo, useImportRepos, useMe, useRegisterRepo, useRepos, useSyncAllRepos, useSyncRepo } from '@/api/hooks'
 import { formatRelative } from '@/lib/date'
 
 /** 디자인 브리프 3.4 — 등록·삭제·동기화. 빈 상태는 일러스트 없이 텍스트만. */
@@ -20,7 +20,6 @@ import { formatRelative } from '@/lib/date'
  */
 export default function RepoSection() {
   const { data: repos, isLoading } = useRepos()
-  const known = useKnownRepos()
   const register = useRegisterRepo()
   const remove = useDeleteRepo()
   const { data: me } = useMe()
@@ -103,32 +102,11 @@ export default function RepoSection() {
           </div>
         ) : (repos ?? []).length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-sm font-medium">내가 등록한 리포지터리가 없습니다</p>
+            <p className="text-sm font-medium">등록된 리포지터리가 없습니다</p>
             <p className="mt-1.5 text-[13px] text-muted-foreground">
               위 입력창에 <span className="font-mono">owner/repo</span> 를 넣어 첫 리포를 등록해 주세요.
+              팀에서 한 사람만 등록하면 모두의 커밋이 모입니다.
             </p>
-            {/*
-              리포는 한 사람만 등록할 수 있다 (수집이 등록자 토큰으로 돈다). 팀원이 이미
-              등록한 리포를 다시 등록하려다 막히면, 이 화면이 비어 있는 것과 겹쳐
-              "나는 아직 아무것도 안 됐다" 로 읽힌다. 실제로는 이미 덮여 있다.
-            */}
-            {(known.data ?? []).length > 0 && (
-              <div className="mx-auto mt-5 max-w-lg rounded border border-dashed p-3 text-left">
-                <p className="text-[13px]">
-                  팀이 이미 등록해 둔 리포 {known.data!.length}곳이 있습니다 —{' '}
-                  <span className="font-medium">다시 등록하지 않아도 됩니다.</span>
-                </p>
-                <p className="mt-1.5 font-mono text-[12px] text-muted-foreground">
-                  {known.data!.slice(0, 5).join(', ')}
-                  {known.data!.length > 5 && ` 외 ${known.data!.length - 5}곳`}
-                </p>
-                <p className="mt-2 text-[12px] text-muted-foreground">
-                  등록은 한 사람만 하면 팀 전체의 커밋이 모입니다. VS Code 확장도 이 리포들의
-                  작업을 그대로 보냅니다 — 확장을 쓰려면 위 <span className="font-medium">API Key</span> 만
-                  발급하면 됩니다.
-                </p>
-              </div>
-            )}
           </div>
         ) : (
           <Table>

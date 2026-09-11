@@ -43,11 +43,20 @@ public class RepoController {
         this.activityRepository = activityRepository;
     }
 
-    /** 내가 등록한 리포만 (9/10 결정). 남의 리포는 그 사람 목록에만 있다. */
+    /**
+     * 등록된 리포 전부 — 등록자를 함께 준다.
+     *
+     * <p>9/10 에는 "내가 등록한 것만" 이었다. 그런데 리포는 한 사람만 등록할 수 있어
+     * (수집이 등록자 토큰으로 돈다), 같은 리포에서 일하는 팀원의 화면은 <b>늘 비어 있었다</b> —
+     * 등록할 길도, 이미 덮여 있다는 것을 알 길도 없었다 (9/11 결정으로 뒤집는다).
+     *
+     * <p>목록만 팀 전체다. 활동과 VS 기록은 그대로 각자의 것만 본다. 지우는 것도 등록한
+     * 사람만 할 수 있다 ({@link RepoService#delete}).
+     */
     @GetMapping
-    public List<RepoResponse> list(@AuthenticationPrincipal AuthenticatedUser principal) {
+    public List<RepoResponse> list() {
         Map<Long, Long> todayCommits = todayCommitCounts();
-        return repoService.listMine(principal.id()).stream()
+        return repoService.list().stream()
                 .map(repo -> RepoResponse.from(
                         repo,
                         todayCommits.getOrDefault(repo.getId(), 0L),
@@ -116,13 +125,13 @@ public class RepoController {
      * 끌어올 때 쓴다.
      */
     @PostMapping("/sync-all")
-    public ResponseEntity<ImportResponse> syncAll(
-            @AuthenticationPrincipal AuthenticatedUser principal,
-            @RequestParam(defaultValue = "false") boolean full) {
-        List<Repo> mine = repoService.listMine(principal.id());
-        mine.forEach(repo -> collector.syncAsync(repo.getId(), full));
+    public ResponseEntity<ImportResponse> syncAll(@RequestParam(defaultValue = "false") boolean full) {
+        // 화면에 보이는 것과 같은 집합이어야 한다. 목록은 팀 전체인데 동기화만 내 것이면,
+        // 팀원이 눌렀을 때 아무 일도 일어나지 않는다.
+        List<Repo> all = repoService.list();
+        all.forEach(repo -> collector.syncAsync(repo.getId(), full));
         return ResponseEntity.accepted()
-                .body(new ImportResponse(mine.size(), mine.stream().map(Repo::getFullName).toList()));
+                .body(new ImportResponse(all.size(), all.stream().map(Repo::getFullName).toList()));
     }
 
     /** 몇 개를 다뤘는지 화면이 알려 줄 수 있게 이름까지 준다. */
