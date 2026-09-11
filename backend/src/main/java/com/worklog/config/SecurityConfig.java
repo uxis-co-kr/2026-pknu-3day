@@ -8,6 +8,7 @@ import com.worklog.auth.JwtAuthFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,7 +22,6 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * 인증 규칙 (PRD F5, 7).
@@ -94,25 +94,29 @@ public class SecurityConfig {
      * 프론트(Vite dev server)에서 Bearer 토큰으로 호출할 수 있게 열어둔다.
      *
      * <p>Vite 프록시를 타면 CORS 를 안 거치지만, 프록시 없이 :8080 을 직접 부르는 사람이
-     * 생겨도 막히지 않게 사내망 대역을 통째로 연다 ({@link com.worklog.auth.OriginPolicy} 와
-     * 같은 대역). 인증은 어차피 Bearer 토큰이라 원본을 넓혀도 새는 것이 없다.
+     * 생겨도 막히지 않게 사내망 대역을 연다. 사람마다 접속 주소가 다르다 (BACKLOG2 §2-1).
+     *
+     * <p>대역을 <b>와일드카드 패턴으로</b> 열지는 않는다. 스프링은 패턴의 {@code *} 를 점까지
+     * 포함해 풀어서, {@code http://192.168.*} 이 {@code 192.168.1.224.evil.com} 까지 통과시킨다 —
+     * 남이 그런 이름을 잡아 두면 사내망인 척 들어온다. 지금은 인증이 Bearer 토큰이라 그것만으로
+     * 새지는 않지만, 쿠키를 쓰는 자리가 하나라도 생기면 그때는 구멍이다 (§2-2).
+     *
+     * <p>그래서 요청이 알려 준 Origin 을 {@link InternalNetwork} 로 가려 <b>네 칸짜리 숫자
+     * 주소인지</b>까지 확인하고, 통과하면 그 주소 하나만 허용한다. OAuth 를 마치고 돌아갈
+     * 주소를 고를 때와 같은 자다 — 한쪽만 느슨하면 그쪽으로 들어온다.
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(java.util.List.of(
-                frontendUrl,
-                "http://localhost:[*]",
-                "http://127.0.0.1:[*]",
-                "http://10.*:[*]",
-                "http://172.*:[*]",
-                "http://192.168.*:[*]"));
-        config.setAllowedMethods(java.util.List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(java.util.List.of("*"));
-        config.setAllowCredentials(true);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
+        return request -> {
+            String origin = request.getHeader(HttpHeaders.ORIGIN);
+            CorsConfiguration config = new CorsConfiguration();
+            config.setAllowedOrigins(
+                    java.util.List.of(InternalNetwork.isInternalOrigin(origin) ? origin : frontendUrl));
+            config.setAllowedMethods(java.util.List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+            config.setAllowedHeaders(java.util.List.of("*"));
+            config.setAllowCredentials(true);
+            return config;
+        };
     }
 
     private AuthenticationEntryPoint authenticationEntryPoint() {

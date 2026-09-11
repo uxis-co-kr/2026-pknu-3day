@@ -1,10 +1,10 @@
 package com.worklog.auth;
 
 import com.worklog.config.ApiException;
+import com.worklog.config.InternalNetwork;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -170,68 +170,11 @@ public class GitHubOAuthController {
         if (origin == null || origin.isBlank()) {
             return null;
         }
-        try {
-            URI uri = URI.create(origin.trim());
-            String host = uri.getHost();
-            if (host == null || !isPrivateHost(host)) {
-                log.warn("사내망 밖의 Origin 은 돌아갈 주소로 쓰지 않는다: {}", origin);
-                return null;
-            }
-            return stripTrailingSlash(origin.trim());
-        } catch (IllegalArgumentException e) {
+        if (!InternalNetwork.isInternalOrigin(origin)) {
+            log.warn("사내망 밖의 Origin 은 돌아갈 주소로 쓰지 않는다: {}", origin);
             return null;
         }
-    }
-
-    /**
-     * localhost 와 사설 IP 대역(10./172.16-31./192.168.) 만.
-     *
-     * <p>앞자리만 견주면 {@code 192.168.1.224.evil.com} 같은 주소가 통과한다 — 남이 그
-     * 도메인을 잡아 두면 토큰이 그리로 날아간다. 그래서 <b>네 칸짜리 숫자 주소인지</b>부터
-     * 확인한다.
-     */
-    static boolean isPrivateHost(String host) {
-        if (host == null || host.isBlank()) {
-            return false;
-        }
-        if ("localhost".equalsIgnoreCase(host) || "[::1]".equals(host) || "::1".equals(host)) {
-            return true;
-        }
-        int[] octets = parseIpv4(host);
-        if (octets == null) {
-            return false;
-        }
-        if (octets[0] == 127 || octets[0] == 10) {
-            return true;
-        }
-        if (octets[0] == 192 && octets[1] == 168) {
-            return true;
-        }
-        return octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31;
-    }
-
-    /** 점 넷으로 나뉜 0~255 네 칸이어야 한다. 아니면 null. */
-    private static int[] parseIpv4(String host) {
-        String[] parts = host.split("\\.", -1);
-        if (parts.length != 4) {
-            return null;
-        }
-        int[] octets = new int[4];
-        for (int i = 0; i < 4; i++) {
-            if (parts[i].isEmpty() || parts[i].length() > 3) {
-                return null;
-            }
-            for (int k = 0; k < parts[i].length(); k++) {
-                if (!Character.isDigit(parts[i].charAt(k))) {
-                    return null;
-                }
-            }
-            octets[i] = Integer.parseInt(parts[i]);
-            if (octets[i] > 255) {
-                return null;
-            }
-        }
-        return octets;
+        return stripTrailingSlash(origin.trim());
     }
 
     private String returnTo(String returnOrigin) {

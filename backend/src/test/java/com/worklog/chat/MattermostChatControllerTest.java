@@ -2,6 +2,7 @@ package com.worklog.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
@@ -38,10 +39,10 @@ class MattermostChatControllerTest {
     @Test
     @DisplayName("답할 말이 없으면 빈 200 — Mattermost 는 아무것도 올리지 않는다")
     void emptyWhenNotAQuestion() {
-        MattermostChatController c = new MattermostChatController(answers, "");
+        MattermostChatController c = new MattermostChatController(answers, "secret");
         when(answers.answer("점심")).thenReturn(Optional.empty());
 
-        ResponseEntity<?> res = post(c, null, "점심");
+        ResponseEntity<?> res = post(c, "secret", "점심");
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(res.getBody()).isNull();
     }
@@ -49,11 +50,28 @@ class MattermostChatControllerTest {
     @Test
     @DisplayName("답은 채널 전체에 보이는 in_channel 로 돌려준다")
     void repliesInChannel() {
-        MattermostChatController c = new MattermostChatController(answers, "");
+        MattermostChatController c = new MattermostChatController(answers, "secret");
         when(answers.answer("조웅식 오늘 업무일지")).thenReturn(Optional.of("답"));
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> body = (Map<String, Object>) post(c, null, "조웅식 오늘 업무일지").getBody();
+        Map<String, Object> body = (Map<String, Object>) post(c, "secret", "조웅식 오늘 업무일지").getBody();
         assertThat(body).containsEntry("text", "답").containsEntry("response_type", "in_channel");
+    }
+
+    /**
+     * 이 경로는 로그인 없이 열려 있고 답에는 남의 업무 일지가 그대로 실린다. 설정이 비었을 때
+     * 열어 두면 사내망 누구나 이름만 적어 남의 일지를 꺼내 볼 수 있다 (BACKLOG2 §2-2).
+     */
+    @Test
+    @DisplayName("token 설정이 없으면 아예 닫는다 — 경고만 남기고 열어 두지 않는다")
+    void closedWhenNotConfigured() {
+        MattermostChatController c = new MattermostChatController(answers, "  ");
+        when(answers.answer("조웅식 오늘 업무일지")).thenReturn(Optional.of("남의 일지"));
+
+        ResponseEntity<?> res = post(c, null, "조웅식 오늘 업무일지");
+
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(res.getBody().toString()).doesNotContain("남의 일지");
+        verifyNoInteractions(answers);
     }
 }

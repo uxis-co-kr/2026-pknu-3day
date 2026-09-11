@@ -2,6 +2,8 @@ package com.worklog.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.worklog.config.InternalNetwork;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -21,7 +23,7 @@ class OAuthOriginTest {
     })
     @DisplayName("사내망 주소는 통과한다")
     void allowsPrivate(String host) {
-        assertThat(GitHubOAuthController.isPrivateHost(host)).isTrue();
+        assertThat(InternalNetwork.isPrivateHost(host)).isTrue();
     }
 
     @ParameterizedTest
@@ -34,6 +36,25 @@ class OAuthOriginTest {
     })
     @DisplayName("사내망 밖은 막는다")
     void rejectsPublic(String host) {
-        assertThat(GitHubOAuthController.isPrivateHost(host)).isFalse();
+        assertThat(InternalNetwork.isPrivateHost(host)).isFalse();
+    }
+
+    /** CORS 허용 주소도 같은 자를 쓴다 (SecurityConfig). 한쪽만 느슨하면 그쪽으로 들어온다. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "http://192.168.1.224:5173", "http://192.168.1.218:5173", "http://localhost:5173",
+    })
+    @DisplayName("사내망 Origin 은 통과한다")
+    void allowsInternalOrigin(String origin) {
+        assertThat(InternalNetwork.isInternalOrigin(origin)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "http://192.168.1.224.evil.com", "http://10.evil.com", "https://evil.com", "null", "",
+    })
+    @DisplayName("사내망 주소인 척하는 도메인은 막는다")
+    void rejectsLookalikeOrigin(String origin) {
+        assertThat(InternalNetwork.isInternalOrigin(origin)).isFalse();
     }
 }

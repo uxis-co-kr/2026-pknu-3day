@@ -10,7 +10,9 @@ services:
     ports:
       # 팀 개발기 두 대 모두 로컬 PostgreSQL 이 127.0.0.1:5432 를 점유하고 있어 기본값을 5433 으로 둔다.
       # 5432 를 쓰고 싶으면 루트 .env 에 POSTGRES_PORT=5432 로 덮어쓴다. 컨테이너 안에서는 그대로 5432.
-      - "${POSTGRES_PORT:-5433}:5432"
+      # 127.0.0.1 로 묶는다. 이 포트를 쓰는 것은 같은 PC 의 백엔드뿐인데, 0.0.0.0 이면
+      # 사내망 아무 PC 에서나 worklog/worklog 로 DB 에 바로 붙을 수 있다 (BACKLOG2 §2-2).
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - worklog-pgdata:/var/lib/postgresql/data
     healthcheck:

@@ -1,5 +1,7 @@
 package com.worklog.chat;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -37,7 +39,7 @@ public class MattermostChatController {
         this.answerService = answerService;
         this.expectedToken = expectedToken == null ? "" : expectedToken.trim();
         if (this.expectedToken.isEmpty()) {
-            log.warn("MATTERMOST_OUTGOING_TOKEN 이 비어 있다. /chat/mattermost 를 누구나 부를 수 있다.");
+            log.warn("MATTERMOST_OUTGOING_TOKEN 이 비어 있어 /chat/mattermost 를 닫아 둔다.");
         }
     }
 
@@ -56,7 +58,18 @@ public class MattermostChatController {
     private ResponseEntity<?> handle(String token, String text, String userName, String channel) {
         // 연결이 되는지부터 알아야 한다 — Mattermost 가 사내 주소를 막으면 여기까지 오지 않는다.
         log.info("Mattermost 요청 도착 — {}@{}: {}", userName, channel, text);
-        if (!expectedToken.isEmpty() && !expectedToken.equals(token)) {
+        // 이 경로는 로그인 없이 열려 있고(SecurityConfig permitAll), 답에는 **남의 업무 일지가
+        // 그대로** 실린다 (WorkLogAnswerService). 설정이 비었을 때 경고만 남기고 열어 두면
+        // 사내망의 누구든 이름만 적어 남의 일지를 꺼내 볼 수 있다 (BACKLOG2 §2-2).
+        // 설정이 없으면 막는다 — 웹훅을 붙이는 사람은 어차피 token 을 함께 넣는다.
+        if (expectedToken.isEmpty()) {
+            log.warn("MATTERMOST_OUTGOING_TOKEN 이 없어 요청을 거절한다 (채널 {}).", channel);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of(
+                            "code", "CHAT_NOT_CONFIGURED",
+                            "message", "MATTERMOST_OUTGOING_TOKEN 이 설정되지 않았습니다."));
+        }
+        if (!tokenMatches(token)) {
             log.warn("Mattermost token 불일치 (채널 {}).", channel);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("code", "BAD_TOKEN", "message", "token 이 맞지 않습니다."));
@@ -70,6 +83,15 @@ public class MattermostChatController {
                 "response_type", "in_channel",
                 "username", "WorkLog Drafter",
                 "text", answer.get()));
+    }
+
+    /** 글자 수·앞자리로 정답을 좁혀 갈 수 없게 상수 시간으로 견준다. */
+    private boolean tokenMatches(String token) {
+        if (token == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                expectedToken.getBytes(StandardCharsets.UTF_8), token.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String str(Object o) {
