@@ -33,7 +33,7 @@ public class JwtService {
     private static final String ISSUER = "worklog";
     private static final String LOGIN_CLAIM = "login";
     private static final String ROLE_CLAIM = "role";
-    /** 발급 시점의 비밀번호 버전 (password_changed_at, epoch ms). 바뀌면 이 토큰은 죽는다 (V10). */
+    /** 발급 시점의 비밀번호 버전 (password_changed_at, epoch ms). 바뀌면 이 토큰은 죽는다 (V11). */
     private static final String PASSWORD_VERSION_CLAIM = "pwv";
 
     private final JwtEncoder encoder;
@@ -88,7 +88,7 @@ public class JwtService {
 
     /**
      * {@link #verify(String)} 에 발급 시각을 더한 것. 필터가 비밀번호 변경 시각과 견준다 —
-     * 로그아웃이 클라이언트에서 버리는 것뿐이라 유출된 토큰을 죽일 방법이 이것 하나다 (V10).
+     * 로그아웃이 클라이언트에서 버리는 것뿐이라 유출된 토큰을 죽일 방법이 이것 하나다 (V11).
      */
     public Verified verifyDetailed(String token) {
         Jwt jwt = decoder.decode(token);

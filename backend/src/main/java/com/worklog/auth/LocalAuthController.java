@@ -115,7 +115,7 @@ public class LocalAuthController {
 
         user.setPasswordHash(PasswordHasher.hash(request.newPassword()));
         user.setMustChangePassword(false);
-        // 이 시각보다 먼저 발급된 토큰은 전부 죽는다 — 다른 기기의 세션도, 유출된 토큰도 (V10).
+        // 이 시각보다 먼저 발급된 토큰은 전부 죽는다 — 다른 기기의 세션도, 유출된 토큰도 (V11).
         user.setPasswordChangedAt(OffsetDateTime.now());
         userRepository.save(user);
         log.info("{} 비밀번호 변경 — 이전 토큰 무효", user.getLoginId());

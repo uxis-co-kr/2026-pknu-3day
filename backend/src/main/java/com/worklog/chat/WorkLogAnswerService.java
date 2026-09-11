@@ -239,7 +239,7 @@ public class WorkLogAnswerService {
     record DaySection(LocalDate date, String label, String body, Long draftId) {}
 
     /**
-     * 초안 하나를 채팅용으로 — 대표 채널의 "예" 에 답할 때 (V10.1). 사람이 물은 것과 같은 모양이다.
+     * 초안 하나를 채팅용으로 — 대표 채널의 "예" 에 답할 때 (V12). 사람이 물은 것과 같은 모양이다.
      */
     @Transactional(readOnly = true)
     public Optional<String> answerDraft(Long draftId) {

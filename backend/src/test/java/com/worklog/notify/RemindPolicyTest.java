@@ -30,7 +30,7 @@ class RemindPolicyTest {
     }
 
     @Test
-    @DisplayName("푸시 전 커밋이 최근이면 방치가 아니다 — 커밋은 했는데 푸시만 안 한 사람에게 '커밋하세요' 는 틀린 말이다 (V10)")
+    @DisplayName("푸시 전 커밋이 최근이면 방치가 아니다 — 커밋은 했는데 푸시만 안 한 사람에게 '커밋하세요' 는 틀린 말이다 (V11)")
     void unpushedCommitCountsAsCommit() {
         VscodeSession s = session(null, 10);
         assertThat(RemindPolicy.isStale(s, NOW)).isTrue();

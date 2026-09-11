@@ -26,7 +26,7 @@ class JwtServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호를 바꾸면 그 전에 발급한 토큰은 죽는다 — 같은 초 안이라도 (V10)")
+    @DisplayName("비밀번호를 바꾸면 그 전에 발급한 토큰은 죽는다 — 같은 초 안이라도 (V11)")
     void rejectsTokensFromBeforePasswordChange() {
         User user = user(3L, "ungsik");
         String before = jwtService.issue(user);

@@ -50,7 +50,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 AuthenticatedUser fromToken = verified.user();
                 // 권한은 토큰이 아니라 DB 의 지금 값이다. 토큰에 적힌 권한을 믿으면, 관리자였을 때
                 // 받은 토큰이 만료될 때까지 계속 관리자로 통한다. 계정이 지워졌으면 토큰도 죽는다.
-                // 비밀번호를 바꾼 뒤에는 그 전에 받은 토큰도 죽는다 (V10 password_changed_at).
+                // 비밀번호를 바꾼 뒤에는 그 전에 받은 토큰도 죽는다 (V11 password_changed_at).
                 AuthenticatedUser user = userRepository
                         .findById(fromToken.id())
                         .filter(u -> {

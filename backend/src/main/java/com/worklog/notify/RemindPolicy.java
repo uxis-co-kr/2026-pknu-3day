@@ -36,7 +36,7 @@ public final class RemindPolicy {
     }
 
     /**
-     * 마지막 커밋 시각. 확장이 준 {@code lastCommitAt} 과 미푸시 커밋(V10) 중 늦은 쪽이다 —
+     * 마지막 커밋 시각. 확장이 준 {@code lastCommitAt} 과 미푸시 커밋(V11) 중 늦은 쪽이다 —
      * 커밋은 했는데 푸시만 안 한 사람에게 "커밋하세요" 라고 하면 틀린 말이다.
      */
     public static OffsetDateTime lastCommitAt(VscodeSession session) {

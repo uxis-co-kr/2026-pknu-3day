@@ -127,7 +127,7 @@ public class AdminController {
     }
 
     /**
-     * 대표 채널 — 사원이 [Mattermost 전송] 을 누르면 "요약되었습니다" 알림이 가는 채널 (V10.1).
+     * 대표 채널 — 사원이 [Mattermost 전송] 을 누르면 "요약되었습니다" 알림이 가는 채널 (V12).
      * {@code channelId} 를 비우면 해제하고, 그때는 전역 웹훅으로 간다.
      */
     @PutMapping("/chat/primary-channel")

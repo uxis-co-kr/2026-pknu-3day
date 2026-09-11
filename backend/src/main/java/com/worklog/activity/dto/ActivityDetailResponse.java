@@ -27,7 +27,7 @@ public record ActivityDetailResponse(
         String summary,
         String summaryStatus,
         String rawDiff,
-        /** 변경 파일 목록 (V10, F-2). 본문은 rawDiff 를 {@code --- path} 로 쪼개 쓴다. */
+        /** 변경 파일 목록 (V11, F-2). 본문은 rawDiff 를 {@code --- path} 로 쪼개 쓴다. */
         java.util.List<com.worklog.activity.ChangedFile> files,
         OffsetDateTime occurredAt) {
 

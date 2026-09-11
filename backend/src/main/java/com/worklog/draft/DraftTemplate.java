@@ -60,7 +60,7 @@ public final class DraftTemplate {
             md.append("- (미커밋 작업 없음)\n");
         } else {
             sessions.forEach(s -> {
-                // 커밋했지만 푸시 전인 것을 먼저 — 사람이 쓴 커밋 메시지가 파일 목록보다 낫다 (V10).
+                // 커밋했지만 푸시 전인 것을 먼저 — 사람이 쓴 커밋 메시지가 파일 목록보다 낫다 (V11).
                 unpushedLines(s).forEach(line -> md.append(line).append('\n'));
                 md.append(inProgressLine(s)).append('\n');
             });

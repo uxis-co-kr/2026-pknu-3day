@@ -25,7 +25,7 @@
     "commands": [
       {
         "command": "worklog.recordPlan",
-        "title": "WorkLog: 계획 추가",
+        "title": "WorkLog: 계획 작성",
         "icon": "$(note)"
       },
       {
@@ -45,8 +45,13 @@
       },
       {
         "command": "worklog.setApiKey",
-        "title": "WorkLog: API Key 입력",
+        "title": "WorkLog: 서버 주소·API Key 입력",
         "icon": "$(key)"
+      },
+      {
+        "command": "worklog.setServerUrl",
+        "title": "WorkLog: 서버 주소 설정",
+        "icon": "$(server)"
       }
     ],
     "configuration": {
@@ -55,7 +60,7 @@
         "worklog.serverUrl": {
           "type": "string",
           "default": "http://localhost:8080",
-          "description": "백엔드 주소. /api 는 붙이지 않는다."
+          "description": "백엔드 주소. /api 는 붙이지 않는다. 서버를 띄운 PC 가 따로 있으면 'WorkLog: 서버 주소 설정' 으로 바꾼다 — 기본값은 자기 컴퓨터를 가리킨다."
         },
         "worklog.apiKey": {
           "type": "string",
@@ -64,9 +69,9 @@
         },
         "worklog.intervalMinutes": {
           "type": "number",
-          "default": 30,
+          "default": 10,
           "minimum": 5,
-          "description": "자동 전송 주기(분)."
+          "description": "자동 전송 주기(분). AI 대화는 그 사이에도 쌓이므로 너무 길면 서버 값이 낡는다."
         },
         "worklog.collectDiff": {
           "type": "boolean",

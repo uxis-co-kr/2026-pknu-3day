@@ -141,7 +141,7 @@ class DraftTemplateTest {
     }
 
     @Test
-    @DisplayName("커밋했지만 푸시 전인 것은 커밋 메시지로, 미커밋 파일 줄보다 먼저 (V10)")
+    @DisplayName("커밋했지만 푸시 전인 것은 커밋 메시지로, 미커밋 파일 줄보다 먼저 (V11)")
     void rendersUnpushedCommits() {
         VscodeSession s = session();
         s.setUnpushedCommits(List.of(

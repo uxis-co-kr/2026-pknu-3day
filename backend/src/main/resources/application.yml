@@ -34,9 +34,10 @@ worklog:
   # 콜백 뒤 돌아갈 화면 주소의 기본값. 요청의 Origin 이 사내망 대역이면 그쪽으로 돌아가므로
   # (BACKLOG2 §2-1), 이 값은 Origin 을 못 얻었을 때와 Mattermost 메시지의 링크에 쓰인다.
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
-  # 사내망 대역(10/8, 172.16/12, 192.168/16, localhost) 외에 더 허용할 화면 주소.
-  # 쉼표 구분, 호스트 이름 또는 CIDR (예: dev.example.internal,203.0.113.0/24).
-  allowed-origins: ${WORKLOG_ALLOWED_ORIGINS:}
+  # 여럿이 한 서버를 볼 때만 채운다. 비우면 요청에서 만든다 — 프록시를 지나면 localhost 로
+  # 보여서 GitHub 이 각자의 PC 로 돌려보낸다 (BACKLOG2 §2-1).
+  # OAuth App 에 등록한 콜백 주소와 글자까지 같아야 한다.
+  oauth-redirect-uri: ${WORKLOG_OAUTH_REDIRECT_URI:}
 
   # 관리자 콘솔에 들어갈 수 있는 GitHub 로그인 (쉼표 구분).
   # 개인 GitHub 계정에 관리자 권한을 얹는 방식이라, 아래 admin 계정이 있으면 비워 두는 편이 낫다.

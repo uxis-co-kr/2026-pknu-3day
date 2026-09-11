@@ -21,11 +21,12 @@ import org.springframework.stereotype.Component;
  * 심겨 콜백에 따라오지 않았다. 브라우저가 쿠키를 막는 환경도 있다. state 안에 nonce·만료·
  * 연결할 사용자를 넣고 서명하면, 콜백이 어느 호스트로 오든 위조·재사용만 막으면 된다.
  *
- * <p>형식: {@code base64url(nonce|expEpochSec|linkUserId|returnTo).base64url(hmacSha256)}
+ * <p>형식: {@code base64url(nonce|expEpochSec|linkUserId|returnOrigin).base64url(hmacSha256)}
  *
- * <p>{@code returnTo} 는 콜백 뒤 돌아갈 화면 주소다 (BACKLOG2 §2-1). 서명 안에 있으니 바꿔치기가
- * 안 되고, 넣을 때 {@link OriginPolicy} 가 사내망 대역만 통과시킨다 — 둘 다 있어야 열린
- * 리다이렉트가 되지 않는다.
+ * <p>{@code returnOrigin} 은 연동을 시작한 화면의 주소다. 사람마다 접속 주소가 달라
+ * ({@code 192.168.1.224:5173} vs {@code ...218:5173}) 설정에 적힌 한 곳으로만 돌려보내면
+ * 남의 화면으로 튕긴다. 시작할 때 받아 서명에 넣어 두고 콜백에서 꺼내 쓴다 — 서명돼 있으니
+ * 중간에 바꿔 열린 리다이렉트로 만들 수 없다.
  */
 @Component
 public class OAuthStateCodec {
@@ -65,15 +66,17 @@ public class OAuthStateCodec {
 
     /**
      * @param linkUserId 이미 로그인한 계정에 GitHub 을 붙이는 경우 그 사용자. 로그인이면 null
-     * @param returnTo 콜백 뒤 돌아갈 화면 주소 ({@code scheme://host[:port]}). 없으면 서버 설정값으로 간다
+     * @param returnOrigin 끝나고 돌아갈 화면 주소({@code http://192.168.1.224:5173}).
+     *     null 이면 설정의 {@code FRONTEND_URL} 을 쓴다
      */
-    public String issue(Long linkUserId, String returnTo) {
+    public String issue(Long linkUserId, String returnOrigin) {
         byte[] nonce = new byte[18];
         random.nextBytes(nonce);
         String payload = ENC.encodeToString(nonce)
                 + "|" + clock.instant().plusSeconds(TTL_SECONDS).getEpochSecond()
                 + "|" + (linkUserId == null ? "" : linkUserId)
-                + "|" + (returnTo == null ? "" : ENC.encodeToString(returnTo.getBytes(StandardCharsets.UTF_8)));
+                // 주소에 | 가 들어갈 일은 없지만, 들어오면 칸이 밀려 파싱이 어긋난다.
+                + "|" + (returnOrigin == null ? "" : returnOrigin.replace("|", ""));
         String body = ENC.encodeToString(payload.getBytes(StandardCharsets.UTF_8));
         return body + "." + sign(body);
     }
@@ -103,7 +106,8 @@ public class OAuthStateCodec {
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
-        if (parts.length != 4) {
+        // 예전 형식(칸 셋)도 받는다 — 이미 나간 state 가 만료되기 전까지 살아 있다.
+        if (parts.length < 3 || parts.length > 4) {
             return Optional.empty();
         }
         long exp;
@@ -123,15 +127,8 @@ public class OAuthStateCodec {
                 return Optional.empty();
             }
         }
-        String returnTo = null;
-        if (!parts[3].isEmpty()) {
-            try {
-                returnTo = new String(DEC.decode(parts[3]), StandardCharsets.UTF_8);
-            } catch (IllegalArgumentException e) {
-                return Optional.empty();
-            }
-        }
-        return Optional.of(new Parsed(link, returnTo));
+        String returnOrigin = parts.length == 4 && !parts[3].isEmpty() ? parts[3] : null;
+        return Optional.of(new Parsed(link, returnOrigin));
     }
 
     private String sign(String body) {
@@ -144,9 +141,5 @@ public class OAuthStateCodec {
         }
     }
 
-    /**
-     * @param linkUserId 붙일 사용자 (로그인이면 null)
-     * @param returnTo 돌아갈 화면 주소 (없으면 null → 서버 설정 {@code FRONTEND_URL})
-     */
-    public record Parsed(Long linkUserId, String returnTo) {}
+    public record Parsed(Long linkUserId, String returnOrigin) {}
 }

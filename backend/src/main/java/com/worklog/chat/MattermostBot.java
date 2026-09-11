@@ -54,7 +54,7 @@ public class MattermostBot {
     private String lastError;
     private long lastFailureLogAt;
     /**
-     * 채널별 "요약본 보낼까요?" 대기 (V10.1). 알림을 쓴 뒤 그 채널에 온 사람의 예/아니오에만 반응한다 —
+     * 채널별 "요약본 보낼까요?" 대기 (V12). 알림을 쓴 뒤 그 채널에 온 사람의 예/아니오에만 반응한다 —
      * 채널의 온갖 "예" 에 요약본을 던지면 곤란하다. 답이 오거나 시간이 지나면 지운다.
      */
     private final Map<String, PendingConfirm> pendingConfirms = new HashMap<>();
@@ -161,7 +161,7 @@ public class MattermostBot {
     }
 
     /**
-     * 대표 채널에 글을 쓴다 — 사원이 [Mattermost 전송] 을 눌렀을 때의 "요약되었습니다" 알림 (V10.1).
+     * 대표 채널에 글을 쓴다 — 사원이 [Mattermost 전송] 을 눌렀을 때의 "요약되었습니다" 알림 (V12).
      *
      * @return 대표 채널이 없거나 봇이 로그인돼 있지 않으면 false. 그러면 부르는 쪽이 웹훅으로 간다
      */
@@ -170,7 +170,7 @@ public class MattermostBot {
     }
 
     /**
-     * @param draftId 알림 뒤의 "예" 에 보낼 초안. 주면 그 채널에 확인 대기를 건다 (V10.1)
+     * @param draftId 알림 뒤의 "예" 에 보낼 초안. 주면 그 채널에 확인 대기를 건다 (V12)
      */
     public synchronized boolean postToPrimaryChannel(String message, Long draftId) {
         ChatBotSettingsService.Effective cfg = settings.effective();
@@ -208,7 +208,7 @@ public class MattermostBot {
     }
 
     /**
-     * 채널 하나에 글을 쓴다 — 버튼 콜백이 요약본을 올릴 때 쓴다 (V10.1).
+     * 채널 하나에 글을 쓴다 (V12).
      *
      * @return 봇이 로그인돼 있지 않거나 쓰지 못하면 false
      */
@@ -373,7 +373,7 @@ public class MattermostBot {
     }
 
     /**
-     * 알림 뒤의 예/아니오 (V10.1). 대기가 없거나 시한이 지났거나 알림보다 앞선 글이면 건드리지 않는다.
+     * 알림 뒤의 예/아니오 (V12). 대기가 없거나 시한이 지났거나 알림보다 앞선 글이면 건드리지 않는다.
      *
      * @return 이 글을 처리했으면 true — 질문 파서로 넘기지 않는다
      */

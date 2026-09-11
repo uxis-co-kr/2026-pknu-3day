@@ -134,10 +134,13 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
 
       <Category label="AI 대화" count={session.aiSessions?.length ?? 0} Icon={MessagesSquare}>
         {(session.aiSessions ?? []).flatMap((a) =>
-          a.prompts.map((q) => (
-            <Row key={`${a.id}:${q}`} onClick={() => onJump([q.slice(0, 40)])}>
-              <span className="min-w-0 flex-1 truncate">{q}</span>
-              <span className="shrink-0 text-muted-foreground/70">{formatTime(a.firstAt)}</span>
+          (a.turns ?? []).map((t, i) => (
+            <Row key={`${a.id}:${i}`} onClick={() => onJump([t.prompt.slice(0, 40)])}>
+              {/* 답변은 좁은 패널에 다 들어가지 않는다. 마우스를 올리면 보이게 둔다. */}
+              <span className="min-w-0 flex-1 truncate" title={t.answer ? `${a.title}\n\n${t.answer}` : a.title}>
+                {t.prompt}
+              </span>
+              <span className="shrink-0 text-muted-foreground/70">{formatTime(t.at)}</span>
             </Row>
           )))}
       </Category>

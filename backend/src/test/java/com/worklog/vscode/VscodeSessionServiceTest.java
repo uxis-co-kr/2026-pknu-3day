@@ -55,26 +55,34 @@ class VscodeSessionServiceTest {
                 List.of(),
                 List.of(new AiSessionSummary(
                         "sess-1",
+                        "출석 중복 검증",
                         "2026-09-09T10:00:00+09:00",
                         "2026-09-09T11:00:00+09:00",
                         2,
-                        List.of("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘"))),
+                        List.of(
+                                new AiTurn("2026-09-09T10:00:00+09:00", "출석 중복 검증 로직 봐 줘", "같은 날 두 번 찍히면…"),
+                                new AiTurn("2026-09-09T11:00:00+09:00", "테스트도 붙여 줘", null)),
+                        null)),
                 List.of(new UnpushedCommit("be292b4", "fix: 재생성 후 흰 화면", "2026-09-09T11:30:00+09:00")),
                 OffsetDateTime.parse("2026-09-09T12:00:00+09:00"));
     }
 
     @Test
-    @DisplayName("확장이 보낸 AI 대화를 그대로 저장한다")
+    @DisplayName("확장이 보낸 AI 대화를 제목·질의별 답변까지 그대로 저장한다")
     void keepsAiSessions() {
         VscodeSession saved = service.upsert(USER_ID, request("오늘 계획"));
 
         assertThat(saved.getAiSessions()).hasSize(1);
-        assertThat(saved.getAiSessions().get(0).prompts())
+        AiSessionSummary ai = saved.getAiSessions().get(0);
+        assertThat(ai.title()).isEqualTo("출석 중복 검증");
+        assertThat(ai.turns()).extracting(AiTurn::prompt)
                 .containsExactly("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘");
+        assertThat(ai.turns().get(0).answer()).isEqualTo("같은 날 두 번 찍히면…");
+        assertThat(ai.turns().get(1).answer()).isNull();
     }
 
     @Test
-    @DisplayName("미푸시 커밋을 저장한다. sha 없는 것은 버리고 50건까지만 (V10)")
+    @DisplayName("미푸시 커밋을 저장한다. sha 없는 것은 버리고 50건까지만 (V11)")
     void keepsUnpushedCommits() {
         VscodeSession saved = service.upsert(USER_ID, request(null));
         assertThat(saved.getUnpushedCommits()).hasSize(1);
@@ -137,18 +145,20 @@ class VscodeSessionServiceTest {
     }
 
     @Test
-    @DisplayName("계획 메모를 안 보내오면 서버에 남은 메모를 지우지 않는다")
-    void keepsPlanNoteWhenAbsent() {
+    @DisplayName("계획을 다 지우고 보내면 서버에 남은 메모도 지운다")
+    void clearsPlanNoteWhenEmpty() {
         VscodeSession existing = new VscodeSession();
         existing.setUser(user);
         existing.setPlanNote("오후에 출석 중복 검증 로직 마무리");
         when(sessions.findByUserIdAndRemoteUrlAndBranchAndWorkDate(USER_ID, REMOTE, BRANCH, WORK_DATE))
                 .thenReturn(Optional.of(existing));
 
-        assertThat(service.upsert(USER_ID, request(null)).getPlanNote())
-                .isEqualTo("오후에 출석 중복 검증 로직 마무리");
-        assertThat(service.upsert(USER_ID, request("   ")).getPlanNote())
-                .isEqualTo("오후에 출석 중복 검증 로직 마무리");
+        // 확장은 계획을 globalState 에 두고 재시작해도 되살린다. 빈 값은 "잃어버렸다" 가
+        // 아니라 "지웠다" 는 뜻이다 (BACKLOG2_client C-2).
+        assertThat(service.upsert(USER_ID, request(null)).getPlanNote()).isNull();
+        assertThat(service.upsert(USER_ID, request("   ")).getPlanNote()).isNull();
+        assertThat(service.upsert(USER_ID, request("오전: 확장 정리")).getPlanNote())
+                .isEqualTo("오전: 확장 정리");
     }
 
     @Test

@@ -65,6 +65,12 @@ export function endOfMonth(isoDate: string): string {
   return toIsoDate(new Date(y, m, 0))
 }
 
+/** 같은 달의 아무 날짜나 주면 `by` 달 만큼 옮긴 달의 1일을 돌려준다. */
+export function shiftMonth(isoDate: string, by: number): string {
+  const [y, m] = isoDate.split('-').map(Number)
+  return toIsoDate(new Date(y, m - 1 + by, 1))
+}
+
 /** "2026년 9월" */
 export function monthLabel(isoDate: string): string {
   const [y, m] = isoDate.split('-').map(Number)

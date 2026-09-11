@@ -37,7 +37,7 @@ public class ChatBotSettingsService {
      * @param enabled 켜져 있는지. 꺼져 있으면 나머지 값이 있어도 봇은 돌지 않는다
      * @param watched 읽을 채널 id. null 이면 전부
      * @param source 어디서 왔는지 — 화면에 알려 준다 (db / env / none)
-     * @param primaryChannelId 업무 일지 요약 알림을 받는 대표 채널 (V10.1). null 이면 전역 웹훅으로
+     * @param primaryChannelId 업무 일지 요약 알림을 받는 대표 채널 (V12). null 이면 전역 웹훅으로
      */
     public record Effective(
             String baseUrl, String loginId, String password, boolean enabled, Set<String> watched, String source,

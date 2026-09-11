@@ -69,7 +69,7 @@ class WorklogWriterTest {
     }
 
     @Test
-    @DisplayName("프롬프트에 푸시 전 커밋이 커밋 메시지로 실린다 (V10)")
+    @DisplayName("프롬프트에 푸시 전 커밋이 커밋 메시지로 실린다 (V11)")
     void promptCarriesUnpushedCommits() {
         com.worklog.vscode.VscodeSession s = new com.worklog.vscode.VscodeSession();
         s.setRemoteUrl("https://github.com/uxis-co-kr/2026-pknu-3day.git");

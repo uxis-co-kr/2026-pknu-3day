@@ -90,7 +90,7 @@ public class Activity {
     @Column(name = "raw_diff", columnDefinition = "text")
     private String rawDiff;
 
-    /** 변경 파일 목록 (V10, F-2). 본문은 rawDiff, 목록·통계는 여기. */
+    /** 변경 파일 목록 (V11, F-2). 본문은 rawDiff, 목록·통계는 여기. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private java.util.List<ChangedFile> files = new java.util.ArrayList<>();

@@ -63,11 +63,14 @@ public class VscodeSessionService {
                 .limit(MAX_UNPUSHED)
                 .toList());
         session.setLastCommitAt(request.lastCommitAt());
-        // 계획 메모는 명령 팔레트로 한 번 적으면 그날 내내 유지되어야 한다. VS Code 를 다시 켜면
-        // 확장이 메모를 잃고 null 로 보내는데, 그때 서버에 남은 메모까지 지우지는 않는다.
-        if (request.planNote() != null && !request.planNote().isBlank()) {
-            session.setPlanNote(request.planNote());
-        }
+        // 확장이 보낸 계획을 그대로 둔다 — 지운 계획은 여기서도 지워져야 한다.
+        //
+        // 예전에는 빈 값을 무시했다. 확장이 재시작하면 메모를 잃고 null 을 보냈기 때문이다.
+        // 지금은 확장이 계획을 globalState 에 두고 재시작해도 되살린다(a79ef18). 그래서
+        // 빈 값은 "잃어버렸다" 가 아니라 "지웠다" 는 뜻이고, 무시하면 계획 문서에서 지운
+        // 줄이 서버에 그대로 남는다 (BACKLOG2_client C-2).
+        session.setPlanNote(
+                request.planNote() == null || request.planNote().isBlank() ? null : request.planNote());
         session.setReportedAt(OffsetDateTime.now());
 
         return sessions.save(session);
@@ -77,6 +80,12 @@ public class VscodeSessionService {
     @Transactional(readOnly = true)
     public List<VscodeSession> findForDay(LocalDate workDate, Long userId) {
         return sessions.findForDay(workDate, userId);
+    }
+
+    /** 기간 조회. VSCode 내역을 달 단위로 볼 때 쓴다 (BACKLOG2 §2-3). */
+    @Transactional(readOnly = true)
+    public List<VscodeSession> findBetween(LocalDate from, LocalDate to, Long userId) {
+        return sessions.findBetween(from, to, userId);
     }
 
     /** 등록된 리포면 연결해 두고, 아니면 null 로 남긴다 (PRD 6. repo_id NULL 허용). */

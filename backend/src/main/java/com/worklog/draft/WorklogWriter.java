@@ -8,12 +8,15 @@ import com.worklog.llm.LlmRequest;
 import com.worklog.llm.LlmSettingService;
 import com.worklog.llm.PromptLoader;
 import com.worklog.vscode.AiSessionSummary;
+import com.worklog.vscode.AiTurn;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
 import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -142,7 +145,7 @@ public class WorklogWriter {
         for (VscodeSession s : sessions) {
             String repo = s.getRepo() != null ? s.getRepo().getFullName() : s.getRemoteUrl();
             sb.append("- [%s] %s 브랜치\n".formatted(repo, s.getBranch()));
-            // 커밋 메시지는 사람이 이미 쓴 요약이다. 미커밋 파일 목록보다 위에 둔다 (V10).
+            // 커밋 메시지는 사람이 이미 쓴 요약이다. 미커밋 파일 목록보다 위에 둔다 (V11).
             List<UnpushedCommit> unpushed = s.getUnpushedCommits();
             if (unpushed != null) {
                 for (UnpushedCommit c : unpushed.stream().limit(MAX_UNPUSHED_PER_SESSION).toList()) {
@@ -166,22 +169,60 @@ public class WorklogWriter {
     }
 
     /**
-     * AI 와 나눈 대화에서 사용자가 친 말만 (V9).
+     * AI 와 나눈 대화에서 사용자가 친 말만 (V9, V10 에서 제목이 붙었다).
      *
      * <p>커밋에도 미커밋 변경에도 남지 않는 작업의 단서다. 세션마다 앞의 몇 개만 넣는다 —
      * 전부 넣으면 이 부분이 프롬프트를 차지해 정작 커밋이 밀린다.
+     *
+     * <p>V10 부터는 답변도 함께 들어오지만 <b>여기에는 담지 않는다.</b> 답변은 질문보다
+     * 훨씬 길어 20개만 넣어도 프롬프트가 두 배가 된다. 답변은 화면(VSCode 내역)에서 본다.
      */
     private static String aiLines(List<VscodeSession> sessions) {
-        String lines = sessions.stream()
-                .flatMap(s -> s.getAiSessions() == null ? Stream.<AiSessionSummary>of() : s.getAiSessions().stream())
-                .flatMap(a -> a.prompts().stream().limit(MAX_AI_PROMPTS_PER_SESSION))
-                .map(String::strip)
-                .filter(p -> !p.isEmpty())
-                .distinct()
-                .limit(MAX_AI_PROMPTS)
-                .map(p -> "- " + p)
-                .collect(Collectors.joining("\n"));
-        return lines.isEmpty() ? "(없음)" : lines;
+        StringBuilder sb = new StringBuilder();
+        int used = 0;
+        for (AiSessionSummary a : distinctAiSessions(sessions)) {
+            if (used >= MAX_AI_PROMPTS) {
+                break;
+            }
+            List<String> asked = a.turns().stream()
+                    .map(AiTurn::prompt)
+                    .filter(p -> p != null && !p.isBlank())
+                    .map(String::strip)
+                    .distinct()
+                    .limit(Math.min(MAX_AI_PROMPTS_PER_SESSION, MAX_AI_PROMPTS - used))
+                    .toList();
+            if (asked.isEmpty()) {
+                continue;
+            }
+            // 제목을 앞에 세운다 — 어느 대화에서 나온 말인지 묶여야 일지가 갈래를 잡는다.
+            sb.append("· %s (%d회 물음)%n".formatted(a.title(), a.promptCount() == null ? asked.size() : a.promptCount()));
+            for (String p : asked) {
+                sb.append("  - ").append(p).append(System.lineSeparator());
+            }
+            used += asked.size();
+        }
+        return sb.isEmpty() ? "(없음)" : sb.toString().strip();
+    }
+
+    /**
+     * 세션 행 여럿에 같은 대화가 들어 있을 수 있다.
+     *
+     * <p>세션 키는 브랜치별인데 AI 대화는 <b>폴더 단위</b>다. 오전에 A 브랜치, 오후에 B
+     * 브랜치로 일하면 두 행이 같은 대화를 각각 들고 있다. 대화 id 로 한 번만 남긴다
+     * (BACKLOG2_client C-1).
+     */
+    private static Collection<AiSessionSummary> distinctAiSessions(List<VscodeSession> sessions) {
+        Map<String, AiSessionSummary> byId = new LinkedHashMap<>();
+        for (VscodeSession s : sessions) {
+            if (s.getAiSessions() == null) {
+                continue;
+            }
+            for (AiSessionSummary a : s.getAiSessions()) {
+                // 같은 대화가 여러 행에 있으면 질문이 더 많은 쪽(늦게 보고된 것)을 남긴다.
+                byId.merge(a.id(), a, (x, y) -> y.turns().size() >= x.turns().size() ? y : x);
+            }
+        }
+        return byId.values();
     }
 
     private static String nullToEmpty(String value) {

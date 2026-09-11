@@ -119,13 +119,23 @@ export interface EditTimelineEntry {
   saveCount: number
 }
 
-/** 그 폴더에서 오간 AI 대화 한 세션. 사용자가 친 말만 담는다. */
+/** 그 폴더에서 오간 AI 대화 한 세션 (V10 — 제목과 질의별 답변이 생겼다). */
 export interface AiSessionSummary {
   id: string
+  /** Claude Code 가 남긴 세션 제목. 없는 세션은 첫 질문에서 만든다. */
+  title: string
   firstAt: string
   lastAt: string
+  /** 그날 실제로 물어본 횟수. `turns` 는 잘려도 이 값은 전부 센다 (C-1 ①). */
   promptCount: number
-  prompts: string[]
+  turns: AiTurn[]
+}
+
+/** 질문 하나와 그에 대한 답변. 답변은 확장이 앞부분만 잘라 보낸다. */
+export interface AiTurn {
+  at: string
+  prompt: string
+  answer?: string | null
 }
 
 export interface VscodeSession {

@@ -4,7 +4,7 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 
 /**
- * 커밋했지만 아직 원격에 올리지 않은 커밋 하나 (V10, TODO_0910 §3-2).
+ * 커밋했지만 아직 원격에 올리지 않은 커밋 하나 (V11, TODO_0910 §3-2).
  *
  * <p>GitHub 수집기는 원격에 없는 커밋을 볼 수 없다. 개발자 입장에서는 분명히 한 일인데 대시보드에도
  * 초안에도 없던 구간이다. 확장이 {@code git log upstream..HEAD} 로 모아 보낸다.
