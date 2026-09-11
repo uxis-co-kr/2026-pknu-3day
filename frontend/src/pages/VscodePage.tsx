@@ -1,13 +1,19 @@
 import { useState } from 'react'
-import { ChevronRight, Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
+import {
+  CalendarDays, ChevronLeft, ChevronRight, Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen,
+} from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import DiffStat from '@/components/common/DiffStat'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useMe, useRepos, useSessions } from '@/api/hooks'
+import { useMe, useRepos, useSessionRange, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
-import { formatRelative, formatTime } from '@/lib/date'
+import {
+  endOfMonth, formatDateLabel, formatRelative, formatTime, monthLabel, shiftMonth, startOfMonth,
+  todayKst,
+} from '@/lib/date'
 import { cn } from '@/lib/utils'
 import type { AiSessionSummary, VscodeSession } from '@/types/api'
 
@@ -18,7 +24,7 @@ import type { AiSessionSummary, VscodeSession } from '@/types/api'
  * 아무 흔적이 없다. 팀원 전체는 관리자 콘솔이 맡는다 (9/10 회의).
  */
 export default function VscodePage() {
-  const { date } = useSelectedDate()
+  const { date, setDate } = useSelectedDate()
 
   const { data: me } = useMe()
   const sessions = useSessions({ date, userId: me?.id })
@@ -37,8 +43,6 @@ export default function VscodePage() {
    * 폴더 단위다. 그대로 더하면 브랜치를 바꾼 날 두 배로 세어진다 (BACKLOG2_client C-1).
    */
   const aiSessions = new Set(shown.flatMap((x) => (x.aiSessions ?? []).map((a) => a.id))).size
-
-
 
   return (
     <div className="space-y-4">
@@ -72,7 +76,93 @@ export default function VscodePage() {
           shown.map((session) => <SessionDetail key={session.id} session={session} />)
         )}
       </Card>
+
+      <MonthList selectedDate={date} userId={me?.id} onPick={setDate} />
     </div>
+  )
+}
+
+/**
+ * 지난 VSCode 내역 — 달 단위 목록 (BACKLOG2 §2-3).
+ *
+ * <p>날짜 선택기만 있으면 지난주에 무엇을 했는지 보려고 하루씩 일곱 번 눌러야 한다.
+ * 기록이 있는 날만 줄로 보여 주고, 누르면 위 상세가 그 날짜로 바뀐다. 업무 일지 목록과
+ * 같은 방식이다.
+ */
+function MonthList({ selectedDate, userId, onPick }: {
+  selectedDate: string
+  userId: number | undefined
+  onPick: (date: string) => void
+}) {
+  const [month, setMonth] = useState(startOfMonth(selectedDate))
+  const range = { from: startOfMonth(month), to: endOfMonth(month) }
+  const list = useSessionRange({ ...range, userId }, Boolean(userId))
+
+  // 위에서 이미 펼쳐 놓은 날은 목록에서 뺀다.
+  const days = new Map<string, VscodeSession[]>()
+  for (const s of list.data ?? []) {
+    if (s.userId !== userId || s.workDate === selectedDate) continue
+    days.set(s.workDate, [...(days.get(s.workDate) ?? []), s])
+  }
+  const rows = [...days.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  const thisMonth = startOfMonth(todayKst())
+
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <CalendarDays className="size-4" />
+          지난 VSCode 내역
+        </h2>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="size-[30px]"
+            onClick={() => setMonth(shiftMonth(month, -1))} aria-label="이전 달">
+            <ChevronLeft />
+          </Button>
+          <span className="min-w-[92px] text-center text-[13px] font-medium tabular-nums">
+            {monthLabel(month)}
+          </span>
+          <Button variant="outline" size="icon" className="size-[30px]"
+            disabled={month >= thisMonth}
+            onClick={() => setMonth(shiftMonth(month, 1))} aria-label="다음 달">
+            <ChevronRight />
+          </Button>
+        </div>
+      </div>
+
+      <Card className="overflow-hidden rounded-lg shadow-none">
+        {list.isLoading ? (
+          <div className="space-y-2 p-4"><Skeleton className="h-9" /><Skeleton className="h-9" /></div>
+        ) : rows.length === 0 ? (
+          <p className="px-6 py-12 text-center text-[13px] text-muted-foreground">
+            이 달에 VS Code 에서 보낸 다른 날의 작업이 없습니다.
+          </p>
+        ) : (
+          rows.map(([workDate, sessions]) => {
+            const files = sessions.reduce((n, x) => n + x.uncommittedFiles.length, 0)
+            const ai = new Set(sessions.flatMap((x) => (x.aiSessions ?? []).map((a) => a.id))).size
+            return (
+              <button
+                key={workDate}
+                type="button"
+                onClick={() => onPick(workDate)}
+                className="flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/60"
+              >
+                <span className="w-[150px] shrink-0 text-[13px] font-medium tabular-nums">
+                  {formatDateLabel(workDate)}
+                </span>
+                <span className="text-[12px] text-muted-foreground">저장소 {sessions.length}</span>
+                <span className="text-[12px] text-muted-foreground">미커밋 {files}파일</span>
+                <span className="text-[12px] text-muted-foreground">AI 대화 {ai}세션</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground/70">
+                  {sessions.map((x) => x.repo?.fullName ?? x.remoteUrl).join(' · ')}
+                </span>
+              </button>
+            )
+          })
+        )}
+      </Card>
+    </>
   )
 }
 

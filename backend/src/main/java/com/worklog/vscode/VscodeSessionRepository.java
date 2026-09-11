@@ -36,6 +36,26 @@ public interface VscodeSessionRepository extends JpaRepository<VscodeSession, Lo
             """)
     List<VscodeSession> findForDay(@Param("workDate") LocalDate workDate, @Param("userId") Long userId);
 
+    /**
+     * 기간 조회 — VSCode 내역을 달 단위로 본다 (BACKLOG2 §2-3).
+     *
+     * <p>하루씩만 볼 수 있으면 지난주에 무엇을 했는지 보려고 날짜 선택기를 일곱 번 눌러야
+     * 한다. 업무 일지 목록({@code GET /drafts?from&to})과 같은 방식으로 맞춘다.
+     *
+     * <p>같은 날 안에서는 늦게 보고한 것이 위로 온다 — 하루 조회와 같은 순서다.
+     */
+    @Query(
+            """
+            select s from VscodeSession s
+            left join fetch s.user
+            left join fetch s.repo
+            where s.workDate between :from and :to
+              and (:userId is null or s.user.id = :userId)
+            order by s.workDate desc, s.reportedAt desc
+            """)
+    List<VscodeSession> findBetween(
+            @Param("from") LocalDate from, @Param("to") LocalDate to, @Param("userId") Long userId);
+
     // ---- 통계·초안 생성이 읽는 집계 (담당자 2) ----
 
     long countByWorkDate(LocalDate workDate);

@@ -1,6 +1,7 @@
 package com.worklog.vscode;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.config.ApiException;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -35,11 +36,26 @@ public class VscodeSessionController {
         return new UpsertResponse(service.upsert(principal.id(), request).getId());
     }
 
+    /**
+     * 세션 목록. {@code date} 하나를 주면 그날, {@code from}·{@code to} 를 주면 그 기간이다.
+     *
+     * <p>기간 조회는 VSCode 내역 화면이 쓴다 — 날짜 선택기로 하루씩 넘기지 않고 달 단위로
+     * 본다 (BACKLOG2 §2-3). {@code GET /drafts} 와 같은 규칙이라 부르는 쪽이 헷갈리지 않는다.
+     * 기존 호출부는 {@code date} 를 그대로 쓰면 된다.
+     */
     @GetMapping
     public List<SessionResponse> list(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long userId) {
-        return service.findForDay(date, userId).stream().map(SessionResponse::from).toList();
+        if (date == null && (from == null || to == null)) {
+            throw ApiException.badRequest("DATE_REQUIRED", "date 또는 from·to 를 함께 주어야 합니다.");
+        }
+        List<VscodeSession> found = date == null
+                ? service.findBetween(from, to, userId)
+                : service.findForDay(date, userId);
+        return found.stream().map(SessionResponse::from).toList();
     }
 
     /** PRD 7. — 200 {id}. */

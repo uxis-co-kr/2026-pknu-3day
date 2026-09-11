@@ -75,6 +75,12 @@ public class VscodeSessionService {
         return sessions.findForDay(workDate, userId);
     }
 
+    /** 기간 조회. VSCode 내역을 달 단위로 볼 때 쓴다 (BACKLOG2 §2-3). */
+    @Transactional(readOnly = true)
+    public List<VscodeSession> findBetween(LocalDate from, LocalDate to, Long userId) {
+        return sessions.findBetween(from, to, userId);
+    }
+
     /** 등록된 리포면 연결해 두고, 아니면 null 로 남긴다 (PRD 6. repo_id NULL 허용). */
     private Repo matchRepo(String remoteUrl) {
         return RemoteUrlParser.toFullName(remoteUrl)

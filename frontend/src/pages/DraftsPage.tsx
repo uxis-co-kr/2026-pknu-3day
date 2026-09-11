@@ -8,20 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import DraftWorkspace from '@/components/draft/DraftWorkspace'
 import { useActivities, useDraftRange, useDrafts, useMe, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
-import { formatDateLabel, formatTime } from '@/lib/date'
-
-/** YYYY-MM 의 첫날·마지막날. 목록은 달 단위로 넘긴다. */
-function monthRange(ym: string): { from: string; to: string } {
-  const [y, m] = ym.split('-').map(Number)
-  const last = new Date(y, m, 0).getDate()
-  return { from: `${ym}-01`, to: `${ym}-${String(last).padStart(2, '0')}` }
-}
-
-function shiftMonth(ym: string, by: number): string {
-  const [y, m] = ym.split('-').map(Number)
-  const d = new Date(y, m - 1 + by, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+import {
+  endOfMonth, formatDateLabel, formatTime, monthLabel, shiftMonth, startOfMonth, todayKst,
+} from '@/lib/date'
 
 /**
  * 업무 일지 작성 — 오늘 것은 맨 위에서 **펼쳐 놓고** 바로 쓰고, 지난 것은 아래에서 고른다.
@@ -34,8 +23,8 @@ export default function DraftsPage() {
   const { date } = useSelectedDate()
   const { data: me } = useMe()
 
-  const [month, setMonth] = useState(date.slice(0, 7))
-  const range = monthRange(month)
+  const [month, setMonth] = useState(startOfMonth(date))
+  const range = { from: startOfMonth(month), to: endOfMonth(month) }
   const list = useDraftRange({ ...range, userId: me?.id }, Boolean(me))
 
   const today = useDrafts({ date, userId: me?.id })
@@ -50,7 +39,7 @@ export default function DraftsPage() {
 
   // 오늘 것은 위에서 이미 펼쳐 놓았다. 목록에서는 뺀다.
   const past = (list.data ?? []).filter((d) => d.workDate !== date)
-  const thisMonth = new Date().toISOString().slice(0, 7)
+  const thisMonth = startOfMonth(todayKst())
 
 
   return (
@@ -80,7 +69,7 @@ export default function DraftsPage() {
             <ChevronLeft />
           </Button>
           <span className="min-w-[92px] text-center text-[13px] font-medium tabular-nums">
-            {month.replace('-', '년 ')}월
+            {monthLabel(month)}
           </span>
           <Button variant="outline" size="icon" className="size-[30px]"
             disabled={month >= thisMonth}
