@@ -26,7 +26,7 @@ GitHub 커밋만으로는 보이지 않는 **진행 중인 일**이 업무 일�
 1. `.vsix` 파일을 받는다 — [GitHub 릴리스](https://github.com/uxis-co-kr/2026-pknu-3day/releases) 의
    `worklog-drafter-<버전>.vsix`, 또는 `npm run package` 로 직접 만든 파일.
 2. VS Code → 확장 패널 → 우상단 `⋯` → **Install from VSIX…** → 파일 선택.
-   - 터미널을 선호하면: `code --install-extension worklog-drafter-0.2.1.vsix`
+   - 터미널을 선호하면: `code --install-extension worklog-drafter-0.2.2.vsix`
 3. VS Code 를 다시 시작한다.
 
 ## 최초 설정
