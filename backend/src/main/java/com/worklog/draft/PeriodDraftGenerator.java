@@ -78,10 +78,17 @@ public class PeriodDraftGenerator {
         this.prompts = prompts;
     }
 
-    /** 주간 업무일지. 그 기간의 하루치 일지를 묶어 쓴다. */
+    /**
+     * 주간 업무일지. 고른 날이 든 <b>그 주(월~일)</b> 의 하루치 일지를 묶어 쓴다.
+     *
+     * <p>기간을 사람이 자유롭게 잡게 두면 같은 주를 조금씩 다르게 잡을 때마다 새 일지가 쌓인다.
+     * 주를 단위로 고정하면 하루치와 똑같아진다 — 같은 주에 다시 만들면 버전만 올라가고
+     * 목록에는 그 주의 최신 것 하나만 남는다.
+     */
     @Transactional
-    public Draft weekly(Long userId, LocalDate from, LocalDate to) {
-        requireRange(from, to);
+    public Draft weekly(Long userId, LocalDate anyDayOfWeek) {
+        LocalDate from = mondayOf(anyDayOfWeek);
+        LocalDate to = from.plusDays(6);
         User user = findUser(userId);
 
         List<Draft> dailies = draftRepository.findLatestBetween(from, to).stream()
@@ -133,7 +140,8 @@ public class PeriodDraftGenerator {
 
         String body = complete(
                 userId, PromptLoader.WEEKLY_WORKLOG_SYSTEM, PromptLoader.WEEKLY_WORKLOG_USER, vars);
-        String content = "# %s ~ %s 주간 업무일지 — %s\n\n%s\n".formatted(from, to, displayName(user), body);
+        String content = "# %s 주간 업무일지 — %s\n\n%s\n\n%s\n"
+                .formatted(weekLabel(from), displayName(user), body, periodNote(from, to));
 
         Draft draft = newDraft(user, DraftKind.WEEKLY, from, to, null);
         draft.setContentMd(content);
@@ -142,10 +150,16 @@ public class PeriodDraftGenerator {
         return saved;
     }
 
-    /** 저장소별 업무일지. 그 기간 그 저장소의 커밋·PR 을 묶어 쓴다. */
+    /**
+     * 저장소별 업무일지. 고른 날이 든 <b>그 주(월~일)</b> 그 저장소의 커밋·PR 을 묶어 쓴다.
+     *
+     * <p>주간과 같은 단위로 둔다. 그래야 같은 주에 다시 만들 때 버전만 올라가고, 저장소마다
+     * 주에 하나씩 이어진다 — 하루치를 쓰는 방식 그대로다.
+     */
     @Transactional
-    public Draft byRepo(Long userId, Long repoId, LocalDate from, LocalDate to, boolean mineOnly) {
-        requireRange(from, to);
+    public Draft byRepo(Long userId, Long repoId, LocalDate anyDayOfWeek, boolean mineOnly) {
+        LocalDate from = mondayOf(anyDayOfWeek);
+        LocalDate to = from.plusDays(6);
         User user = findUser(userId);
         Repo repo = repoRepository.findById(repoId)
                 .orElseThrow(() -> ApiException.notFound("REPO_NOT_FOUND", "저장소를 찾을 수 없습니다."));
@@ -183,8 +197,8 @@ public class PeriodDraftGenerator {
 
         String body = complete(
                 userId, PromptLoader.REPO_WORKLOG_SYSTEM, PromptLoader.REPO_WORKLOG_USER, vars);
-        String content = "# %s — %s ~ %s 저장소별 업무일지\n\n%s\n"
-                .formatted(repo.getFullName(), from, to, body);
+        String content = "# %s — %s 저장소별 업무일지\n\n%s\n\n%s\n"
+                .formatted(repo.getFullName(), weekLabel(from), body, periodNote(from, to));
 
         Draft draft = newDraft(user, DraftKind.REPO, from, to, repo);
         draft.setContentMd(content);
@@ -247,13 +261,23 @@ public class PeriodDraftGenerator {
                 .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
     }
 
-    private static void requireRange(LocalDate from, LocalDate to) {
-        if (from == null || to == null || to.isBefore(from)) {
-            throw ApiException.badRequest("INVALID_DATE_RANGE", "기간을 올바르게 골라 주세요.");
+    /** 그 날이 든 주의 월요일. 주는 월요일에 시작해 일요일에 끝난다. */
+    static LocalDate mondayOf(LocalDate date) {
+        if (date == null) {
+            throw ApiException.badRequest("DATE_REQUIRED", "주를 골라 주세요.");
         }
-        if (ChronoUnit.DAYS.between(from, to) >= MAX_DAYS) {
-            throw ApiException.badRequest("INVALID_DATE_RANGE", "기간은 %d일까지만 됩니다.".formatted(MAX_DAYS));
-        }
+        return date.with(java.time.DayOfWeek.MONDAY);
+    }
+
+    /** "2026-09-07 ~ 09-13" — 제목에 넣을 짧은 주 표기. */
+    static String weekLabel(LocalDate monday) {
+        LocalDate sunday = monday.plusDays(6);
+        return "%s ~ %02d-%02d".formatted(monday, sunday.getMonthValue(), sunday.getDayOfMonth());
+    }
+
+    /** 본문 맨 아래 각주 — 이 일지가 어느 주를 다루는지 한 줄로 남긴다. */
+    static String periodNote(LocalDate monday, LocalDate sunday) {
+        return "---\n_기간: %s(월) ~ %s(일)_".formatted(monday, sunday);
     }
 
     /** 커밋별 요약이 이미 있으면 그것을 쓴다 — 두 번 요약하지 않고 컨텍스트도 아낀다. */

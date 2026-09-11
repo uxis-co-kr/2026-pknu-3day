@@ -32,7 +32,10 @@ public class DraftGenerateController {
     }
 
     /**
-     * 주간 업무일지 AI 생성 (V15). 그 기간의 하루치 일지를 묶어 다시 쓴다.
+     * 주간 업무일지 AI 생성 (V15). 고른 날이 든 <b>그 주(월~일)</b> 의 하루치 일지를 묶어 다시 쓴다.
+     *
+     * <p>같은 주에 다시 만들면 새 일지가 아니라 <b>버전이 올라간다</b> — 하루치와 같다.
+     * 목록에는 그 주의 최신 것 하나만 남는다.
      *
      * <p>하루치와 달리 204 가 없다 — 재료가 없으면 400 으로 무엇이 없는지 말한다. 빈 일지를
      * 만들어 두면 사람이 지워야 한다.
@@ -43,11 +46,13 @@ public class DraftGenerateController {
             @RequestBody PeriodRequest request) {
         Long userId = request.userId() == null ? principal.id() : request.userId();
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(GenerateResponse.from(periodGenerator.weekly(userId, request.from(), request.to())));
+                .body(GenerateResponse.from(periodGenerator.weekly(userId, request.week())));
     }
 
     /**
-     * 저장소별 업무일지 AI 생성 (V15). 그 기간 그 저장소의 커밋·PR 을 묶어 쓴다.
+     * 저장소별 업무일지 AI 생성 (V15). 고른 날이 든 그 주(월~일) 그 저장소의 커밋·PR 을 묶어 쓴다.
+     *
+     * <p>주간과 같은 단위다 — 저장소마다 주에 하나씩 이어지고, 다시 만들면 버전이 올라간다.
      *
      * @param request {@code mineOnly} 가 true 면 내 활동만, false 면 그 저장소의 팀 전체
      */
@@ -60,11 +65,21 @@ public class DraftGenerateController {
             throw ApiException.badRequest("REPO_REQUIRED", "저장소를 골라 주세요.");
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(GenerateResponse.from(
-                periodGenerator.byRepo(userId, request.repoId(), request.from(), request.to(), request.mineOnly())));
+                periodGenerator.byRepo(userId, request.repoId(), request.week(), request.mineOnly())));
     }
 
-    /** 주간·저장소별 생성 요청. {@code repoId} 는 저장소별에만 쓴다. */
-    public record PeriodRequest(LocalDate from, LocalDate to, Long userId, Long repoId, boolean mineOnly) {}
+    /**
+     * 주간·저장소별 생성 요청.
+     *
+     * @param date 그 주의 아무 날. 서버가 월~일로 맞춘다. 옛 화면이 보내던 {@code from} 도 받는다
+     * @param repoId 저장소별에만 쓴다
+     */
+    public record PeriodRequest(LocalDate date, LocalDate from, Long userId, Long repoId, boolean mineOnly) {
+
+        LocalDate week() {
+            return date != null ? date : from;
+        }
+    }
 
     /**
      * @return 201 + 생성된 초안, 활동이 없으면 204 (PRD F3)

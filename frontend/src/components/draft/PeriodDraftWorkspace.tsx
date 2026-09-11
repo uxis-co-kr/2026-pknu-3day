@@ -14,7 +14,7 @@ import { ApiError } from '@/api/apiClient'
 import {
   useDraft, useDraftsByKind, useGeneratePeriodDraft, useNotifyDraft, useRepos, useSaveDraft,
 } from '@/api/hooks'
-import { addDays, formatTime, todayKst } from '@/lib/date'
+import { addDays, formatTime, mondayOf, todayKst, weekLabel } from '@/lib/date'
 import type { DraftSummary } from '@/types/api'
 
 const TAB =
@@ -39,8 +39,8 @@ export default function PeriodDraftWorkspace({
   displayName?: string | null
 }) {
   const today = todayKst()
-  const [from, setFrom] = useState(addDays(today, -6))
-  const [to, setTo] = useState(today)
+  // 주를 단위로 쓴다 — 같은 주를 조금씩 다르게 잡으면 일지가 쌓인다. 고른 날이 든 주(월~일)다.
+  const [week, setWeek] = useState(mondayOf(today))
   const [repoId, setRepoId] = useState<string>('')
   const [mineOnly, setMineOnly] = useState(true)
 
@@ -91,8 +91,7 @@ export default function PeriodDraftWorkspace({
   async function onGenerate() {
     const made = await generate.mutateAsync({
       kind,
-      from,
-      to,
+      date: week,
       userId,
       repoId: kind === 'repo' ? Number(repoId) : undefined,
       mineOnly: kind === 'repo' ? mineOnly : undefined,
@@ -122,15 +121,23 @@ export default function PeriodDraftWorkspace({
       {/* 무엇을 모아 만들지 */}
       <Card className="flex flex-wrap items-end gap-2 p-3">
         <label className="flex flex-col gap-1 text-[12px] text-muted-foreground">
-          시작
-          <Input type="date" value={from} max={to} className="h-[34px] w-[150px] text-[13px]"
-            onChange={(e) => setFrom(e.target.value)} />
+          주 고르기 (그 주의 아무 날)
+          <Input type="date" value={week} max={today} className="h-[34px] w-[170px] text-[13px]"
+            onChange={(e) => setWeek(mondayOf(e.target.value))} />
         </label>
-        <label className="flex flex-col gap-1 text-[12px] text-muted-foreground">
-          끝
-          <Input type="date" value={to} min={from} max={today} className="h-[34px] w-[150px] text-[13px]"
-            onChange={(e) => setTo(e.target.value)} />
-        </label>
+        <div className="flex flex-col gap-1 text-[12px] text-muted-foreground">
+          기간
+          <div className="flex h-[34px] items-center gap-1">
+            <Button variant="outline" size="sm" className="h-[34px] px-2"
+              onClick={() => setWeek(addDays(week, -7))}>◀</Button>
+            <span className="w-[210px] text-center text-[13px] tabular-nums text-foreground">
+              {weekLabel(week)}
+            </span>
+            <Button variant="outline" size="sm" className="h-[34px] px-2"
+              disabled={addDays(week, 7) > today}
+              onClick={() => setWeek(addDays(week, 7))}>▶</Button>
+          </div>
+        </div>
 
         {kind === 'repo' && (
           <>
@@ -166,8 +173,8 @@ export default function PeriodDraftWorkspace({
 
         <span className="ml-auto text-[12px] text-muted-foreground">
           {kind === 'weekly'
-            ? '그 기간의 하루치 일지를 묶어 다시 씁니다'
-            : '그 기간 그 저장소의 커밋·PR 을 묶어 씁니다'}
+            ? '그 주(월~일)의 하루치 일지를 묶어 다시 씁니다. 같은 주에 다시 만들면 버전만 올라갑니다'
+            : '그 주(월~일) 그 저장소의 커밋·PR 을 묶어 씁니다. 같은 주에 다시 만들면 버전만 올라갑니다'}
         </span>
       </Card>
 
@@ -246,7 +253,7 @@ export default function PeriodDraftWorkspace({
       {/* 지난 것 */}
       <Card className="p-0">
         <p className="border-b px-4 py-2.5 text-[13px] font-medium">
-          지난 {kind === 'weekly' ? '주간' : '저장소별'} 업무일지
+          {kind === 'weekly' ? '주간' : '저장소별'} 업무일지 — 주마다 한 건
         </p>
         {rows.length === 0 ? (
           <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">

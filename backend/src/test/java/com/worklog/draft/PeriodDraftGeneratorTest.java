@@ -34,8 +34,9 @@ class PeriodDraftGeneratorTest {
 
     private static final long USER_ID = 1L;
     private static final long REPO_ID = 7L;
+    /** 2026-09-07 은 월요일. 주는 월~일(9/7~9/13)로 맞춰진다. */
     private static final LocalDate FROM = LocalDate.of(2026, 9, 7);
-    private static final LocalDate TO = LocalDate.of(2026, 9, 11);
+    private static final LocalDate TO = LocalDate.of(2026, 9, 13);
 
     private DraftRepository drafts;
     private ActivityRepository activities;
@@ -108,14 +109,14 @@ class PeriodDraftGeneratorTest {
                 daily(LocalDate.of(2026, 9, 9), "요약 파이프라인"),
                 daily(LocalDate.of(2026, 9, 8), "로그인 고침")));
 
-        Draft made = generator.weekly(USER_ID, FROM, TO);
+        Draft made = generator.weekly(USER_ID, FROM);
 
         assertThat(made.getKind()).isEqualTo(DraftKind.WEEKLY);
         assertThat(made.getPeriodStart()).isEqualTo(FROM);
         assertThat(made.getPeriodEnd()).isEqualTo(TO);
         assertThat(made.getWorkDate()).isEqualTo(FROM); // 기존 날짜 조회가 그대로 돌게
         assertThat(made.getRepo()).isNull();
-        assertThat(made.getContentMd()).startsWith("# 2026-09-07 ~ 2026-09-11 주간 업무일지 — 조웅식");
+        assertThat(made.getContentMd()).startsWith("# 2026-09-07 ~ 09-13 주간 업무일지 — 조웅식");
 
         ArgumentCaptor<LlmRequest> req = ArgumentCaptor.forClass(LlmRequest.class);
         org.mockito.Mockito.verify(provider).complete(req.capture());
@@ -132,7 +133,7 @@ class PeriodDraftGeneratorTest {
         when(activities.findForUserBetween(anyLong(), any(), any())).thenReturn(List.of(
                 activity(ActivityType.COMMIT, "로그인 고침", LocalDate.of(2026, 9, 8), repo, user)));
 
-        Draft made = generator.weekly(USER_ID, FROM, TO);
+        Draft made = generator.weekly(USER_ID, FROM);
 
         assertThat(made.getKind()).isEqualTo(DraftKind.WEEKLY);
         ArgumentCaptor<LlmRequest> req = ArgumentCaptor.forClass(LlmRequest.class);
@@ -146,7 +147,7 @@ class PeriodDraftGeneratorTest {
         when(drafts.findLatestBetween(FROM, TO)).thenReturn(List.of());
         when(activities.findForUserBetween(anyLong(), any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() -> generator.weekly(USER_ID, FROM, TO))
+        assertThatThrownBy(() -> generator.weekly(USER_ID, FROM))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("쓸 재료가 없습니다");
     }
@@ -159,12 +160,12 @@ class PeriodDraftGeneratorTest {
                 activity(ActivityType.PR_MERGED, "PR 머지", LocalDate.of(2026, 9, 9), repo, user)));
         when(provider.complete(any())).thenReturn("## 이 저장소에서 한 일\n- 수집기를 고쳤다 (abcdef1)");
 
-        Draft made = generator.byRepo(USER_ID, REPO_ID, FROM, TO, false);
+        Draft made = generator.byRepo(USER_ID, REPO_ID, FROM, false);
 
         assertThat(made.getKind()).isEqualTo(DraftKind.REPO);
         assertThat(made.getRepo()).isSameAs(repo);
         assertThat(made.getPeriodStart()).isEqualTo(FROM);
-        assertThat(made.getContentMd()).startsWith("# uxis/worklog — 2026-09-07 ~ 2026-09-11 저장소별 업무일지");
+        assertThat(made.getContentMd()).startsWith("# uxis/worklog — 2026-09-07 ~ 09-13 저장소별 업무일지");
         assertThat(made.getSourceActivityIds()).hasSize(2);
 
         ArgumentCaptor<LlmRequest> req = ArgumentCaptor.forClass(LlmRequest.class);
@@ -177,21 +178,33 @@ class PeriodDraftGeneratorTest {
     void byRepoWithoutMaterial() {
         when(activities.findBetweenForRepoDraft(any(), any(), any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() -> generator.byRepo(USER_ID, REPO_ID, FROM, TO, false))
+        assertThatThrownBy(() -> generator.byRepo(USER_ID, REPO_ID, FROM, false))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("기록이 없습니다");
     }
 
     @Test
-    @DisplayName("기간이 거꾸로이거나 너무 길면 막는다")
-    void rangeIsChecked() {
-        assertThatThrownBy(() -> generator.weekly(USER_ID, TO, FROM))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("기간을 올바르게");
-        assertThatThrownBy(() -> generator.weekly(USER_ID, FROM, FROM.plusDays(PeriodDraftGenerator.MAX_DAYS)))
-                .isInstanceOf(ApiException.class)
-                .hasMessageContaining("92일까지");
+    @DisplayName("어느 날을 골라도 그 주 월~일로 맞춘다 — 같은 주면 같은 일지가 된다")
+    void normalizesToWeek() {
+        when(drafts.findLatestBetween(any(), any()))
+                .thenReturn(List.of(daily(LocalDate.of(2026, 9, 9), "로그인 고침")));
+
+        // 수요일(9/9)을 골라도 월요일(9/7)로
+        Draft made = generator.weekly(USER_ID, LocalDate.of(2026, 9, 9));
+        assertThat(made.getPeriodStart()).isEqualTo(LocalDate.of(2026, 9, 7));
+        assertThat(made.getPeriodEnd()).isEqualTo(LocalDate.of(2026, 9, 13));
+        assertThat(made.getWorkDate()).isEqualTo(LocalDate.of(2026, 9, 7));
+
+        // 일요일(9/13)을 골라도 같은 주
+        assertThat(generator.weekly(USER_ID, LocalDate.of(2026, 9, 13)).getPeriodStart())
+                .isEqualTo(LocalDate.of(2026, 9, 7));
+
+        // 제목과 각주에 기간이 들어간다
+        assertThat(made.getContentMd())
+                .startsWith("# 2026-09-07 ~ 09-13 주간 업무일지")
+                .contains("_기간: 2026-09-07(월) ~ 2026-09-13(일)_");
     }
+
 
     @Test
     @DisplayName("LLM 이 실패하면 초안을 만들지 않는다 — 묶지 못한 글은 값어치가 없다")
@@ -199,7 +212,7 @@ class PeriodDraftGeneratorTest {
         when(drafts.findLatestBetween(FROM, TO)).thenReturn(List.of(daily(LocalDate.of(2026, 9, 8), "x")));
         when(provider.complete(any())).thenThrow(new IllegalStateException("모델이 죽었다"));
 
-        assertThatThrownBy(() -> generator.weekly(USER_ID, FROM, TO))
+        assertThatThrownBy(() -> generator.weekly(USER_ID, FROM))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("AI 요약에 실패");
         org.mockito.Mockito.verify(drafts, org.mockito.Mockito.never()).save(any());
