@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import ActivityRow from '@/components/activity/ActivityRow'
 import Pagination from '@/components/common/Pagination'
@@ -51,7 +51,8 @@ export default function AdminActivityPage() {
   const [selected, setSelected] = useState<string>(ALL)
   const [openDate, setOpenDate] = useState<string | null>(null)
   const [peoplePage, setPeoplePage] = useState(0)
-  const [activityPage, setActivityPage] = useState(0)
+  /** 어느 목록의 몇 쪽인지. 날짜나 사람이 바뀌면 그 자리에서 첫 쪽으로 돌아간다. */
+  const [activityPage, setActivityPage] = useState({ key: '', page: 0 })
 
   const range =
     period === 'week' ? { from: addDays(today, -6), to: today }
@@ -109,11 +110,12 @@ export default function AdminActivityPage() {
   const dayActivities = useActivities({ date: openDate ?? today, userId: row?.user.id })
   const dayItems = dayActivities.data?.items ?? []
   const activityPageCount = Math.max(1, Math.ceil(dayItems.length / PER_PAGE))
-  const activityCurrent = Math.min(activityPage, activityPageCount - 1)
-  const activityRows = dayItems.slice(activityCurrent * PER_PAGE, (activityCurrent + 1) * PER_PAGE)
-
   // 다른 날·다른 사람을 고르면 목록이 통째로 바뀐다. 3쪽을 보던 채로 남아 있으면 안 된다.
-  useEffect(() => setActivityPage(0), [openDate, selected])
+  const activityKey = `${openDate ?? today}|${selected}`
+  const activityCurrent = activityPage.key === activityKey
+    ? Math.min(activityPage.page, activityPageCount - 1)
+    : 0
+  const activityRows = dayItems.slice(activityCurrent * PER_PAGE, (activityCurrent + 1) * PER_PAGE)
 
   return (
     <AdminGuard error={error}>
@@ -261,6 +263,7 @@ export default function AdminActivityPage() {
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h2 className="text-[13px] font-medium">
               {openDate ?? today} 활동{row ? ` — ${nameOf(row)}` : ' — 전체'}
+              <span className="ml-2 font-normal text-muted-foreground">행을 누르면 GitHub 에서 엽니다</span>
             </h2>
             {row && (() => {
               const p = row.series.find((x) => x.date === (openDate ?? today))
@@ -274,13 +277,25 @@ export default function AdminActivityPage() {
           ) : (
             <>
               <div className={cn('divide-y')}>
-                {activityRows.map((a) => <ActivityRow key={a.id} activity={a} dense />)}
+                {/*
+                  커밋 하나가 실제로 무엇을 고쳤는지는 여기서 알 수 없다 — 제목과 요약뿐이다.
+                  관리자가 "이건 뭐지" 할 때 GitHub 을 손으로 찾아 들어가고 있었다. 행이 그
+                  주소를 이미 들고 있으므로(activity.url) 눌러서 바로 가게 한다.
+                */}
+                {activityRows.map((a) => (
+                  <ActivityRow
+                    key={a.id}
+                    activity={a}
+                    dense
+                    onClick={a.url ? () => window.open(a.url, '_blank', 'noopener,noreferrer') : undefined}
+                  />
+                ))}
               </div>
               <Pagination
                 page={activityCurrent}
                 pageCount={activityPageCount}
                 total={dayItems.length}
-                onChange={setActivityPage}
+                onChange={(p) => setActivityPage({ key: activityKey, page: p })}
               />
             </>
           )}
