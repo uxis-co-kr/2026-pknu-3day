@@ -41,7 +41,14 @@ public class WorklogWriter {
 
     /** 한 번에 넘길 활동 수. 넘치면 프롬프트가 컨텍스트를 넘어선다. */
     private static final int MAX_ACTIVITIES = 60;
-    private static final int MAX_TOKENS = 1200;
+    /**
+     * 출력 상한. 저장소마다 단락을 쓰게 된 뒤로 1200 으로는 <b>두 번째 저장소에서 잘렸다</b>
+     * (9/11 확인 — 커밋 47건이던 날).
+     */
+    private static final int MAX_TOKENS = 2000;
+
+    /** 저장소를 알 수 없는 기록도 어딘가에는 실려야 한다. */
+    private static final String UNKNOWN_REPO = "(알 수 없는 저장소)";
     /** 세션 하나에서 가져올 AI 프롬프트 수. */
     private static final int MAX_AI_PROMPTS_PER_SESSION = 6;
     /** 전체 AI 프롬프트 상한. */
@@ -109,19 +116,41 @@ public class WorklogWriter {
                 vars);
     }
 
-    /** 커밋별 요약이 이미 있으면 그것을 쓴다 — 두 번 요약하지 않고 컨텍스트도 아낀다. */
+    /**
+     * 커밋별 요약이 이미 있으면 그것을 쓴다 — 두 번 요약하지 않고 컨텍스트도 아낀다.
+     *
+     * <p><b>저장소로 묶어서 넣는다</b> (9/11). 줄마다 {@code [owner/repo]} 를 붙여 평평하게
+     * 늘어놓았더니, 모델이 첫 저장소만 쓰고 두 번째 저장소 단락을 통째로 빠뜨렸다. 일지도
+     * 저장소로 나눠 쓰게 했으니 재료도 같은 모양으로 준다.
+     */
     private static String activityLines(List<Activity> activities) {
         if (activities.isEmpty()) {
             return "(없음)";
         }
-        return activities.stream()
-                .limit(MAX_ACTIVITIES)
-                .map(WorklogWriter::activityLine)
-                .collect(Collectors.joining("\n"));
+        return byRepo(
+                activities.stream().limit(MAX_ACTIVITIES).toList(),
+                a -> a.getRepo() == null ? UNKNOWN_REPO : a.getRepo().getFullName(),
+                WorklogWriter::activityLine);
+    }
+
+    /**
+     * 저장소마다 {@code ◆ owner/repo} 한 줄을 세우고 그 아래에 항목을 붙인다.
+     *
+     * <p>마크다운 머리말(`##`)을 쓰지 않는다 — 모델이 재료의 머리말을 그대로 베껴 쓴다.
+     */
+    private static <T> String byRepo(
+            List<T> items, java.util.function.Function<T, String> repoOf, java.util.function.Function<T, String> line) {
+        Map<String, List<T>> grouped =
+                items.stream().collect(Collectors.groupingBy(repoOf, LinkedHashMap::new, Collectors.toList()));
+        StringBuilder sb = new StringBuilder();
+        new java.util.TreeSet<>(grouped.keySet()).forEach(repo -> {
+            sb.append("◆ ").append(repo).append('\n');
+            grouped.get(repo).forEach(item -> sb.append(line.apply(item)).append('\n'));
+        });
+        return sb.toString().strip();
     }
 
     private static String activityLine(Activity a) {
-        String repo = a.getRepo() == null ? "?" : a.getRepo().getFullName();
         String text = a.getSummary() != null && !a.getSummary().isBlank()
                 ? a.getSummary().replace('\n', ' ').strip()
                 : String.valueOf(a.getTitle());
@@ -133,8 +162,7 @@ public class WorklogWriter {
             case PR_OPENED -> "PR 생성";
             case PR_MERGED -> "PR 머지";
         };
-        return "- [%s] %s (%s, %s) +%d −%d"
-                .formatted(repo, text, kind, mark, nz(a.getAdditions()), nz(a.getDeletions()));
+        return "- %s (%s, %s) +%d −%d".formatted(text, kind, mark, nz(a.getAdditions()), nz(a.getDeletions()));
     }
 
     private static String sessionLines(List<VscodeSession> sessions) {
@@ -142,9 +170,13 @@ public class WorklogWriter {
             return "(없음)";
         }
         StringBuilder sb = new StringBuilder();
-        for (VscodeSession s : sessions) {
-            String repo = s.getRepo() != null ? s.getRepo().getFullName() : s.getRemoteUrl();
-            sb.append("- [%s] %s 브랜치\n".formatted(repo, s.getBranch()));
+        // 활동 재료와 같은 열쇠로 묶는다 — 두 자리의 저장소 이름이 다르면 모델이 다른 저장소로 읽는다.
+        Map<String, List<VscodeSession>> grouped = sessions.stream()
+                .collect(Collectors.groupingBy(WorklogWriter::repoOf, LinkedHashMap::new, Collectors.toList()));
+        for (String repo : new java.util.TreeSet<>(grouped.keySet())) {
+            sb.append("◆ ").append(repo).append('\n');
+            for (VscodeSession s : grouped.get(repo)) {
+            sb.append("- %s 브랜치\n".formatted(s.getBranch()));
             List<UncommittedFile> files = s.getUncommittedFiles();
             if (files != null) {
                 for (UncommittedFile f : files.stream().limit(20).toList()) {
@@ -165,8 +197,21 @@ public class WorklogWriter {
                     sb.append("  · 미푸시 커밋 %s %s\n".formatted(c.sha(), c.subject()));
                 }
             }
+            }
         }
         return sb.toString().strip();
+    }
+
+    /** 세션은 등록 전이라 repo 가 없을 수 있다. 그때는 원격 주소에서 이름을 뽑는다. */
+    private static String repoOf(VscodeSession s) {
+        if (s.getRepo() != null) {
+            return s.getRepo().getFullName();
+        }
+        String url = s.getRemoteUrl();
+        if (url == null || url.isBlank()) {
+            return UNKNOWN_REPO;
+        }
+        return com.worklog.vscode.RemoteUrlParser.toFullName(url).orElse(url);
     }
 
     /**
