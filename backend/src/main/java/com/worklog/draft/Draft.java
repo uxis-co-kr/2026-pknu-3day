@@ -14,7 +14,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import lombok.Getter;
@@ -32,11 +31,9 @@ import org.hibernate.type.SqlTypes;
  * <p>같은 (user, workDate) 에 재생성하면 덮어쓰지 않고 version 을 올려 새 행을 만든다.
  */
 @Entity
-@Table(
-        name = "drafts",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uq_drafts_user_date_version",
-                columnNames = {"user_id", "work_date", "version"}))
+// 버전 유니크는 (user, kind, work_date, repo, version) 부분 인덱스로 옮겼다 (V15).
+// repo_id 가 NULL 인 행끼리도 막아야 해서 제약이 아니라 coalesce 를 쓴 인덱스다.
+@Table(name = "drafts")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -53,6 +50,32 @@ public class Draft {
     /** KST 기준 업무 일자. */
     @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
+
+    /** 하루치·주간·저장소별 (V15). 기존 행은 전부 DAILY. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DraftKind kind = DraftKind.DAILY;
+
+    /** WEEKLY·REPO 의 기간. DAILY 는 null 이고 workDate 하루가 곧 기간이다. */
+    @Column(name = "period_start")
+    private LocalDate periodStart;
+
+    @Column(name = "period_end")
+    private LocalDate periodEnd;
+
+    /** REPO 일지가 다루는 저장소. 리포를 지워도 일지는 남는다 (ON DELETE SET NULL). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "repo_id")
+    private com.worklog.github.Repo repo;
+
+    /** 기간의 시작 — DAILY 면 그날. 화면·알림이 "언제 것인지" 를 한 가지로 읽게 한다. */
+    public LocalDate from() {
+        return periodStart != null ? periodStart : workDate;
+    }
+
+    public LocalDate to() {
+        return periodEnd != null ? periodEnd : workDate;
+    }
 
     @Column(nullable = false)
     private Integer version = 1;

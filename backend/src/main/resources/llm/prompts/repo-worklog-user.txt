@@ -1,0 +1,8 @@
+저장소: {repo}
+작성자: {name}
+기간: {from} ~ {to}
+참여: {people}
+커밋 {commits}건 · PR 생성 {prs}건 · 머지 {merges}건
+
+[기록]
+{entries}

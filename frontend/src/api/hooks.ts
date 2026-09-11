@@ -26,6 +26,7 @@ export const qk = {
   sessions: (f: DayFilter | SessionRangeFilter) => ['vscode-sessions', f] as const,
   drafts: (f: DraftFilter) => ['drafts', f] as const,
   draftRange: (f: DraftRangeFilter) => ['drafts', 'range', f] as const,
+  draftsByKind: (f: DraftKindFilter) => ['drafts', 'kind', f] as const,
   draft: (id: number) => ['drafts', id] as const,
   repos: ['repos'] as const,
   apiKeys: ['api-keys'] as const,
@@ -39,6 +40,8 @@ export interface ActivityFilter extends DayFilter { repoId?: number; type?: stri
 export interface DraftFilter extends DayFilter { status?: string }
 /** 업무 일지 목록 — 하루가 아니라 기간으로 본다. */
 export interface DraftRangeFilter { from: string; to: string; userId?: number; status?: string }
+/** 주간·저장소별 목록 (V15). kind 를 주지 않으면 서버가 하루치만 준다. */
+export interface DraftKindFilter { from: string; to: string; kind: 'WEEKLY' | 'REPO'; userId?: number }
 /** VSCode 내역 — 업무 일지처럼 달 단위로 본다 (BACKLOG2 §2-3). */
 export interface SessionRangeFilter { from: string; to: string; userId?: number }
 export interface PeopleFilter { from: string; to: string; userId?: number; granularity?: 'day' | 'week' }
@@ -189,6 +192,35 @@ export const useGenerateDraft = () => {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['drafts'] }),
   })
 }
+
+/**
+ * 주간·저장소별 업무일지 AI 생성 (V15).
+ *
+ * <p>하루치와 달리 재료가 없으면 400 으로 이유가 온다 — 빈 일지를 만들지 않는다.
+ * 모델 호출이라 사내 gemma4 기준 10~30초 걸린다.
+ */
+export const useGeneratePeriodDraft = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ kind, ...body }: {
+      kind: 'weekly' | 'repo'
+      from: string
+      to: string
+      userId?: number
+      repoId?: number
+      mineOnly?: boolean
+    }) => api.post<Draft>(`/drafts/generate/${kind}`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['drafts'] }),
+  })
+}
+
+/** 종류별 일지 목록. kind 를 안 주면 서버가 하루치만 준다. */
+export const useDraftsByKind = (f: DraftKindFilter, enabled = true) =>
+  useQuery({
+    queryKey: qk.draftsByKind(f),
+    queryFn: () => api.get<DraftSummary[]>(`/drafts${qs({ ...f })}`),
+    enabled,
+  })
 
 export const useNotifyDraft = () =>
   useDraftMutation(({ id }: { id: number }) => api.post<{ sent: boolean }>(`/drafts/${id}/notify`))

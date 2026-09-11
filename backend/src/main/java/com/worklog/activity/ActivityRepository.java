@@ -47,6 +47,22 @@ public interface ActivityRepository
             @Param("start") OffsetDateTime start,
             @Param("end") OffsetDateTime end);
 
+    /**
+     * 저장소별 업무일지의 재료 (V15) — 그 기간 그 저장소의 활동.
+     *
+     * <p>{@code userId} 를 주면 그 사람 것만 본다. 리포와 사용자를 함께 읽는다 — 이름을 붙이는 데
+     * 둘 다 필요하고, 지연 로딩이면 트랜잭션 밖에서 터진다.
+     */
+    @Query("select a from Activity a join fetch a.repo left join fetch a.user"
+            + " where a.repo.id = :repoId and a.occurredAt >= :start and a.occurredAt < :end"
+            + " and (:userId is null or a.user.id = :userId)"
+            + " order by a.occurredAt asc")
+    List<Activity> findBetweenForRepoDraft(
+            @Param("start") OffsetDateTime start,
+            @Param("end") OffsetDateTime end,
+            @Param("repoId") Long repoId,
+            @Param("userId") Long userId);
+
     /** 일별 통계 — 타입별 건수 (PRD 7. /stats/daily). */
     @Query("select a.type, count(a) from Activity a"
             + " where a.occurredAt >= :start and a.occurredAt < :end"

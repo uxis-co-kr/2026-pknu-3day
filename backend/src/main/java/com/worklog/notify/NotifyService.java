@@ -106,8 +106,23 @@ public class NotifyService {
 
     /** "조웅식의 오늘(2026-09-11)의 업무일지가 요약되었습니다. 확인해주시기 바랍니다." + 링크. */
     String summarizedMessage(Draft draft, LocalDate today) {
-        return "%s의 %s의 업무일지가 요약되었습니다. 확인해주시기 바랍니다.\n🔗 %s"
-                .formatted(displayName(draft.getUser()), dayLabel(draft.getWorkDate(), today), draftLink(draft));
+        return "%s의 %s가 요약되었습니다. 확인해주시기 바랍니다.\n🔗 %s"
+                .formatted(displayName(draft.getUser()), whenAndWhat(draft, today), draftLink(draft));
+    }
+
+    /**
+     * "오늘(2026-09-11)의 업무일지" · "9/8~9/12 주간 업무일지" · "uxis/worklog 저장소별 업무일지 (9/8~9/12)".
+     *
+     * <p>종류마다 읽는 사람이 알아야 할 것이 다르다 — 하루치는 날짜, 주간은 기간, 저장소별은 저장소다.
+     */
+    static String whenAndWhat(Draft draft, LocalDate today) {
+        return switch (draft.getKind()) {
+            case DAILY -> "%s의 업무일지".formatted(dayLabel(draft.getWorkDate(), today));
+            case WEEKLY -> "%s~%s 주간 업무일지".formatted(draft.from(), draft.to());
+            case REPO -> "%s 저장소별 업무일지 (%s~%s)".formatted(
+                    draft.getRepo() != null ? draft.getRepo().getFullName() : "저장소",
+                    draft.from(), draft.to());
+        };
     }
 
     /**
