@@ -42,11 +42,22 @@ export default function GithubPage() {
     .filter((a) => a.user?.id === me?.id)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
 
-  const shown = useMemo(
-    () => mine.filter((a) =>
-      types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter))),
+  /**
+   * 요약 박스가 세는 자리 — **리포 필터만** 따른다.
+   *
+   * <p>타입 탭까지 반영하면 "커밋만 보기" 를 눌렀을 때 PR·머지 칸이 0 이 된다. 그 칸들은
+   * 원래 타입별로 몇 건인지 말하는 자리라, 타입을 걸러 놓고 타입별로 세면 늘 자기 자신이다.
+   */
+  const inRepo = useMemo(
+    () => mine.filter((a) => repoFilter === 'all' || a.repo.id === Number(repoFilter)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activities.data, types, repoFilter],
+    [activities.data, repoFilter],
+  )
+
+  const shown = useMemo(
+    () => inRepo.filter((a) => types.includes(a.type)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inRepo, types],
   )
 
   // 필터를 바꾸면 있던 페이지가 사라질 수 있다. 범위를 벗어나면 마지막 페이지로 당긴다.
@@ -63,10 +74,10 @@ export default function GithubPage() {
    */
   const myStat = {
     // 저장소를 맨 앞에 둔다 — 하루에 여러 저장소를 오간 날에 그 사실이 먼저 보여야 한다.
-    repos: new Set(mine.map((a) => a.repo.id)).size,
-    commits: mine.filter((a) => a.type === 'COMMIT').length,
-    prs: mine.filter((a) => a.type === 'PR_OPENED').length,
-    merges: mine.filter((a) => a.type === 'PR_MERGED').length,
+    repos: new Set(inRepo.map((a) => a.repo.id)).size,
+    commits: inRepo.filter((a) => a.type === 'COMMIT').length,
+    prs: inRepo.filter((a) => a.type === 'PR_OPENED').length,
+    merges: inRepo.filter((a) => a.type === 'PR_MERGED').length,
   }
 
 
