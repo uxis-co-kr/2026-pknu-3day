@@ -29,45 +29,45 @@ GitHub 활동과 VS Code 안의 미커밋 작업을 모아 **업무 일지 초�
 
 ## 로컬 실행
 
-**새로 클론했다면 `backend/.env` 부터 만든다.** 이 파일은 커밋하지 않으므로 클론에는 없고,
-`JWT_SECRET`·`ENCRYPTION_KEY` 가 비면 백엔드가 뜨다가 멈춘다 (아래 "백엔드 환경 변수").
+처음 클론했다면 **[docs/SETUP.md](docs/SETUP.md)** 를 본다. 아래는 요약이다.
 
 ```bash
-# 0) 백엔드 환경 변수 (클론 직후 한 번)
-cp backend/.env.example backend/.env   # 값을 채운다
-
-# 1) DB — 호스트 5433 으로 노출된다 (루트 .env 의 POSTGRES_PORT 로 바꿀 수 있다)
-docker compose up -d
-
-# 2) 백엔드 (http://localhost:8080/api)
-cd backend && set -a && source .env && set +a && ./gradlew bootRun
-
-# 3) 프론트 (http://localhost:5173)
-cd frontend && npm run dev
+./scripts/setup.sh          # ① 세팅 (한 번) — .env 생성·비밀값 발급·DB 기동·의존성 설치
+./scripts/backend.sh        # ② 백엔드  http://localhost:8080/api
+cd frontend && npm run dev  # ③ 프론트  http://localhost:5173
 ```
+
+http://localhost:5173 에서 **admin / admin1234** 로 들어간다 — 기본 비밀번호라 첫 로그인에서
+비밀번호 변경을 먼저 시킨다.
+사원번호 로그인은 사원 명부(와플 API 또는 `WAPLE_FALLBACK_EMPLOYEES`)가 붙어야 된다.
 
 프론트는 **따로 설정하지 않아도 실서버를 부른다.** `frontend/.env` 없이 그대로 띄우면 된다.
 화면만 눌러 보려고 가짜 데이터를 쓰려면 그때만 `VITE_USE_MOCK=true` 를 켠다 — 켜 둔 채로
 진짜 사원번호로 로그인하면 "사원번호 또는 비밀번호가 올바르지 않습니다" 가 뜬다. 서버까지
 가지도 않은 것이라 서버 로그에는 아무것도 남지 않는다.
 
-### 백엔드 환경 변수
+### 손으로 띄우려면
 
-`backend/.env.example` 를 `backend/.env` 로 복사해 값을 채운다. **`.env` 는 커밋하지 않는다.**
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-값을 셸에 올린 뒤 실행하려면:
+`setup.sh` 없이도 된다. 다만 `backend/.env` 의 `JWT_SECRET`·`ENCRYPTION_KEY` 는 비워 둘 수
+없다 — 로그인 토큰과 GitHub 토큰 암호화에 쓰는 값이라, 비면 기동 중에 멈춘다.
 
 ```bash
+cp .env.example .env
+cp backend/.env.example backend/.env     # JWT_SECRET, ENCRYPTION_KEY 를 채운다
+docker compose up -d
 cd backend && set -a && source .env && set +a && ./gradlew bootRun
+cd frontend && npm run dev
 ```
 
-DB 연결과 Flyway 마이그레이션은 기본값으로 동작한다. 다만 **`JWT_SECRET` 과 `ENCRYPTION_KEY`
-는 비워 둘 수 없다** — 로그인 토큰과 GitHub 토큰 암호화에 쓰는 값이라, 비면 기동 중에
-`JWT_SECRET 이 비어 있다` 로 멈춘다. 만드는 법은 `.env.example` 에 적어 두었다.
+### 세팅이 됐는지 확인
+
+[docs/SMOKE_CHECK.md](docs/SMOKE_CHECK.md) 를 따라 로그인 → 확장 전송 → 일지 생성·확정까지
+한 바퀴 돌려 본다. 10분이면 된다. 고친 것이 무엇을 깨뜨리지 않았는지 볼 때도 같은 길을 쓴다.
+
+### 기능 켜기
+
+세팅만 하면 로그인·화면·업무 일지 작성까지 된다. GitHub 수집·AI 요약·사원 명부·Mattermost
+는 `backend/.env` 를 채우는 만큼 켜진다 — 표는 [docs/SETUP.md §5](docs/SETUP.md) 에 있다.
 
 ### DB 확인
 
@@ -96,13 +96,13 @@ JPA 는 `ddl-auto: validate` 라 엔티티와 스키마가 어긋나면 기동 �
 ```bash
 cd vscode-extension
 npm install
-npm run package        # worklog-drafter-0.1.0.vsix 생성
+npm run package        # worklog-drafter-<버전>.vsix 생성
 ```
 
 설치는 둘 중 하나로 한다.
 
 ```bash
-code --install-extension worklog-drafter-0.1.0.vsix
+code --install-extension worklog-drafter-<버전>.vsix
 ```
 
 또는 VS Code → 확장 패널 → 우상단 `⋯` → **Install from VSIX…**.
