@@ -2,7 +2,7 @@
   "name": "worklog-drafter",
   "displayName": "WorkLog Drafter",
   "description": "커밋되지 않은 작업과 오늘의 계획을 모아 WorkLog Drafter 서버로 보낸다.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "withly",
   "private": true,
   "license": "UNLICENSED",
