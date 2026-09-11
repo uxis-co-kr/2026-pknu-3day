@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { Collector } from './collector'
+import { Collector, todayKst } from './collector'
 import { initLog, log } from './log'
 import { WorkLogTreeProvider } from './sidebar'
 import { Uploader } from './uploader'
@@ -336,24 +336,70 @@ async function pickFolder(): Promise<string | undefined> {
 /**
  * 계획을 적는 임시 문서. 파일 경로 → 어느 폴더의 계획인지.
  *
- * <p>저장 이벤트를 받았을 때 이것이 계획 문서인지 사용자의 작업 파일인지 가른다.
+ * <p>빠른 길일 뿐이고 믿을 것은 못 된다 — 확장 호스트가 다시 뜨면 비는데 탭은 복원된다.
+ * {@link planFolderOf} 를 보라.
  */
 const planDocs = new Map<string, string>()
 
+/** 계획 문서를 두는 곳(확장의 globalStorage). activate 에서 채운다. */
+let plansDir: vscode.Uri | undefined
+
 /**
- * 계획 문서의 파일 이름. 탭 제목이 되므로 폴더 이름을 그대로 쓴다.
+ * 계획 문서의 파일 이름.
+ *
+ * <p>예전에는 폴더 이름을 앞에 세웠다. 그런데 이 저장소의 폴더 이름이 `0909` 라서
+ * 탭과 문서 첫 줄에 `0909 계획` 이 떠 <b>날짜로 읽혔다</b> — 실제 업무 일자는 9/11 인데.
+ * 폴더가 하나면 이름을 넣지 않는다.
  *
  * <p>워크스페이스에 이름이 같은 폴더가 둘 이상이면 경로 해시를 덧붙여 나눈다 — 같은
  * 파일을 두 폴더가 나눠 쓰면 한쪽 계획이 다른 쪽을 덮는다.
  */
 function planFileName(folder: string): string {
+  const folders = vscode.workspace.workspaceFolders ?? []
+  if (folders.length <= 1) return 'WorkLog 계획.md'
   const base = path.basename(folder)
-  const twins = (vscode.workspace.workspaceFolders ?? []).filter(
-    (f) => path.basename(f.uri.fsPath) === base,
-  )
   const safe = base.replace(/[\\/:*?"<>|]/g, '_') || 'workspace'
-  if (twins.length <= 1) return `${safe} 계획.md`
-  return `${safe} 계획 (${createHash('sha1').update(folder).digest('hex').slice(0, 6)}).md`
+  const twins = folders.filter((f) => path.basename(f.uri.fsPath) === base)
+  if (twins.length <= 1) return `WorkLog 계획 (${safe}).md`
+  return `WorkLog 계획 (${safe}-${createHash('sha1').update(folder).digest('hex').slice(0, 6)}).md`
+}
+
+/** 머리말에 적어 두는 표시. 탭이 복원된 뒤에도 어느 폴더의 계획인지 알기 위해서다. */
+const FOLDER_MARK = /^\s*폴더:\s*(\S.*?)\s*$/
+
+function folderFromDocument(text: string): string | undefined {
+  for (const line of text.split('\n').slice(0, 12)) {
+    const m = FOLDER_MARK.exec(line)
+    if (m) return m[1]
+  }
+  return undefined
+}
+
+/** 스킴을 보지 않고 경로로만 가린다 — globalStorage 의 스킴은 환경마다 다를 수 있다. */
+function isInside(dir: vscode.Uri, file: vscode.Uri): boolean {
+  return file.path.startsWith(dir.path.replace(/\/+$/, '') + '/')
+}
+
+/**
+ * 저장된 문서가 계획 문서면 어느 폴더의 것인지 돌려준다.
+ *
+ * <p>열 때 기억해 둔 지도({@link planDocs})만 믿으면 안 된다. 확장 호스트가 다시 뜨면
+ * (창 새로 고침·VS Code 재시작·확장 재설치) 지도는 비는데 <b>탭은 그대로 복원된다.</b>
+ * 그 상태로 저장하면 아무 일도 일어나지 않고, 사용자에게는 저장이 먹지 않는 것으로 보인다.
+ * 그래서 <b>경로</b>로 먼저 가리고 폴더는 문서 머리말에서 되찾는다.
+ */
+function planFolderOf(doc: vscode.TextDocument): string | undefined {
+  const known = planDocs.get(doc.uri.fsPath)
+  if (known) return known
+  if (!plansDir || !isInside(plansDir, doc.uri)) return undefined
+
+  const marked = folderFromDocument(doc.getText())
+  if (marked) return marked
+  // 머리말을 지웠더라도 폴더가 하나뿐이면 물을 것이 없다.
+  const folders = vscode.workspace.workspaceFolders ?? []
+  if (folders.length === 1) return folders[0].uri.fsPath
+  log(`계획 문서를 저장했지만 어느 폴더의 것인지 알 수 없습니다: ${doc.uri.fsPath}`)
+  return undefined
 }
 
 /**
@@ -391,14 +437,55 @@ export function parsePlanDocument(text: string): string[] {
   return notes
 }
 
-/** 문서 맨 위에 넣는 안내. 저장하는 법과 읽는 규칙을 그 자리에서 알려 준다. */
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const
+
+/** "2026-09-11 (금)". 업무 일자는 KST 다 (PRD 12). */
+function dateLabel(): string {
+  const iso = todayKst()
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${iso} (${WEEKDAYS[new Date(y, m - 1, d).getDay()]})`
+}
+
+/**
+ * 문서 맨 위에 넣는 안내.
+ *
+ * <p><b>업무 일자를 적는다.</b> 예전에는 폴더 이름(`0909`)이 첫 줄에 있어 날짜로 읽혔다.
+ * <p><b>폴더 경로도 적는다.</b> 탭이 복원된 뒤 저장해도 어느 폴더의 계획인지 알기 위해서다.
+ */
 function planHeader(folder: string): string {
   return [
-    `<!-- ${path.basename(folder)} · 오늘 할 일을 적으세요.`,
-    '     저장(Cmd+S)하면 사이드바의 "계획" 과 오늘 업무 일지의 "계획 / TODO" 에 반영됩니다.',
-    '     한 줄이 계획 하나입니다. 빈 줄·이 주석·# 로 시작하는 줄은 빼고 보냅니다.',
+    `<!-- WorkLog 계획 · ${dateLabel()}`,
+    `     폴더: ${folder}`,
+    '     오늘 할 일을 한 줄에 하나씩 적고 저장(Cmd+S)하세요.',
+    '     사이드바의 "계획" 과 오늘 업무 일지의 "계획 / TODO" 에 반영됩니다.',
+    '     빈 줄·이 주석·# 로 시작하는 줄은 빼고 보냅니다.',
     '     지운 줄은 계획에서도 지워집니다. -->',
   ].join('\n')
+}
+
+/**
+ * 예전 이름(`<폴더> 계획.md`)으로 만든 파일이 남아 있으면 적어 둔 계획을 옮기고 지운다.
+ *
+ * <p>그대로 두면 이름이 비슷한 파일이 둘 생기고, 사용자가 옛 탭에 계속 적게 된다.
+ */
+async function migrateLegacyPlanFile(dir: vscode.Uri, current: vscode.Uri, folder: string): Promise<void> {
+  const safe = path.basename(folder).replace(/[\\/:*?"<>|]/g, '_') || 'workspace'
+  const legacy = vscode.Uri.joinPath(dir, `${safe} 계획.md`)
+  if (legacy.fsPath === current.fsPath) return
+
+  let text: string
+  try {
+    text = new TextDecoder().decode(await vscode.workspace.fs.readFile(legacy))
+  } catch {
+    return // 없으면 그만이다
+  }
+  const notes = parsePlanDocument(text)
+  if (notes.length > 0 && collector.planNotesOf(folder).length === 0) {
+    collector.setPlanNotes(notes, folder)
+    log(`예전 계획 파일에서 ${notes.length}건을 옮겼습니다`)
+  }
+  planDocs.delete(legacy.fsPath)
+  await Promise.resolve(vscode.workspace.fs.delete(legacy)).catch(() => undefined)
 }
 
 /**
@@ -415,6 +502,7 @@ async function openPlanDocument(context: vscode.ExtensionContext): Promise<void>
 
   await vscode.workspace.fs.createDirectory(context.globalStorageUri)
   const file = vscode.Uri.joinPath(context.globalStorageUri, planFileName(folder))
+  await migrateLegacyPlanFile(context.globalStorageUri, file, folder)
   planDocs.set(file.fsPath, folder)
 
   // 이미 열어 두고 고치는 중이면 덮어쓰지 않는다. 적던 내용이 사라지면 안 된다.
@@ -444,7 +532,13 @@ function applyPlanDocument(doc: vscode.TextDocument, folder: string): void {
   log(`계획 ${notes.length}건 (${folder})`)
   void tree.refresh()
   // 저장할 때마다 알림 창을 띄우면 성가시다. 상태바에 잠깐 보여 주는 정도로 둔다.
-  vscode.window.setStatusBarMessage(`WorkLog: 계획 ${notes.length}건을 저장했습니다.`, 3000)
+  // 다만 0건은 "안 먹었다" 와 구별되지 않으므로 그렇게 읽히지 않게 적는다.
+  vscode.window.setStatusBarMessage(
+    notes.length > 0
+      ? `$(check) WorkLog: 계획 ${notes.length}건을 저장했습니다.`
+      : '$(info) WorkLog: 계획으로 읽을 줄이 없어 오늘 계획을 비웠습니다.',
+    4000,
+  )
 }
 
 /**
@@ -475,6 +569,10 @@ function restartTimer() {
 
 export function activate(context: vscode.ExtensionContext): void {
   initLog(context)
+  // 저장 이벤트가 계획 문서인지 가릴 때 쓴다. 탭이 복원된 뒤에도 알아볼 수 있어야 한다.
+  plansDir = context.globalStorageUri
+  // 스킴을 남겨 둔다 — 계획 저장이 안 먹을 때 여기부터 본다 (한 번 여기서 막혔다).
+  log(`계획 문서 폴더: ${plansDir.scheme}:${plansDir.path}`)
   // globalState 에 저장 기록·계획을 남긴다. 재시작해도 그날 것은 이어 쌓인다.
   collector = new Collector(context.globalState)
 
@@ -496,13 +594,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.uri.scheme !== 'file') return
-      const planFolder = planDocs.get(doc.uri.fsPath)
+      // 스킴 검사보다 먼저 본다. globalStorage 가 file 스킴이 아닌 환경에서는 계획 문서가
+      // 여기서 통째로 걸러져, 저장해도 아무 일이 일어나지 않았다.
+      const planFolder = planFolderOf(doc)
       if (planFolder) {
         // 계획 문서는 사용자의 작업 파일이 아니다. 저장 이벤트로 세지 않는다.
         applyPlanDocument(doc, planFolder)
         return
       }
+      if (doc.uri.scheme !== 'file') return
       collector.recordSave(doc.uri.fsPath)
       scheduleTreeRefresh()
     }),
