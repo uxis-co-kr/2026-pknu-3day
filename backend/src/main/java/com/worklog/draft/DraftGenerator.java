@@ -72,7 +72,12 @@ public class DraftGenerator {
 
         List<Activity> activities = activityRepository.findForUserBetween(
                 userId, KstDates.startOf(workDate), KstDates.endOf(workDate));
-        List<VscodeSession> sessions = sessionRepository.findByUserIdAndWorkDate(userId, workDate);
+        // 행이 있다는 것만으로는 재료가 아니다. 확장이 10분마다 보내므로, 열어만 두고 아무것도
+        // 하지 않은 날에도 빈 세션이 쌓인다. 그것으로 일지를 만들면 아무것도 하지 않은 날에
+        // AI 가 일지를 지어낸다 (9/11 확인).
+        List<VscodeSession> sessions = sessionRepository.findByUserIdAndWorkDate(userId, workDate).stream()
+                .filter(VscodeSession::hasContent)
+                .toList();
 
         if (activities.isEmpty() && sessions.isEmpty()) {
             log.info("{} 의 {} 활동이 없어 초안을 만들지 않는다.", user.getLogin(), workDate);

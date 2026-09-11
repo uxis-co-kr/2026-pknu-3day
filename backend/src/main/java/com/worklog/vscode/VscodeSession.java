@@ -121,4 +121,27 @@ public class VscodeSession {
             reportedAt = OffsetDateTime.now();
         }
     }
+
+    /**
+     * 이 세션에 <b>적을 것이 있는가</b>.
+     *
+     * <p>확장은 10분마다 보낸다. 열어만 두고 아무것도 하지 않은 날에도 (저장소·브랜치·날짜만
+     * 담긴) 빈 행이 생긴다. "행이 있다" 를 "일한 기록이 있다" 로 읽으면 아무것도 하지 않은
+     * 날에도 AI 가 일지를 지어낸다 (9/11 확인).
+     *
+     * <p>미푸시 커밋의 {@code null} 은 "셀 수 없음"(업스트림 없는 브랜치)이지 기록이 아니다.
+     */
+    public boolean hasContent() {
+        return notEmpty(uncommittedFiles)
+                || notEmpty(todos)
+                || notEmpty(unsavedFiles)
+                || notEmpty(aiSessions)
+                || notEmpty(editTimeline)
+                || notEmpty(unpushedCommits)
+                || (planNote != null && !planNote.isBlank());
+    }
+
+    private static boolean notEmpty(List<?> list) {
+        return list != null && !list.isEmpty();
+    }
 }
