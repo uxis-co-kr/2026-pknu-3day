@@ -22,6 +22,17 @@ class OAuthStateCodecTest {
     }
 
     @Test
+    @DisplayName("돌아갈 화면 주소도 서명 안에 실려 그대로 돌아온다 (BACKLOG2 §2-1)")
+    void carriesReturnTo() {
+        String state = codec.issue(7L, "http://192.168.1.218:5173");
+        OAuthStateCodec.Parsed parsed = codec.verify(state).orElseThrow();
+
+        assertThat(parsed.linkUserId()).isEqualTo(7L);
+        assertThat(parsed.returnTo()).isEqualTo("http://192.168.1.218:5173");
+        assertThat(codec.verify(codec.issue(null)).orElseThrow().returnTo()).isNull();
+    }
+
+    @Test
     @DisplayName("한 글자만 바꿔도, 사용자 id 를 바꿔 끼워도 통하지 않는다")
     void rejectsTampering() {
         String state = codec.issue(7L);

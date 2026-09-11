@@ -57,11 +57,16 @@ public class GitHubLinkController {
      *
      * <p>이제 <b>인증된 이 경로</b>가 서명된 state 에 자기 id 를 담아 URL 을 돌려주고,
      * 화면은 그 URL 로 이동만 한다. id 는 요청자의 토큰에서 나오므로 남의 것을 적을 수 없다.
+     *
+     * <p>fetch 로 부르는 요청이라 {@code Origin} 이 온다. 콜백 뒤 <b>그 화면으로</b> 돌아가게
+     * state 에 함께 넣는다 — 사람마다 화면 주소가 달라도 된다 (BACKLOG2 §2-1). Vite 프록시는
+     * Host 만 바꾸고 Origin 은 그대로 넘긴다.
      */
     @PostMapping("/start")
     public StartResponse start(
             @AuthenticationPrincipal AuthenticatedUser principal, HttpServletRequest request) {
-        return new StartResponse(oauthController.authorizeUrl(principal.id(), request));
+        String returnTo = oauthController.allowedReturnTo(request.getHeader("Origin"));
+        return new StartResponse(oauthController.authorizeUrl(principal.id(), returnTo, request));
     }
 
     @DeleteMapping

@@ -40,6 +40,7 @@ public class GitHubOAuthController {
     private final JwtService jwtService;
     private final String frontendUrl;
     private final OAuthStateCodec stateCodec;
+    private final OriginPolicy originPolicy;
 
     public GitHubOAuthController(
             GitHubOAuthClient client,
@@ -47,12 +48,14 @@ public class GitHubOAuthController {
             UserService userService,
             JwtService jwtService,
             OAuthStateCodec stateCodec,
+            OriginPolicy originPolicy,
             @Value("${worklog.frontend-url}") String frontendUrl) {
         this.client = client;
         this.properties = properties;
         this.userService = userService;
         this.jwtService = jwtService;
         this.stateCodec = stateCodec;
+        this.originPolicy = originPolicy;
         this.frontendUrl = stripTrailingSlash(frontendUrl);
     }
 
@@ -63,11 +66,14 @@ public class GitHubOAuthController {
      *     <b>이 값은 반드시 인증된 자리에서 넘겨야 한다</b> — 요청 파라미터로 받으면 누구든
      *     남의 id 를 적어 자기 GitHub 을 그 계정에 붙일 수 있다.
      *     {@code POST /me/github/start} 가 토큰에서 꺼내 넘긴다.
+     * @param returnTo 콜백 뒤 돌아갈 화면 주소. 사람마다 화면 주소가 다르므로(BACKLOG2 §2-1)
+     *     요청의 Origin/Referer 에서 온 값을 {@link OriginPolicy} 로 걸러 넘긴다. 없으면 FRONTEND_URL
      */
-    String authorizeUrl(Long link, HttpServletRequest request) {
+    String authorizeUrl(Long link, String returnTo, HttpServletRequest request) {
         requireConfigured();
-        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지 state 안에 서명해 넘긴다.
-        String state = stateCodec.issue(link);
+        // 콜백은 새 요청이라 Authorization 헤더가 없다. 누구에게 붙일지, 어디로 돌아갈지를
+        // state 안에 서명해 넘긴다.
+        String state = stateCodec.issue(link, returnTo);
         return AUTHORIZE_URL_PREFIX
                 + "?client_id=" + encode(properties.getClientId())
                 + "&redirect_uri=" + encode(redirectUri(request))
@@ -81,7 +87,23 @@ public class GitHubOAuthController {
     @GetMapping
     public void authorize(HttpServletRequest request, HttpServletResponse response)
             throws IOException {
-        response.sendRedirect(authorizeUrl(null, request));
+        // 브라우저 이동이라 Origin 이 없다. Referer 가 있으면 같은 기준으로 쓴다.
+        response.sendRedirect(authorizeUrl(null, allowedReturnTo(request.getHeader("Referer")), request));
+    }
+
+    /**
+     * 돌아갈 화면 주소로 써도 되는 값만 남긴다. 거절해도 오류를 내지 않는다 — 그냥 서버 설정
+     * ({@code FRONTEND_URL}) 으로 돌아가게 두고 로그만 남긴다.
+     */
+    String allowedReturnTo(String origin) {
+        if (origin == null || origin.isBlank()) {
+            return null;
+        }
+        Optional<String> normalized = originPolicy.normalize(origin);
+        if (normalized.isEmpty()) {
+            log.info("허용되지 않은 화면 주소 {} — FRONTEND_URL 로 돌려보낸다.", origin);
+        }
+        return normalized.orElse(null);
     }
 
     @GetMapping("/callback")
@@ -113,16 +135,18 @@ public class GitHubOAuthController {
         GitHubOAuthClient.GitHubUserDto dto = client.fetchUser(accessToken);
 
         Long linkTo = parsed.linkUserId();
+        // 시작할 때 서명해 둔 화면 주소로 돌아간다. 없으면 서버 설정값.
+        String front = frontendFor(parsed);
 
         if (linkTo != null) {
             // 이미 로그인한 계정에 붙이는 경우. 새 계정을 만들지 않는다 (TODO_0910 §1-1).
             try {
                 User user = userService.linkGitHub(linkTo, dto, accessToken);
                 log.info("GitHub 연동 성공: {} → 사용자 {}", user.getLogin(), user.getId());
-                response.sendRedirect(frontendUrl + "/settings?github=linked");
+                response.sendRedirect(front + "/settings?github=linked");
             } catch (ApiException e) {
                 log.warn("GitHub 연동 실패: {}", e.getMessage());
-                response.sendRedirect(frontendUrl + "/settings?github=" + encode(e.getCode()));
+                response.sendRedirect(front + "/settings?github=" + encode(e.getCode()));
             }
             return;
         }
@@ -131,7 +155,13 @@ public class GitHubOAuthController {
         String jwt = jwtService.issue(user);
 
         log.info("GitHub 로그인 성공: {} (id={})", user.getLogin(), user.getId());
-        response.sendRedirect(frontendUrl + "/auth/done?token=" + encode(jwt));
+        response.sendRedirect(front + "/auth/done?token=" + encode(jwt));
+    }
+
+    /** state 에 실린 화면 주소가 지금도 허용 대역이면 그것, 아니면 FRONTEND_URL. */
+    String frontendFor(OAuthStateCodec.Parsed parsed) {
+        String returnTo = parsed == null ? null : allowedReturnTo(parsed.returnTo());
+        return returnTo == null ? frontendUrl : stripTrailingSlash(returnTo);
     }
 
     private void requireConfigured() {

@@ -90,11 +90,23 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** 프론트(Vite dev server)에서 Bearer 토큰으로 호출할 수 있게 열어둔다. */
+    /**
+     * 프론트(Vite dev server)에서 Bearer 토큰으로 호출할 수 있게 열어둔다.
+     *
+     * <p>Vite 프록시를 타면 CORS 를 안 거치지만, 프록시 없이 :8080 을 직접 부르는 사람이
+     * 생겨도 막히지 않게 사내망 대역을 통째로 연다 ({@link com.worklog.auth.OriginPolicy} 와
+     * 같은 대역). 인증은 어차피 Bearer 토큰이라 원본을 넓혀도 새는 것이 없다.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(java.util.List.of(frontendUrl));
+        config.setAllowedOriginPatterns(java.util.List.of(
+                frontendUrl,
+                "http://localhost:[*]",
+                "http://127.0.0.1:[*]",
+                "http://10.*:[*]",
+                "http://172.*:[*]",
+                "http://192.168.*:[*]"));
         config.setAllowedMethods(java.util.List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(java.util.List.of("*"));
         config.setAllowCredentials(true);
