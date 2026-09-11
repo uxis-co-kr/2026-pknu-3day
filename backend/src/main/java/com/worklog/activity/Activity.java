@@ -19,6 +19,8 @@ import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * GitHub 에서 수집한 활동 1건 — 커밋 / PR 생성 / PR 머지 (PRD F1).
@@ -87,6 +89,11 @@ public class Activity {
     /** 파일당 200줄, 커밋당 3,000자로 잘라 저장한다 (PRD F1-4). */
     @Column(name = "raw_diff", columnDefinition = "text")
     private String rawDiff;
+
+    /** 변경 파일 목록 (V10, F-2). 본문은 rawDiff, 목록·통계는 여기. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, columnDefinition = "jsonb")
+    private java.util.List<ChangedFile> files = new java.util.ArrayList<>();
 
     @Column(columnDefinition = "text")
     private String summary;

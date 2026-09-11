@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class DiffTruncatorTest {
 
     private static GitHubCommitDto.File file(String name, String patch) {
-        return new GitHubCommitDto.File(name, 1, 0, 1, patch);
+        return new GitHubCommitDto.File(name, "modified", 1, 0, 1, patch);
     }
 
     private static String lines(int count) {

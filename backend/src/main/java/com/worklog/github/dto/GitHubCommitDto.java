@@ -36,7 +36,13 @@ public record GitHubCommitDto(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record File(
-            String filename, Integer additions, Integer deletions, Integer changes, String patch) {}
+            String filename,
+            /** added · modified · removed · renamed */
+            String status,
+            Integer additions,
+            Integer deletions,
+            Integer changes,
+            String patch) {}
 
     /** 커밋 메시지 제목 줄. */
     public String title() {
