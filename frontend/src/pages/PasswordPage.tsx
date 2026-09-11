@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApiError, auth } from '@/api/apiClient'
+import { cn } from '@/lib/utils'
 import { useChangePassword, useMe } from '@/api/hooks'
 
 /**
@@ -42,44 +43,79 @@ export default function PasswordPage() {
   }
 
   const form = (
+    /*
+     * 세 칸을 가로로 편다.
+     *
+     * <p>예전에는 좁은 한 줄(520px)에 세로로 쌓았다. 설정의 다른 단락은 카드 너비를 다 쓰는데
+     * 여기만 왼쪽 절반이 차고 오른쪽이 비어, 덜 만든 화면처럼 보였다. 그렇다고 입력칸을 카드
+     * 너비만큼 늘이면 여덟 글자 적을 자리가 1000px 이 된다 — 칸 길이는 적을 내용의 길이를
+     * 알려 주는 신호라, 길면 긴 값을 기대하게 만든다.
+     *
+     * <p>좁은 화면에서는 한 칸씩 쌓인다.
+     */
     <form className="space-y-4" onSubmit={(e) => void onSubmit(e)}>
-      <div className="space-y-1.5">
-        <Label htmlFor="current" className="text-[13px]">현재 비밀번호</Label>
-        <Input id="current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)}
-          autoComplete="current-password" className="h-10" />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="next" className="text-[13px]">새 비밀번호</Label>
-        <Input id="next" type="password" value={next} onChange={(e) => setNext(e.target.value)}
-          autoComplete="new-password" className="h-10" />
-        <p className="text-[12px] text-muted-foreground">4자 이상. 사원번호와 같은 값은 쓸 수 없습니다</p>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="confirm" className="text-[13px]">새 비밀번호 확인</Label>
-        <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-          autoComplete="new-password" className="h-10" />
-        {mismatch && <p className="text-[12px] text-status-failed">두 값이 다릅니다</p>}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field id="current" label="현재 비밀번호" value={current} onChange={setCurrent}
+          autoComplete="current-password" />
+        <Field id="next" label="새 비밀번호" value={next} onChange={setNext}
+          autoComplete="new-password" hint="4자 이상. 사원번호와 같은 값은 쓸 수 없습니다" />
+        <Field id="confirm" label="새 비밀번호 확인" value={confirm} onChange={setConfirm}
+          autoComplete="new-password"
+          hint={mismatch ? '두 값이 다릅니다' : undefined} hintTone={mismatch ? 'error' : undefined} />
       </div>
 
-      {error && <p className="text-[13px] text-status-failed">{error}</p>}
-      {done && <p className="text-[13px] text-status-confirmed">비밀번호를 바꿨습니다.</p>}
-
-      <Button type="submit" className="h-10 w-full"
-        disabled={change.isPending || !current || !next || mismatch}>
-        {change.isPending ? '변경 중…' : '비밀번호 변경'}
-      </Button>
+      {/* 결과 문구와 버튼을 한 줄에 둔다 — 버튼만 있는 줄이 하나 더 생기지 않게. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px]">
+          {error && <span className="text-status-failed">{error}</span>}
+          {done && <span className="text-status-confirmed">비밀번호를 바꿨습니다.</span>}
+        </p>
+        <Button type="submit" className="h-[34px] w-full sm:ml-auto sm:w-auto sm:min-w-[132px]"
+          disabled={change.isPending || !current || !next || mismatch}>
+          {change.isPending ? '변경 중…' : '비밀번호 변경'}
+        </Button>
+      </div>
     </form>
   )
 
   // 설정의 Section 이 이미 카드다. 여기서 또 감싸면 상자가 겹친다.
   return (
-    <div className="max-w-[520px]">
+    <div>
+      {/* 아래 입력 줄과 같은 너비를 쓴다. 폭을 좁혀 두 줄로 접으면 한 문장이 토막 나 보인다. */}
       <p className="mb-4 text-[13px] text-muted-foreground">
         {usingInitial
           ? '아직 최초 비밀번호(사원번호)를 쓰고 있습니다. 사원번호는 사원 목록에서 조회할 수 있으니 바꾸는 편이 안전합니다.'
           : `${me?.loginId ? `사원번호 ${me.loginId}` : '내 계정'}의 비밀번호를 바꿉니다.`}
       </p>
       {form}
+    </div>
+  )
+}
+
+/**
+ * 입력 한 칸. 라벨·입력·도움말이 한 묶음이다.
+ *
+ * <p>도움말 자리는 비어 있어도 남겨 둔다. "두 값이 다릅니다" 가 떴다 사라질 때마다 세 칸의
+ * 높이가 들썩이면 눈이 쫓아가지 못한다.
+ */
+function Field({ id, label, value, onChange, autoComplete, hint, hintTone }: {
+  id: string
+  label: string
+  value: string
+  onChange: (v: string) => void
+  autoComplete: string
+  hint?: string
+  hintTone?: 'error'
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-[13px]">{label}</Label>
+      <Input id={id} type="password" value={value} onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete} className="h-[34px] text-[13px]" />
+      <p className={cn('min-h-[16px] text-[12px]',
+        hintTone === 'error' ? 'text-status-failed' : 'text-muted-foreground')}>
+        {hint}
+      </p>
     </div>
   )
 }
