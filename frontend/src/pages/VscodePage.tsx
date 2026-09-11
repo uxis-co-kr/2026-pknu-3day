@@ -24,7 +24,7 @@ import type { AiSessionSummary, VscodeSession } from '@/types/api'
  * 아무 흔적이 없다. 팀원 전체는 관리자 콘솔이 맡는다 (9/10 회의).
  */
 export default function VscodePage() {
-  const { date, setDate } = useSelectedDate()
+  const { date } = useSelectedDate()
 
   const { data: me } = useMe()
   const sessions = useSessions({ date, userId: me?.id })
@@ -77,7 +77,7 @@ export default function VscodePage() {
         )}
       </Card>
 
-      <MonthList selectedDate={date} userId={me?.id} onPick={setDate} />
+      <MonthList selectedDate={date} userId={me?.id} />
     </div>
   )
 }
@@ -89,10 +89,9 @@ export default function VscodePage() {
  * 기록이 있는 날만 줄로 보여 주고, 누르면 위 상세가 그 날짜로 바뀐다. 업무 일지 목록과
  * 같은 방식이다.
  */
-function MonthList({ selectedDate, userId, onPick }: {
+function MonthList({ selectedDate, userId }: {
   selectedDate: string
   userId: number | undefined
-  onPick: (date: string) => void
 }) {
   const [month, setMonth] = useState(startOfMonth(selectedDate))
   const range = { from: startOfMonth(month), to: endOfMonth(month) }
@@ -138,28 +137,9 @@ function MonthList({ selectedDate, userId, onPick }: {
             이 달에 VS Code 에서 보낸 다른 날의 작업이 없습니다.
           </p>
         ) : (
-          rows.map(([workDate, sessions]) => {
-            const files = sessions.reduce((n, x) => n + x.uncommittedFiles.length, 0)
-            const ai = new Set(sessions.flatMap((x) => (x.aiSessions ?? []).map((a) => a.id))).size
-            return (
-              <button
-                key={workDate}
-                type="button"
-                onClick={() => onPick(workDate)}
-                className="flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/60"
-              >
-                <span className="w-[150px] shrink-0 text-[13px] font-medium tabular-nums">
-                  {formatDateLabel(workDate)}
-                </span>
-                <span className="text-[12px] text-muted-foreground">저장소 {sessions.length}</span>
-                <span className="text-[12px] text-muted-foreground">미커밋 {files}파일</span>
-                <span className="text-[12px] text-muted-foreground">AI 대화 {ai}세션</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground/70">
-                  {sessions.map((x) => x.repo?.fullName ?? x.remoteUrl).join(' · ')}
-                </span>
-              </button>
-            )
-          })
+          rows.map(([workDate, sessions]) => (
+            <DayRow key={workDate} workDate={workDate} sessions={sessions} />
+          ))
         )}
       </Card>
     </>
@@ -223,6 +203,46 @@ function SessionDetail({ session }: { session: VscodeSession }) {
           ))}
         </Group>
       </div>
+    </div>
+  )
+}
+
+/**
+ * 지난 날 하루치. **그 자리에서 펼친다.**
+ *
+ * <p>누르면 위 상세가 그 날짜로 바뀌게 했더니 화면이 통째로 갈아엎어져, 목록을 훑다가
+ * 제자리를 잃었다. 날짜 선택기는 그대로 두고 여기서는 펼쳐 보기만 한다.
+ */
+function DayRow({ workDate, sessions }: { workDate: string; sessions: VscodeSession[] }) {
+  const [open, setOpen] = useState(false)
+  const files = sessions.reduce((n, x) => n + x.uncommittedFiles.length, 0)
+  const ai = new Set(sessions.flatMap((x) => (x.aiSessions ?? []).map((a) => a.id))).size
+
+  return (
+    <div className="border-b last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60"
+      >
+        <ChevronRight className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')} />
+        <span className="w-[150px] shrink-0 text-[13px] font-medium tabular-nums">
+          {formatDateLabel(workDate)}
+        </span>
+        <span className="text-[12px] text-muted-foreground">저장소 {sessions.length}</span>
+        <span className="text-[12px] text-muted-foreground">미커밋 {files}파일</span>
+        <span className="text-[12px] text-muted-foreground">AI 대화 {ai}세션</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground/70">
+          {sessions.map((x) => x.repo?.fullName ?? x.remoteUrl).join(' · ')}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t bg-muted/30">
+          {sessions.map((session) => <SessionDetail key={session.id} session={session} />)}
+        </div>
+      )}
     </div>
   )
 }
