@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
+import { ChevronRight, Clock, FileDiff, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
 import DiffStat from '@/components/common/DiffStat'
@@ -8,7 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useMe, useRepos, useSessions } from '@/api/hooks'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
 import { formatRelative, formatTime } from '@/lib/date'
-import type { VscodeSession } from '@/types/api'
+import { cn } from '@/lib/utils'
+import type { AiSessionSummary, VscodeSession } from '@/types/api'
 
 /**
  * VSCode 내역 — 확장이 보낸 **내** 작업.
@@ -118,16 +119,7 @@ function SessionDetail({ session }: { session: VscodeSession }) {
         </Group>
 
         <Group label="AI 대화" count={session.aiSessions?.length ?? 0} Icon={MessagesSquare}>
-          {(session.aiSessions ?? []).map((a) => (
-            <div key={a.id}>
-              <p className="tabular-nums text-muted-foreground/70">
-                {formatTime(a.firstAt)}–{formatTime(a.lastAt)} · {a.promptCount}개
-              </p>
-              {a.prompts.slice(0, 3).map((q) => (
-                <p key={q} className="truncate pl-2">· {q}</p>
-              ))}
-            </div>
-          ))}
+          {(session.aiSessions ?? []).map((a) => <AiSession key={a.id} ai={a} />)}
         </Group>
 
         <Group label="저장 이벤트" count={session.editTimeline.length} Icon={Clock}>
@@ -140,6 +132,54 @@ function SessionDetail({ session }: { session: VscodeSession }) {
             </div>
           ))}
         </Group>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * AI 대화 한 세션.
+ *
+ * <p>예전에는 `02:35–05:49` 처럼 시각만 보여 줬다. 무슨 대화였는지 알 수 없다. 제목을
+ * 앞에 세우고, 펼치면 질문마다 무엇이라 답했는지 본다 (BACKLOG2 §2-3).
+ */
+function AiSession({ ai }: { ai: AiSessionSummary }) {
+  const [open, setOpen] = useState(false)
+  const turns = ai.turns ?? []
+  const shown = open ? turns : turns.slice(0, 2)
+
+  return (
+    <div className="rounded border border-border/60 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1.5 text-left"
+      >
+        <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
+        <span className="min-w-0 flex-1 truncate font-medium">{ai.title}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground/70">
+          {formatTime(ai.firstAt)}–{formatTime(ai.lastAt)} · {ai.promptCount}개
+        </span>
+      </button>
+
+      <div className="mt-1 space-y-1 pl-[18px]">
+        {shown.map((t, i) => (
+          <div key={`${t.at}:${i}`}>
+            <p className={open ? '' : 'truncate'}>· {t.prompt}</p>
+            {t.answer && (
+              <p className={cn('pl-2 text-muted-foreground/70', !open && 'truncate')}>↳ {t.answer}</p>
+            )}
+          </div>
+        ))}
+        {!open && turns.length > shown.length && (
+          <p className="text-muted-foreground/60">… 그 외 {turns.length - shown.length}개</p>
+        )}
+        {/* 담은 것은 12개까지다. 실제로 물어본 횟수와 다르면 그렇다고 말한다 (C-1 ①). */}
+        {open && ai.promptCount > turns.length && (
+          <p className="text-muted-foreground/60">
+            {ai.promptCount}개 중 최근 {turns.length}개만 보관합니다
+          </p>
+        )}
       </div>
     </div>
   )

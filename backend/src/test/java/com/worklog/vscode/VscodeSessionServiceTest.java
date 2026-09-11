@@ -55,21 +55,29 @@ class VscodeSessionServiceTest {
                 List.of(),
                 List.of(new AiSessionSummary(
                         "sess-1",
+                        "출석 중복 검증",
                         "2026-09-09T10:00:00+09:00",
                         "2026-09-09T11:00:00+09:00",
                         2,
-                        List.of("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘"))),
+                        List.of(
+                                new AiTurn("2026-09-09T10:00:00+09:00", "출석 중복 검증 로직 봐 줘", "같은 날 두 번 찍히면…"),
+                                new AiTurn("2026-09-09T11:00:00+09:00", "테스트도 붙여 줘", null)),
+                        null)),
                 OffsetDateTime.parse("2026-09-09T12:00:00+09:00"));
     }
 
     @Test
-    @DisplayName("확장이 보낸 AI 대화를 그대로 저장한다")
+    @DisplayName("확장이 보낸 AI 대화를 제목·질의별 답변까지 그대로 저장한다")
     void keepsAiSessions() {
         VscodeSession saved = service.upsert(USER_ID, request("오늘 계획"));
 
         assertThat(saved.getAiSessions()).hasSize(1);
-        assertThat(saved.getAiSessions().get(0).prompts())
+        AiSessionSummary ai = saved.getAiSessions().get(0);
+        assertThat(ai.title()).isEqualTo("출석 중복 검증");
+        assertThat(ai.turns()).extracting(AiTurn::prompt)
                 .containsExactly("출석 중복 검증 로직 봐 줘", "테스트도 붙여 줘");
+        assertThat(ai.turns().get(0).answer()).isEqualTo("같은 날 두 번 찍히면…");
+        assertThat(ai.turns().get(1).answer()).isNull();
     }
 
     @Test

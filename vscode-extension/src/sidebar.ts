@@ -2,7 +2,7 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import type { Collector } from './collector'
 import type { UnpushedCommit } from './git'
-import type { AiSessionSummary, SessionPayload, TodoItem, UncommittedFile } from './types'
+import type { AiSessionSummary, AiTurn, SessionPayload, TodoItem, UncommittedFile } from './types'
 
 /**
  * 사이드바 뷰 — 지금 무엇이 서버로 갈지 보여 준다 (PRD X3, BACKLOG 1-14).
@@ -164,13 +164,29 @@ function aiGroup(sessions: AiSessionSummary[]): Node {
   return group(
     `AI 대화 ${sessions.length}세션`,
     'comment-discussion',
-    sessions.map((s) =>
-      group(
-        `${time(s.firstAt)}–${time(s.lastAt)}`,
-        'comment',
-        s.prompts.map((p) => leaf(p, 'quote')),
-      )),
+    sessions.map((s) => sessionNode(s)),
   )
+}
+
+/** 세션 하나. 시각만으로는 무슨 대화였는지 알 수 없어 제목을 앞에 세운다. */
+function sessionNode(s: AiSessionSummary): Node {
+  const node = group(s.title, 'comment', s.turns.map((t) => turnNode(t)))
+  // 담은 것은 12개까지지만 실제로 물어본 횟수를 보여 준다.
+  node.item.description = `${time(s.firstAt)}–${time(s.lastAt)} · ${s.promptCount}개`
+  node.item.tooltip = s.turns.length < s.promptCount
+    ? `${s.title}\n\n${s.promptCount}개 중 최근 ${s.turns.length}개만 보냅니다`
+    : s.title
+  return node
+}
+
+/** 질문 하나. 답변이 있으면 펼쳐 볼 수 있게 자식으로 단다. */
+function turnNode(turn: AiTurn): Node {
+  const node = turn.answer
+    ? group(turn.prompt, 'quote', [leaf(turn.answer, 'comment-discussion', turn.answer)])
+    : leaf(turn.prompt, 'quote')
+  node.item.description = time(turn.at)
+  node.item.tooltip = turn.answer ? `${turn.prompt}\n\n${turn.answer}` : turn.prompt
+  return node
 }
 
 /** 파일 노드는 누르면 열린다. 새 파일은 diff 대신 본문이 가므로 표시를 나눈다. */

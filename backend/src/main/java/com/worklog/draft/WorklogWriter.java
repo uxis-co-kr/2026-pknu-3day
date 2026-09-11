@@ -8,6 +8,7 @@ import com.worklog.llm.LlmRequest;
 import com.worklog.llm.LlmSettingService;
 import com.worklog.llm.PromptLoader;
 import com.worklog.vscode.AiSessionSummary;
+import com.worklog.vscode.AiTurn;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
 import com.worklog.vscode.VscodeSession;
@@ -158,21 +159,39 @@ public class WorklogWriter {
     }
 
     /**
-     * AI 와 나눈 대화에서 사용자가 친 말만 (V9).
+     * AI 와 나눈 대화에서 사용자가 친 말만 (V9, V10 에서 제목이 붙었다).
      *
      * <p>커밋에도 미커밋 변경에도 남지 않는 작업의 단서다. 세션마다 앞의 몇 개만 넣는다 —
      * 전부 넣으면 이 부분이 프롬프트를 차지해 정작 커밋이 밀린다.
+     *
+     * <p>V10 부터는 답변도 함께 들어오지만 <b>여기에는 담지 않는다.</b> 답변은 질문보다
+     * 훨씬 길어 20개만 넣어도 프롬프트가 두 배가 된다. 답변은 화면(VSCode 내역)에서 본다.
      */
     private static String aiLines(List<VscodeSession> sessions) {
-        String lines = distinctAiSessions(sessions).stream()
-                .flatMap(a -> a.prompts().stream().limit(MAX_AI_PROMPTS_PER_SESSION))
-                .map(String::strip)
-                .filter(p -> !p.isEmpty())
-                .distinct()
-                .limit(MAX_AI_PROMPTS)
-                .map(p -> "- " + p)
-                .collect(Collectors.joining("\n"));
-        return lines.isEmpty() ? "(없음)" : lines;
+        StringBuilder sb = new StringBuilder();
+        int used = 0;
+        for (AiSessionSummary a : distinctAiSessions(sessions)) {
+            if (used >= MAX_AI_PROMPTS) {
+                break;
+            }
+            List<String> asked = a.turns().stream()
+                    .map(AiTurn::prompt)
+                    .filter(p -> p != null && !p.isBlank())
+                    .map(String::strip)
+                    .distinct()
+                    .limit(Math.min(MAX_AI_PROMPTS_PER_SESSION, MAX_AI_PROMPTS - used))
+                    .toList();
+            if (asked.isEmpty()) {
+                continue;
+            }
+            // 제목을 앞에 세운다 — 어느 대화에서 나온 말인지 묶여야 일지가 갈래를 잡는다.
+            sb.append("· %s (%d회 물음)%n".formatted(a.title(), a.promptCount() == null ? asked.size() : a.promptCount()));
+            for (String p : asked) {
+                sb.append("  - ").append(p).append(System.lineSeparator());
+            }
+            used += asked.size();
+        }
+        return sb.isEmpty() ? "(없음)" : sb.toString().strip();
     }
 
     /**
@@ -189,8 +208,8 @@ public class WorklogWriter {
                 continue;
             }
             for (AiSessionSummary a : s.getAiSessions()) {
-                // 같은 대화가 여러 행에 있으면 프롬프트가 더 많은 쪽(늦게 보고된 것)을 남긴다.
-                byId.merge(a.id(), a, (x, y) -> y.prompts().size() >= x.prompts().size() ? y : x);
+                // 같은 대화가 여러 행에 있으면 질문이 더 많은 쪽(늦게 보고된 것)을 남긴다.
+                byId.merge(a.id(), a, (x, y) -> y.turns().size() >= x.turns().size() ? y : x);
             }
         }
         return byId.values();
