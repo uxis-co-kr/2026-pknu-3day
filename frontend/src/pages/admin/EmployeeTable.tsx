@@ -1,6 +1,7 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, ExternalLink, KeyRound } from 'lucide-react'
 import { ApiError } from '@/api/apiClient'
+import Pagination from '@/components/common/Pagination'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -132,10 +133,24 @@ function RepoList({ account }: { account: AdminAccount }) {
  * <p>한 줄이 "이 사람이 서비스를 쓸 준비가 됐는가"를 말한다. 서비스 계정이 없으면
  * VS Code 도 GitHub 도 붙일 자리가 없으므로 나머지 칸은 비운다.
  */
+const PER_PAGE = 10
+
 export default function EmployeeTable({ employees }: { employees: AdminEmployee[] }) {
   const [open, setOpen] = useState<number | null>(null)
+  const [page, setPage] = useState(0)
+
+  // 사원 번호 순. 명부가 오는 순서는 API 사정이라 사람이 찾을 때 기준이 되지 못한다.
+  const sorted = useMemo(
+    () => [...employees].sort((a, b) => a.empSeq - b.empSeq),
+    [employees],
+  )
+  // 명단이 줄어 있던 쪽이 사라질 수 있다. 범위를 벗어나면 마지막 쪽으로 당긴다.
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PER_PAGE))
+  const current = Math.min(page, pageCount - 1)
+  const rows = sorted.slice(current * PER_PAGE, (current + 1) * PER_PAGE)
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -146,11 +161,10 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
           <TableHead className="w-40">VS Code 연동</TableHead>
           <TableHead className="w-40">GitHub 연동</TableHead>
           <TableHead className="w-20 text-right">리포</TableHead>
-          <TableHead className="w-20 text-right">활동 수</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {employees.map((e) => {
+        {rows.map((e) => {
           const expanded = open === e.empSeq
           const acc = e.account
           return (
@@ -199,12 +213,11 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
                 <TableCell className="text-right tabular-nums">
                   {acc ? acc.repos.length : <span className="text-muted-foreground">—</span>}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{acc?.activityCount ?? 0}</TableCell>
               </TableRow>
 
               {expanded && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={8} className="bg-muted/30 p-0">
+                  <TableCell colSpan={7} className="bg-muted/30 p-0">
                     {acc ? (
                       <>
                         <RepoList account={acc} />
@@ -224,5 +237,16 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
         })}
       </TableBody>
     </Table>
+    <Pagination
+      page={current}
+      pageCount={pageCount}
+      total={sorted.length}
+      onChange={(p) => {
+        setPage(p)
+        // 펼친 행은 이 쪽에만 있던 것이다. 넘어가서도 열려 있으면 엉뚱한 자리가 펼쳐진다.
+        setOpen(null)
+      }}
+    />
+    </>
   )
 }

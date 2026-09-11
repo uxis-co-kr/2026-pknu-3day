@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import ActivityRow from '@/components/activity/ActivityRow'
+import Pagination from '@/components/common/Pagination'
 import { DraftStatusBadge } from '@/components/common/StatusBadge'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,8 @@ const BAR_ACTIVE = '#2563eb'
 
 const ALL = 'all'
 
+const PER_PAGE = 10
+
 function StatCard({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
     <Card className="flex h-[101px] flex-col rounded-lg px-[19px] py-[17px] shadow-none">
@@ -47,6 +50,8 @@ export default function AdminActivityPage() {
   const [customTo, setCustomTo] = useState(today)
   const [selected, setSelected] = useState<string>(ALL)
   const [openDate, setOpenDate] = useState<string | null>(null)
+  const [peoplePage, setPeoplePage] = useState(0)
+  const [activityPage, setActivityPage] = useState(0)
 
   const range =
     period === 'week' ? { from: addDays(today, -6), to: today }
@@ -66,8 +71,13 @@ export default function AdminActivityPage() {
     return (item: Item) => byUserId.get(item.user.id) ?? item.user.name ?? item.user.login
   }, [people])
 
+  // 커밋이 많은 사람부터. 같으면 이름 순으로 묶어 둔다 — 동점이 여럿이면 쪽을 넘길 때마다
+  // 순서가 흔들려 같은 사람이 두 쪽에 보일 수 있다.
   const items = useMemo(
-    () => [...(stats.data?.items ?? [])].sort((a, b) => b.totals.commits - a.totals.commits),
+    () => [...(stats.data?.items ?? [])].sort(
+      (a, b) => b.totals.commits - a.totals.commits
+        || (a.user.name ?? a.user.login).localeCompare(b.user.name ?? b.user.login),
+    ),
     [stats.data],
   )
   const team = items.reduce(
@@ -77,6 +87,11 @@ export default function AdminActivityPage() {
   const active = items.filter((i) => i.totals.commits + i.totals.prs + i.totals.merges > 0).length
 
   const row = selected === ALL ? null : items.find((i) => String(i.user.id) === selected) ?? null
+
+  // 기간이나 사람을 바꾸면 보던 쪽이 사라질 수 있다. 범위를 벗어나면 마지막 쪽으로 당긴다.
+  const peoplePageCount = Math.max(1, Math.ceil(items.length / PER_PAGE))
+  const peopleCurrent = Math.min(peoplePage, peoplePageCount - 1)
+  const peopleRows = items.slice(peopleCurrent * PER_PAGE, (peopleCurrent + 1) * PER_PAGE)
 
   // 전체를 골랐을 때의 일별 그래프는 사람별 시계열을 날짜로 합친다.
   const series = useMemo(() => {
@@ -92,6 +107,13 @@ export default function AdminActivityPage() {
   const chart = series.map((p) => ({ ...p, label: p.date.slice(5).replace('-', '/') }))
 
   const dayActivities = useActivities({ date: openDate ?? today, userId: row?.user.id })
+  const dayItems = dayActivities.data?.items ?? []
+  const activityPageCount = Math.max(1, Math.ceil(dayItems.length / PER_PAGE))
+  const activityCurrent = Math.min(activityPage, activityPageCount - 1)
+  const activityRows = dayItems.slice(activityCurrent * PER_PAGE, (activityCurrent + 1) * PER_PAGE)
+
+  // 다른 날·다른 사람을 고르면 목록이 통째로 바뀐다. 3쪽을 보던 채로 남아 있으면 안 된다.
+  useEffect(() => setActivityPage(0), [openDate, selected])
 
   return (
     <AdminGuard error={error}>
@@ -175,7 +197,7 @@ export default function AdminActivityPage() {
                   <TableRow><TableCell colSpan={5}><Skeleton className="h-8" /></TableCell></TableRow>
                 ) : items.length === 0 ? (
                   <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">계정이 없습니다.</TableCell></TableRow>
-                ) : items.map((i) => {
+                ) : peopleRows.map((i) => {
                   const drafts = i.series.filter((p) => p.draft)
                   const confirmed = drafts.filter((p) => p.draft?.status === 'CONFIRMED').length
                   return (
@@ -195,6 +217,12 @@ export default function AdminActivityPage() {
                 })}
               </TableBody>
             </Table>
+            <Pagination
+              page={peopleCurrent}
+              pageCount={peoplePageCount}
+              total={items.length}
+              onChange={setPeoplePage}
+            />
           </Card>
         )}
 
@@ -241,12 +269,20 @@ export default function AdminActivityPage() {
           </div>
           {dayActivities.isLoading ? (
             <div className="p-4"><Skeleton className="h-16" /></div>
-          ) : (dayActivities.data?.items ?? []).length === 0 ? (
+          ) : dayItems.length === 0 ? (
             <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">이날 활동이 없습니다.</p>
           ) : (
-            <div className={cn('divide-y')}>
-              {dayActivities.data!.items.map((a) => <ActivityRow key={a.id} activity={a} dense />)}
-            </div>
+            <>
+              <div className={cn('divide-y')}>
+                {activityRows.map((a) => <ActivityRow key={a.id} activity={a} dense />)}
+              </div>
+              <Pagination
+                page={activityCurrent}
+                pageCount={activityPageCount}
+                total={dayItems.length}
+                onChange={setActivityPage}
+              />
+            </>
           )}
         </Card>
       </div>
