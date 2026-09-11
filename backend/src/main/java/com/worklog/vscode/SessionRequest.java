@@ -20,4 +20,6 @@ public record SessionRequest(
         List<EditTimelineEntry> editTimeline,
         /** 그 폴더에서 오간 AI 대화 (V9). 없으면 빈 배열. */
         List<AiSessionSummary> aiSessions,
+        /** 미푸시 커밋 (V11). 업스트림이 없어 셀 수 없으면 null — 빈 배열과 뜻이 다르다. */
+        List<UnpushedCommit> unpushedCommits,
         OffsetDateTime lastCommitAt) {}

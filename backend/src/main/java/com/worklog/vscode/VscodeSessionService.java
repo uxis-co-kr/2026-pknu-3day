@@ -55,6 +55,8 @@ public class VscodeSessionService {
         session.setTodos(orEmpty(request.todos()));
         session.setEditTimeline(orEmpty(request.editTimeline()));
         session.setAiSessions(orEmpty(request.aiSessions()));
+        // null 을 그대로 둔다. 빈 배열로 바꾸면 "셀 수 없음" 이 "미푸시 없음" 으로 둔갑한다.
+        session.setUnpushedCommits(request.unpushedCommits());
         session.setLastCommitAt(request.lastCommitAt());
         // 확장이 보낸 계획을 그대로 둔다 — 지운 계획은 여기서도 지워져야 한다.
         //

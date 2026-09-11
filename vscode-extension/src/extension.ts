@@ -31,7 +31,7 @@ function readConfig() {
   }
 }
 
-/** 상태바에는 "미커밋 N파일" 또는 오류만 표시한다 (PRD F6). */
+/** 상태바에는 "미커밋 파일 N개" 또는 오류만 표시한다 (PRD F6). */
 function renderStatusBar(error?: string) {
   if (error) {
     const keyProblem = error === NO_API_KEY || error === WRONG_API_KEY
@@ -52,8 +52,8 @@ function renderStatusBar(error?: string) {
   } else {
     // 미푸시는 셀 수 있을 때만 붙인다. 업스트림이 없는 브랜치에서 0 으로 보이면 거짓말이다.
     const unpushed = collector.unpushedCount
-    const tail = unpushed ? ` · 미푸시 ${unpushed}` : ''
-    statusBar.text = `$(git-commit) 미커밋 ${collector.uncommittedCount}파일${tail}`
+    const tail = unpushed ? ` · 미푸시 커밋 ${unpushed}개` : ''
+    statusBar.text = `$(git-commit) 미커밋 파일 ${collector.uncommittedCount}개${tail}`
     statusBar.command = 'worklog.sendNow'
     statusBar.tooltip = 'WorkLog Drafter — 클릭하면 지금 전송'
     statusBar.backgroundColor = undefined
@@ -246,7 +246,7 @@ async function askServerAndKey(): Promise<void> {
 async function tellResult(result: SendResult): Promise<void> {
   switch (result.kind) {
     case 'sent':
-      void vscode.window.showInformationMessage(`WorkLog: 전송했습니다 (미커밋 ${result.files}파일).`)
+      void vscode.window.showInformationMessage(`WorkLog: 전송했습니다 (미커밋 파일 ${result.files}개).`)
       return
     case 'nothing':
       void vscode.window.showInformationMessage(
@@ -341,6 +341,11 @@ async function pickFolder(): Promise<string | undefined> {
  */
 const planDocs = new Map<string, string>()
 
+/** 두 번 누른 것으로 볼 간격. macOS 기본 더블클릭 간격과 맞췄다. */
+const DOUBLE_CLICK_MS = 500
+/** 마지막으로 계획 줄을 누른 폴더와 시각. 두 번 눌렀는지 가리는 데만 쓴다. */
+let lastPlanClick: { folder: string; at: number } | undefined
+
 /** 계획 문서를 두는 곳(확장의 globalStorage). activate 에서 채운다. */
 let plansDir: vscode.Uri | undefined
 
@@ -403,38 +408,14 @@ function planFolderOf(doc: vscode.TextDocument): string | undefined {
 }
 
 /**
- * 계획 문서에서 계획 줄만 뽑는다.
+ * 계획 문서에서 계획 본문을 뽑는다.
  *
- * <p>안내 주석과 날짜 제목은 우리가 넣은 것이라 계획이 아니다. 목록 표식(`- `, `1. `,
- * 체크박스)은 markdown 으로 적기 편하라고 둔 것이므로 떼어 낸다. 한 줄이 계획 하나다 —
- * 사이드바가 줄 단위로 보여 주고 우클릭으로 한 줄씩 지울 수 있어야 한다.
+ * <p><b>문서 한 통이 오늘 계획 하나다.</b> 예전에는 한 줄을 계획 하나로 세어 목록 표식을
+ * 떼고 줄마다 나눠 담았다 — 그러면 제목도 들여쓰기도 남지 않아, markdown 으로 적은 계획이
+ * 줄 더미가 됐다. 이제는 우리가 넣은 안내 주석만 걷어내고 나머지는 적은 그대로 둔다.
  */
-export function parsePlanDocument(text: string): string[] {
-  const notes: string[] = []
-  let inComment = false
-  for (const raw of text.split('\n')) {
-    let line = raw.trim()
-    if (inComment) {
-      const close = line.indexOf('-->')
-      if (close < 0) continue
-      line = line.slice(close + 3).trim()
-      inComment = false
-    }
-    line = line.replace(/<!--[\s\S]*?-->/g, ' ').trim()
-    const open = line.indexOf('<!--')
-    if (open >= 0) {
-      inComment = true
-      line = line.slice(0, open).trim()
-    }
-    if (!line || line.startsWith('#')) continue
-    const note = line
-      // 표식만 있고 내용이 없는 줄(빈 `- `)은 아래에서 걸러지도록 통째로 비운다.
-      .replace(/^([-*+]|\d+[.)])(\s+|$)/, '')
-      .replace(/^\[[ xX]\]\s*/, '')
-      .trim()
-    if (note) notes.push(note)
-  }
-  return notes
+export function parsePlanDocument(text: string): string {
+  return text.replace(/<!--[\s\S]*?(?:-->|$)/g, '').trim()
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const
@@ -456,10 +437,10 @@ function planHeader(folder: string): string {
   return [
     `<!-- WorkLog 계획 · ${dateLabel()}`,
     `     폴더: ${folder}`,
-    '     오늘 할 일을 한 줄에 하나씩 적고 저장(Cmd+S)하세요.',
+    '     오늘 할 일을 적고 저장(Cmd+S)하세요. 이 문서 한 통이 오늘 계획입니다.',
     '     사이드바의 "계획" 과 오늘 업무 일지의 "계획 / TODO" 에 반영됩니다.',
-    '     빈 줄·이 주석·# 로 시작하는 줄은 빼고 보냅니다.',
-    '     지운 줄은 계획에서도 지워집니다. -->',
+    '     제목·목록·들여쓰기는 적은 그대로 갑니다. 이 주석만 빼고 보냅니다.',
+    '     지운 내용은 계획에서도 지워집니다. -->',
   ].join('\n')
 }
 
@@ -479,10 +460,10 @@ async function migrateLegacyPlanFile(dir: vscode.Uri, current: vscode.Uri, folde
   } catch {
     return // 없으면 그만이다
   }
-  const notes = parsePlanDocument(text)
-  if (notes.length > 0 && collector.planNotesOf(folder).length === 0) {
-    collector.setPlanNotes(notes, folder)
-    log(`예전 계획 파일에서 ${notes.length}건을 옮겼습니다`)
+  const body = parsePlanDocument(text)
+  if (body && !collector.planOf(folder)) {
+    collector.setPlan(body, folder)
+    log('예전 계획 파일에서 오늘 계획을 옮겼습니다')
   }
   planDocs.delete(legacy.fsPath)
   await Promise.resolve(vscode.workspace.fs.delete(legacy)).catch(() => undefined)
@@ -496,8 +477,9 @@ async function migrateLegacyPlanFile(dir: vscode.Uri, current: vscode.Uri, folde
  * 문서로 열면 `Cmd+S` 가 "다른 이름으로 저장" 창을 띄워, 저장할 때 받는다는 약속이 깨진다.
  * 파일은 확장의 globalStorage 에 두므로 사용자의 저장소에는 남지 않는다.
  */
-async function openPlanDocument(context: vscode.ExtensionContext): Promise<void> {
-  const folder = await pickFolder()
+async function openPlanDocument(context: vscode.ExtensionContext, from?: string): Promise<void> {
+  // 사이드바의 계획 단락에서 부르면 어느 폴더인지 이미 안다. 그때는 묻지 않는다.
+  const folder = from ?? (await pickFolder())
   if (!folder) return
 
   await vscode.workspace.fs.createDirectory(context.globalStorageUri)
@@ -512,8 +494,7 @@ async function openPlanDocument(context: vscode.ExtensionContext): Promise<void>
     return
   }
 
-  const notes = collector.planNotesOf(folder)
-  const body = notes.length > 0 ? notes.map((n) => `- ${n}`).join('\n') : '- '
+  const body = collector.planOf(folder) || '- '
   const text = `${planHeader(folder)}\n\n${body}`
   await vscode.workspace.fs.writeFile(file, new TextEncoder().encode(text))
 
@@ -525,18 +506,18 @@ async function openPlanDocument(context: vscode.ExtensionContext): Promise<void>
   editor.revealRange(new vscode.Range(end, end))
 }
 
-/** 계획 문서를 저장했을 때. 문서가 곧 그 폴더의 계획 전부다. */
+/** 계획 문서를 저장했을 때. 문서가 곧 그 폴더의 오늘 계획 전부다. */
 function applyPlanDocument(doc: vscode.TextDocument, folder: string): void {
-  const notes = parsePlanDocument(doc.getText())
-  collector.setPlanNotes(notes, folder)
-  log(`계획 ${notes.length}건 (${folder})`)
+  const body = parsePlanDocument(doc.getText())
+  collector.setPlan(body, folder)
+  log(`계획 ${body.length}자 (${folder})`)
   void tree.refresh()
   // 저장할 때마다 알림 창을 띄우면 성가시다. 상태바에 잠깐 보여 주는 정도로 둔다.
-  // 다만 0건은 "안 먹었다" 와 구별되지 않으므로 그렇게 읽히지 않게 적는다.
+  // 다만 빈 문서는 "안 먹었다" 와 구별되지 않으므로 그렇게 읽히지 않게 적는다.
   vscode.window.setStatusBarMessage(
-    notes.length > 0
-      ? `$(check) WorkLog: 계획 ${notes.length}건을 저장했습니다.`
-      : '$(info) WorkLog: 계획으로 읽을 줄이 없어 오늘 계획을 비웠습니다.',
+    body
+      ? '$(check) WorkLog: 오늘 계획을 저장했습니다.'
+      : '$(info) WorkLog: 내용이 비어 오늘 계획을 비웠습니다.',
     4000,
   )
 }
@@ -638,18 +619,26 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   )
 
-  // 사이드바에서 계획 한 줄을 지운다. 잘못 적은 메모가 그날 내내 남지 않게.
+  // 사이드바의 계획 단락에서 부른다. 노드가 어느 폴더인지 들고 오므로 묻지 않아도 된다.
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.removePlan', (node?: { note?: string; folder?: string }) => {
-      if (!node?.note) return
-      collector.removePlanNote(node.note, node.folder)
-      log(`계획 삭제: ${node.note}`)
-      void tree.refresh()
-    }),
+    vscode.commands.registerCommand('worklog.recordPlan', (node?: { folder?: string }) =>
+      openPlanDocument(context, node?.folder),
+    ),
   )
 
+  // 계획 줄을 **두 번** 눌렀을 때만 연다. 트리 항목에는 더블클릭 이벤트가 없어 (한 번
+  // 누를 때마다 command 가 올 뿐이다) 간격을 재서 가린다. 연필 버튼은 한 번으로 연다.
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.recordPlan', () => openPlanDocument(context)),
+    vscode.commands.registerCommand('worklog.planClicked', (node?: { folder?: string }) => {
+      const folder = node?.folder ?? ''
+      const now = Date.now()
+      if (lastPlanClick?.folder === folder && now - lastPlanClick.at < DOUBLE_CLICK_MS) {
+        lastPlanClick = undefined
+        return openPlanDocument(context, node?.folder)
+      }
+      lastPlanClick = { folder, at: now }
+      return undefined
+    }),
   )
 
   context.subscriptions.push(

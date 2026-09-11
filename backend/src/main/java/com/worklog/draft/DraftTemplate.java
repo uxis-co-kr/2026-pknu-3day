@@ -62,11 +62,22 @@ public final class DraftTemplate {
         }
 
         md.append("\n## 계획 / TODO\n");
-        List<String> plans = plans(sessions);
-        if (plans.isEmpty()) {
+        List<String> plans = planNotes(sessions);
+        List<String> todos = todoLines(sessions);
+        if (plans.isEmpty() && todos.isEmpty()) {
             md.append("- (기록된 계획 없음)\n");
         } else {
-            plans.forEach(p -> md.append("- ").append(p).append('\n'));
+            // 계획은 확장에서 적은 markdown 문서 그대로다. 불릿을 덧붙이지 않는다.
+            if (!plans.isEmpty()) {
+                md.append(String.join("\n\n", plans)).append('\n');
+            }
+            if (!todos.isEmpty()) {
+                // 문서 바로 아래에 붙이면 계획의 일부로 읽힌다. 한 줄 띄워 나눈다.
+                if (!plans.isEmpty()) {
+                    md.append('\n');
+                }
+                todos.forEach(t -> md.append("- ").append(t).append('\n'));
+            }
         }
 
         md.append("\n## 메모\n(직접 작성)\n");
@@ -101,27 +112,36 @@ public final class DraftTemplate {
         return "- [%s] 미커밋 %d개 — %s%s".formatted(repo, files.size(), names, more);
     }
 
-    /** 계획 메모를 먼저, 그다음 코드 안 TODO 주석 (PRD F3). */
-    private static List<String> plans(List<VscodeSession> sessions) {
+    /**
+     * 오늘 계획으로 적어 둔 markdown 문서 (PRD F3).
+     *
+     * <p><b>문서 한 통이 계획 하나다.</b> 예전에는 줄마다 불릿을 붙였는데, 확장이 문서를
+     * 통째로 보내게 된 지금 그렇게 하면 제목도 들여쓴 목록도 평평한 불릿 더미가 된다.
+     * 적은 그대로 옮기고 다듬지 않는다.
+     *
+     * <p>같은 폴더에서 브랜치를 옮겨 가며 일하면 세션이 여럿인데 계획 문서는 같다.
+     * 같은 문서를 두 번 싣지 않는다.
+     */
+    private static List<String> planNotes(List<VscodeSession> sessions) {
         return sessions.stream()
-                .flatMap(s -> {
-                    List<String> lines = new java.util.ArrayList<>();
-                    if (s.getPlanNote() != null && !s.getPlanNote().isBlank()) {
-                        // 확장이 계획을 여러 건 받게 되면서 줄바꿈으로 이어 보낸다. 줄마다 불릿이 돼야 한다.
-                        s.getPlanNote().lines()
-                                .map(String::strip)
-                                .filter(line -> !line.isEmpty())
-                                .forEach(lines::add);
-                    }
-                    List<TodoItem> todos = s.getTodos();
-                    if (todos != null) {
-                        todos.stream()
-                                .limit(10)
-                                .forEach(t -> lines.add("%s:%d %s".formatted(t.path(), t.line(), t.text())));
-                    }
-                    return lines.stream();
-                })
+                .map(VscodeSession::getPlanNote)
+                .filter(p -> p != null && !p.isBlank())
+                .map(String::strip)
+                .distinct()
                 .toList();
+    }
+
+    /** 계획 다음에 붙는 코드 안 TODO 주석 (PRD F3). */
+    private static List<String> todoLines(List<VscodeSession> sessions) {
+        List<String> lines = new java.util.ArrayList<>();
+        for (VscodeSession s : sessions) {
+            List<TodoItem> todos = s.getTodos();
+            if (todos == null) {
+                continue;
+            }
+            todos.stream().limit(10).forEach(t -> lines.add("%s:%d %s".formatted(t.path(), t.line(), t.text())));
+        }
+        return lines;
     }
 
     private static String shorten(String sha) {

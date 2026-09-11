@@ -215,17 +215,20 @@ public class WorklogWriter {
         return byId.values();
     }
 
+    /**
+     * 오늘 계획으로 적어 둔 문서. 확장이 markdown 한 통을 통째로 보낸다 — 하루에 하나다.
+     *
+     * <p>줄마다 불릿을 붙이지 않는다. 적은 모양(제목·목록·들여쓰기)이 곧 뜻이라, 그대로
+     * 넘겨야 모델이 무엇을 하려 했는지 읽는다. 같은 폴더의 다른 브랜치 세션은 같은 문서를
+     * 들고 오므로 한 번만 싣는다.
+     */
     private static String planLines(List<VscodeSession> sessions) {
         String plans = sessions.stream()
                 .map(VscodeSession::getPlanNote)
                 .filter(p -> p != null && !p.isBlank())
-                // 확장이 여러 건을 줄바꿈으로 이어 보낸다 (서버 계약은 문자열 한 칸).
-                .flatMap(p -> p.lines())
                 .map(String::strip)
-                .filter(p -> !p.isEmpty())
                 .distinct()
-                .map(p -> "- " + p)
-                .collect(Collectors.joining("\n"));
+                .collect(Collectors.joining("\n\n"));
         return plans.isEmpty() ? "(없음)" : plans;
     }
 

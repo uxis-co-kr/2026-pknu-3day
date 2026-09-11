@@ -131,6 +131,14 @@ export interface AiSessionSummary {
   turns: AiTurn[]
 }
 
+/** 미푸시 커밋 하나. GitHub 활동으로는 잡히지 않는다 — 원격에 없으니 API 에 안 나온다. */
+export interface UnpushedCommit {
+  /** 짧은 해시 */
+  sha: string
+  subject: string
+  at: string
+}
+
 /** 질문 하나와 그에 대한 답변. 답변은 확장이 앞부분만 잘라 보낸다. */
 export interface AiTurn {
   at: string
@@ -151,6 +159,13 @@ export interface VscodeSession {
   editTimeline: EditTimelineEntry[]
   /** 커밋에도 미커밋 변경에도 남지 않는 작업의 단서. */
   aiSessions: AiSessionSummary[]
+  /**
+   * 커밋했지만 아직 push 하지 않은 커밋 (V11).
+   *
+   * <p>`null` 은 <b>셀 수 없음</b>이다 — 한 번도 push 하지 않은 브랜치는 비교할 업스트림이
+   * 없다. 빈 배열(미푸시 없음)과 뜻이 다르므로 화면에서도 나눠 적는다.
+   */
+  unpushedCommits?: UnpushedCommit[] | null
   summary: string | null
   lastCommitAt: string | null
   reportedAt: string

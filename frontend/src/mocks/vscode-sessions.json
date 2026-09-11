@@ -47,7 +47,7 @@
         "text": "오후에 출석 중복 검증 로직 마무리"
       }
     ],
-    "planNote": "오후에 출석 중복 검증 로직 마무리",
+    "planNote": "## 오전\n- 출석 체크 API 리뷰 반영\n\n## 오후\n- 출석 중복 검증 로직 마무리\n  - 같은 날 두 번 찍히는 경우부터",
     "editTimeline": [
       {
         "path": "src/api/attendance.ts",
@@ -96,6 +96,18 @@
           }
         ]
       }
+    ],
+    "unpushedCommits": [
+      {
+        "sha": "9f2c1ab",
+        "subject": "feat: 출석 중복 검증 테스트 추가",
+        "at": "2026-09-09T15:42:11+09:00"
+      },
+      {
+        "sha": "3be70d4",
+        "subject": "refactor: 출석 서비스 의존성 정리",
+        "at": "2026-09-09T14:05:39+09:00"
+      }
     ]
   },
   {
@@ -141,6 +153,7 @@
     "summary": "로그인 리다이렉트 회귀 테스트 작성 중 (미커밋)",
     "lastCommitAt": "2026-09-09T17:00:00+09:00",
     "reportedAt": "2026-09-09T17:45:00+09:00",
-    "aiSessions": []
+    "aiSessions": [],
+    "unpushedCommits": null
   }
 ]
