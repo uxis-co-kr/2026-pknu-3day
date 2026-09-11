@@ -295,46 +295,27 @@ function DayRow({ workDate, sessions }: { workDate: string; sessions: VscodeSess
  * 앞에 세우고, 펼치면 질문마다 무엇이라 답했는지 본다 (BACKLOG2 §2-3).
  */
 function AiSession({ ai }: { ai: AiSessionSummary }) {
-  const [open, setOpen] = useState(false)
-  const turns = ai.turns ?? []
-  const shown = open ? turns : turns.slice(0, 2)
-
   return (
     <div className="rounded border border-border/60 px-2 py-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-1.5 text-left"
-      >
-        <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
+      <div className="flex w-full items-center gap-1.5">
         <span className="min-w-0 flex-1 truncate font-medium">{ai.title}</span>
         <span className="shrink-0 tabular-nums text-muted-foreground/70">
           {formatTime(ai.firstAt)}–{formatTime(ai.lastAt)} · {ai.promptCount}개
         </span>
-      </button>
-
-      <div className="mt-1 space-y-1 pl-[18px]">
-        {/* 서버가 붙인 요약. 질문 원문보다 먼저 읽히도록 위에 둔다 — 접은 채로도 무슨
-            대화였는지 알 수 있어야 한다. 전송 직후에는 잠깐 없다. */}
-        {ai.summary && <p className="text-foreground/80">{ai.summary}</p>}
-        {shown.map((t, i) => (
-          <div key={`${t.at}:${i}`}>
-            <p className={open ? '' : 'truncate'}>· {t.prompt}</p>
-            {t.answer && (
-              <p className={cn('pl-2 text-muted-foreground/70', !open && 'truncate')}>↳ {t.answer}</p>
-            )}
-          </div>
-        ))}
-        {!open && turns.length > shown.length && (
-          <p className="text-muted-foreground/60">… 그 외 {turns.length - shown.length}개</p>
-        )}
-        {/* 담은 것은 12개까지다. 실제로 물어본 횟수와 다르면 그렇다고 말한다 (C-1 ①). */}
-        {open && ai.promptCount > turns.length && (
-          <p className="text-muted-foreground/60">
-            {ai.promptCount}개 중 최근 {turns.length}개만 보관합니다
-          </p>
-        )}
       </div>
+
+      {/*
+        요약만 보여 준다 (9/11 결정). 질문과 답변 원문을 여기 펼쳐 두면, 하루를 되짚어 보는
+        화면이 대화 기록을 그대로 옮겨 적은 것이 된다 — 길기도 하고, 남이 볼 수 있는 자리에
+        원문이 놓이는 것도 부담이다. 원문은 각자의 VS Code 확장에서 본다.
+      */}
+      <p className="mt-1 pl-1 text-foreground/80">
+        {ai.summary ?? (
+          // 전송 직후에는 아직 없고, 9/11 이전 기록에는 영영 없다 (요약은 전송 때 채운다).
+          // 둘을 구분해 말할 방법이 없으니 단정하지 않는다.
+          <span className="text-muted-foreground/60">요약이 아직 없습니다</span>
+        )}
+      </p>
     </div>
   )
 }
