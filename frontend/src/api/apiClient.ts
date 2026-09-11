@@ -2,10 +2,16 @@ import { MockHttpError, handleMock } from './mockServer'
 import type { ApiErrorBody } from '@/types/api'
 
 /**
- * VITE_USE_MOCK=true 면 src/mocks 를, false 면 실서버를 부른다 (PRD 9. 1-2 / 1-9).
+ * VITE_USE_MOCK=true 면 src/mocks 를, 아니면 실서버를 부른다 (PRD 9. 1-2 / 1-9).
  * 두 경로가 같은 타입을 돌려주므로 화면 코드는 어느 쪽인지 몰라도 된다.
+ *
+ * <p><b>기본값은 실서버다.</b> 예전에는 "false 라고 적지 않으면 목업" 이었다. 그런데
+ * `frontend/.env` 는 커밋하지 않으므로 <b>새로 클론한 사람에게는 그 파일이 없다</b> —
+ * 서버를 멀쩡히 띄워 두고도 화면은 가짜 데이터를 보고, 진짜 사원번호로 로그인하면
+ * "사원번호 또는 비밀번호가 올바르지 않습니다" 가 뜬다. 서버 로그에는 아무것도 남지 않아
+ * 원인을 찾기 어렵다 (9/11 실제로 겪었다). 목업은 일부러 켤 때만 쓴다.
  */
-export const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
+export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 /**

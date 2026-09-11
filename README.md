@@ -29,18 +29,27 @@ GitHub 활동과 VS Code 안의 미커밋 작업을 모아 **업무 일지 초�
 
 ## 로컬 실행
 
-세 개의 명령으로 전체가 뜬다.
+**새로 클론했다면 `backend/.env` 부터 만든다.** 이 파일은 커밋하지 않으므로 클론에는 없고,
+`JWT_SECRET`·`ENCRYPTION_KEY` 가 비면 백엔드가 뜨다가 멈춘다 (아래 "백엔드 환경 변수").
 
 ```bash
+# 0) 백엔드 환경 변수 (클론 직후 한 번)
+cp backend/.env.example backend/.env   # 값을 채운다
+
 # 1) DB — 호스트 5433 으로 노출된다 (루트 .env 의 POSTGRES_PORT 로 바꿀 수 있다)
 docker compose up -d
 
 # 2) 백엔드 (http://localhost:8080/api)
-cd backend && ./gradlew bootRun
+cd backend && set -a && source .env && set +a && ./gradlew bootRun
 
 # 3) 프론트 (http://localhost:5173)
 cd frontend && npm run dev
 ```
+
+프론트는 **따로 설정하지 않아도 실서버를 부른다.** `frontend/.env` 없이 그대로 띄우면 된다.
+화면만 눌러 보려고 가짜 데이터를 쓰려면 그때만 `VITE_USE_MOCK=true` 를 켠다 — 켜 둔 채로
+진짜 사원번호로 로그인하면 "사원번호 또는 비밀번호가 올바르지 않습니다" 가 뜬다. 서버까지
+가지도 않은 것이라 서버 로그에는 아무것도 남지 않는다.
 
 ### 백엔드 환경 변수
 
@@ -56,8 +65,9 @@ cp backend/.env.example backend/.env
 cd backend && set -a && source .env && set +a && ./gradlew bootRun
 ```
 
-기본값만으로도 DB 연결과 Flyway 마이그레이션은 동작한다. GitHub OAuth·JWT·LLM 관련 값은
-해당 기능을 붙이는 시점(1일차 오후)부터 필요하다.
+DB 연결과 Flyway 마이그레이션은 기본값으로 동작한다. 다만 **`JWT_SECRET` 과 `ENCRYPTION_KEY`
+는 비워 둘 수 없다** — 로그인 토큰과 GitHub 토큰 암호화에 쓰는 값이라, 비면 기동 중에
+`JWT_SECRET 이 비어 있다` 로 멈춘다. 만드는 법은 `.env.example` 에 적어 두었다.
 
 ### DB 확인
 
