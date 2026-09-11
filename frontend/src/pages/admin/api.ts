@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/api/apiClient'
+import { api, qs } from '@/api/apiClient'
+import type { Draft, DraftSummary } from '@/types/api'
 import type {
   AdminLlmSettings,
   AdminOverview,
@@ -14,10 +15,31 @@ export const adminQk = {
   chatStatus: ['admin', 'chat', 'status'] as const,
   chatSettings: ['admin', 'chat', 'settings'] as const,
   overview: ['admin', 'overview'] as const,
+  drafts: ['admin', 'drafts'] as const,
   people: ['admin', 'people'] as const,
   notify: ['admin', 'settings', 'notify'] as const,
   llm: ['admin', 'settings', 'llm'] as const,
 }
+
+/**
+ * 기간 안의 <b>전원</b> 업무 일지 (직원 업무일지 페이지).
+ *
+ * 같은 `GET /drafts` 를 쓰지만 관리자 토큰이라 전원이 온다 — 일반 회원은 DataScope 가
+ * 자기 것으로 좁힌다. (사용자, 날짜)당 최신 버전만 오고 최근 날짜가 먼저다.
+ */
+export const useAdminDrafts = (f: { from: string; to: string; userId?: number }) =>
+  useQuery({
+    queryKey: [...adminQk.drafts, f],
+    queryFn: () => api.get<DraftSummary[]>(`/drafts${qs({ ...f })}`),
+  })
+
+/** 일지 한 건의 본문. 목록에는 본문이 없어 고른 뒤에 따로 부른다. */
+export const useAdminDraft = (id: number | undefined) =>
+  useQuery({
+    queryKey: [...adminQk.drafts, 'one', id],
+    queryFn: () => api.get<Draft>(`/drafts/${id}`),
+    enabled: id !== undefined,
+  })
 
 export const useAdminOverview = () =>
   useQuery({ queryKey: adminQk.overview, queryFn: () => api.get<AdminOverview>('/admin/overview') })
