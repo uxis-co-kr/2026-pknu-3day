@@ -105,9 +105,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "worklog.setApiKey",
+          "command": "worklog.setServerUrl",
           "when": "view == worklog.session",
           "group": "navigation@3"
+        },
+        {
+          "command": "worklog.setApiKey",
+          "when": "view == worklog.session",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [

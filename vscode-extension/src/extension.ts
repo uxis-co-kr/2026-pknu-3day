@@ -713,6 +713,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('worklog.intervalMinutes')) restartTimer()
+      // 사이드바 첫 줄이 지금 부르는 주소를 보여 준다. 바꾼 즉시 그 줄도 따라가야 한다.
+      if (e.affectsConfiguration('worklog.serverUrl')) void tree.refresh()
     }),
   )
 

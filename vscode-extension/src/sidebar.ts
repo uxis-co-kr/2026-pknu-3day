@@ -77,7 +77,10 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   private roots(): Node[] {
-    const nodes: Node[] = [leaf(statusLabel(this.status), statusIcon(this.status))]
+    const nodes: Node[] = [
+      leaf(statusLabel(this.status), statusIcon(this.status)),
+      serverNode(this.status),
+    ]
 
     if (this.payloads.length === 0) {
       nodes.push(leaf('수집된 저장소 없음', 'info', '워크스페이스가 git 저장소가 아니거나 origin 이 없습니다'))
@@ -212,6 +215,34 @@ function daysBefore(iso: string, days: number): string {
   const t = new Date(y, m - 1, d - days)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`
+}
+
+/**
+ * 지금 부르고 있는 서버 주소. 누르면 그 자리에서 바꾼다.
+ *
+ * <p>서버는 한 대만 띄우고 여럿이 붙는 것이 이 도구의 쓰임인데 기본값은 `localhost` — 자기
+ * PC 다 (BACKLOG2 §2-1). 남의 PC 에서 열면 아무 말 없이 자기 컴퓨터를 부르고, 자기 백엔드를
+ * 띄워 두었다면 작업 기록이 그쪽 DB 로 들어가 갈린다. 무엇을 부르고 있는지 늘 보이게 둔다.
+ *
+ * <p>전송이 실패한 뒤에는 아이콘을 바꿔 둔다 — 실패의 첫 번째 용의자가 이 주소다.
+ */
+function serverNode(status: Status): Node {
+  const url = currentServerUrl()
+  const node = leaf(
+    `서버 ${url.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`,
+    status.kind === 'failed' ? 'warning' : 'server',
+    `작업 기록을 이 주소로 보냅니다 — ${url}\n`
+      + '서버를 띄운 PC 가 따로 있으면 그 주소로 바꿉니다. 예) http://192.168.0.224:8080',
+    '눌러서 변경',
+  )
+  node.item.command = { command: 'worklog.setServerUrl', title: 'WorkLog: 서버 주소 설정' }
+  return node
+}
+
+/** extension.ts 의 readConfig 와 같은 값. 설정을 그때그때 읽어 바꾼 즉시 반영한다. */
+function currentServerUrl(): string {
+  const url = vscode.workspace.getConfiguration('worklog').get<string>('serverUrl', '').trim()
+  return url || 'http://localhost:8080'
 }
 
 export type Status =
