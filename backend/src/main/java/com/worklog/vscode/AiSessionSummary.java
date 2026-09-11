@@ -26,7 +26,15 @@ public record AiSessionSummary(
          * 들고 있으면 어느 쪽이 옳은지 알 수 없다. 옛 확장을 쓰는 사람의 대화를 조용히
          * 버리지 않으려고 입력으로만 받아 준다.
          */
-        List<String> prompts) {
+        List<String> prompts,
+        /**
+         * 이 대화가 무엇이었는지 LLM 이 적은 두어 문장.
+         *
+         * <p>확장은 보내지 않는다. 서버가 채우고, 다음 전송에서 같은 대화가 다시 오면
+         * {@code VscodeSessionService} 가 물려준다 — 대화가 길어지지 않았는데 다시 요약할
+         * 이유가 없다.
+         */
+        String summary) {
 
     /** 제목을 첫 질문에서 만들 때의 길이. 확장의 MAX_TITLE_LEN 과 같다. */
     private static final int TITLE_LEN = 40;

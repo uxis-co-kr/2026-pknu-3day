@@ -8,7 +8,10 @@ import com.worklog.github.RepoRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,7 +57,8 @@ public class VscodeSessionService {
         session.setUncommittedFiles(orEmpty(request.uncommittedFiles()));
         session.setTodos(orEmpty(request.todos()));
         session.setEditTimeline(orEmpty(request.editTimeline()));
-        session.setAiSessions(orEmpty(request.aiSessions()));
+        // 확장은 요약을 모른다. 서버가 적어 둔 것을 물려주지 않으면 10분마다 지워진다.
+        session.setAiSessions(carryOverSummaries(session.getAiSessions(), orEmpty(request.aiSessions())));
         // null 을 그대로 둔다. 빈 배열로 바꾸면 "셀 수 없음" 이 "미푸시 없음" 으로 둔갑한다.
         session.setUnpushedCommits(request.unpushedCommits());
         session.setLastCommitAt(request.lastCommitAt());
@@ -81,6 +85,57 @@ public class VscodeSessionService {
     @Transactional(readOnly = true)
     public List<VscodeSession> findBetween(LocalDate from, LocalDate to, Long userId) {
         return sessions.findBetween(from, to, userId);
+    }
+
+    /**
+     * 새로 받은 대화 목록에 <b>이미 적어 둔 요약</b>을 옮겨 붙인다.
+     *
+     * <p>확장은 10분마다 같은 대화를 다시 보내는데 요약은 서버가 채운 값이라 보내 주지 않는다.
+     * 그대로 덮으면 애써 만든 요약이 사라지고, 다음 요약이 또 돌아 같은 대화를 하루에 수십 번
+     * 요약하게 된다.
+     *
+     * <p><b>대화가 이어졌으면 물려주지 않는다.</b> 오전에 요약한 뒤 오후 내내 이어 간 대화를
+     * 오전 요약으로 남겨 두면 그날 한 일을 잘못 적게 된다. 비워 두면 다시 요약된다.
+     *
+     * <p>질문 수뿐 아니라 <b>주고받은 내용</b>이 달라졌는지도 본다. 물어 둔 질문에 답이
+     * 뒤늦게 달리는 일이 흔한데, 그때 질문 수는 그대로라 수만 보면 답을 못 본 채로 적은
+     * 요약이 그대로 남는다.
+     */
+    static List<AiSessionSummary> carryOverSummaries(
+            List<AiSessionSummary> previous, List<AiSessionSummary> incoming) {
+        if (previous == null || previous.isEmpty()) {
+            return incoming;
+        }
+        Map<String, AiSessionSummary> before = new HashMap<>();
+        previous.forEach(p -> before.put(p.id(), p));
+
+        return incoming.stream()
+                .map(now -> {
+                    AiSessionSummary was = before.get(now.id());
+                    if (was == null
+                            || was.summary() == null
+                            || was.summary().isBlank()
+                            || now.summary() != null
+                            || continued(was, now)) {
+                        return now;
+                    }
+                    return new AiSessionSummary(
+                            now.id(),
+                            now.title(),
+                            now.firstAt(),
+                            now.lastAt(),
+                            now.promptCount(),
+                            now.turns(),
+                            null,
+                            was.summary());
+                })
+                .toList();
+    }
+
+    /** 요약을 적어 둔 뒤로 대화가 이어졌는지 — 질문이 늘었거나 오간 내용이 달라졌는지. */
+    private static boolean continued(AiSessionSummary was, AiSessionSummary now) {
+        return !Objects.equals(was.promptCount(), now.promptCount())
+                || !Objects.equals(was.turns(), now.turns());
     }
 
     /** 등록된 리포면 연결해 두고, 아니면 null 로 남긴다 (PRD 6. repo_id NULL 허용). */

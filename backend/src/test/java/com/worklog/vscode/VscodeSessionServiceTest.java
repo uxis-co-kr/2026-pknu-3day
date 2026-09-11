@@ -62,6 +62,7 @@ class VscodeSessionServiceTest {
                         List.of(
                                 new AiTurn("2026-09-09T10:00:00+09:00", "출석 중복 검증 로직 봐 줘", "같은 날 두 번 찍히면…"),
                                 new AiTurn("2026-09-09T11:00:00+09:00", "테스트도 붙여 줘", null)),
+                        null,
                         null)),
                 List.of(new UnpushedCommit(
                         "9f2c1ab", "feat: 출석 중복 검증", OffsetDateTime.parse("2026-09-09T11:30:00+09:00"))),

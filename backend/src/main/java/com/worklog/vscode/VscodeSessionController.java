@@ -25,15 +25,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class VscodeSessionController {
 
     private final VscodeSessionService service;
+    private final AiSessionSummarizer summarizer;
 
-    public VscodeSessionController(VscodeSessionService service) {
+    public VscodeSessionController(VscodeSessionService service, AiSessionSummarizer summarizer) {
         this.service = service;
+        this.summarizer = summarizer;
     }
 
     @PostMapping
     public UpsertResponse upsert(
             @AuthenticationPrincipal AuthenticatedUser principal, @RequestBody @Valid SessionRequest request) {
-        return new UpsertResponse(service.upsert(principal.id(), request).getId());
+        Long id = service.upsert(principal.id(), request).getId();
+        // 아직 요약이 없는 대화만 뒤에서 채운다. 확장의 전송을 기다리게 하지 않는다 —
+        // LLM 이 느리거나 죽어 있어도 수집은 제 시간에 끝나야 한다.
+        summarizer.summarizeMissing(id);
+        return new UpsertResponse(id);
     }
 
     /**

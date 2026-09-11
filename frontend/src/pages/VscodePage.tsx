@@ -302,6 +302,9 @@ function AiSession({ ai }: { ai: AiSessionSummary }) {
       </button>
 
       <div className="mt-1 space-y-1 pl-[18px]">
+        {/* 서버가 붙인 요약. 질문 원문보다 먼저 읽히도록 위에 둔다 — 접은 채로도 무슨
+            대화였는지 알 수 있어야 한다. 전송 직후에는 잠깐 없다. */}
+        {ai.summary && <p className="text-foreground/80">{ai.summary}</p>}
         {shown.map((t, i) => (
           <div key={`${t.at}:${i}`}>
             <p className={open ? '' : 'truncate'}>· {t.prompt}</p>

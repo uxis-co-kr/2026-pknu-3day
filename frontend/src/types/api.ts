@@ -129,6 +129,12 @@ export interface AiSessionSummary {
   /** 그날 실제로 물어본 횟수. `turns` 는 잘려도 이 값은 전부 센다 (C-1 ①). */
   promptCount: number
   turns: AiTurn[]
+  /**
+   * 이 대화가 무엇이었는지 서버가 LLM 으로 적은 두어 문장.
+   *
+   * <p>전송 직후 뒤에서 채우므로 방금 올라온 대화에는 잠깐 없다. 질문이 늘면 다시 만든다.
+   */
+  summary?: string | null
 }
 
 /** 미푸시 커밋 하나. GitHub 활동으로는 잡히지 않는다 — 원격에 없으니 API 에 안 나온다. */
