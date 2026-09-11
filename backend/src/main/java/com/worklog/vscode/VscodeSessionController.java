@@ -42,19 +42,32 @@ public class VscodeSessionController {
      * <p>기간 조회는 VSCode 내역 화면이 쓴다 — 날짜 선택기로 하루씩 넘기지 않고 달 단위로
      * 본다 (BACKLOG2 §2-3). {@code GET /drafts} 와 같은 규칙이라 부르는 쪽이 헷갈리지 않는다.
      * 기존 호출부는 {@code date} 를 그대로 쓰면 된다.
+     *
+     * <p>{@code mine=true} 는 <b>부르는 사람 자신</b>의 것만 준다. VS Code 확장이 쓴다 —
+     * 확장은 API Key 만 들고 있어 제 {@code userId} 를 모르는데, 빼고 부르면 그날 팀 전원의
+     * 기록이 내려간다.
      */
     @GetMapping
     public List<SessionResponse> list(
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) Long userId) {
+            @RequestParam(required = false) Long userId,
+            @RequestParam(defaultValue = "false") boolean mine) {
         if (date == null && (from == null || to == null)) {
             throw ApiException.badRequest("DATE_REQUIRED", "date 또는 from·to 를 함께 주어야 합니다.");
         }
+        Long owner = userId;
+        if (mine) {
+            if (principal == null) {
+                throw ApiException.forbidden("AUTH_REQUIRED", "mine=true 는 로그인이 필요합니다.");
+            }
+            owner = principal.id();
+        }
         List<VscodeSession> found = date == null
-                ? service.findBetween(from, to, userId)
-                : service.findForDay(date, userId);
+                ? service.findBetween(from, to, owner)
+                : service.findForDay(date, owner);
         return found.stream().map(SessionResponse::from).toList();
     }
 

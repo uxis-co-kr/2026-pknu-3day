@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { log } from './log'
-import type { AiSessionSummary, AiTurn } from './types'
+import type { AiSessionSummary, AiTurn, IdleAiSession } from './types'
 
 /**
  * 이 폴더에서 오간 AI 대화(Claude Code)를 읽어 요약 재료를 만든다.
@@ -61,6 +61,89 @@ export async function collectAiSessions(cwd: string, workDate: string): Promise<
   // 마지막으로 말한 세션이 앞에 오게.
   out.sort((a, b) => b.lastAt.localeCompare(a.lastAt))
   return out
+}
+
+/** 오늘 것이 아닌 대화를 사이드바에 몇 개까지 붙일지. */
+const MAX_IDLE = 8
+/** 며칠 전 것까지 보여 줄지. 그보다 오래된 대화는 지금 하는 일과 관계가 없다. */
+const IDLE_DAYS = 14
+/** 제목과 질문 하나만 찾으면 되므로 끝부분만 조금 읽는다. */
+const IDLE_TAIL_BYTES = 256 * 1024
+
+/**
+ * **오늘 질문이 없어 보내지 않는** 대화. 사이드바에만 쓴다.
+ *
+ * <p>Claude Code 사이드바는 <b>열어 둔 대화</b>를 보여 주고 여기는 <b>오늘 한 일</b>을
+ * 보여 주니, 두 목록이 어긋나 보인다. 어제 열어 둔 대화가 사이드바에는 있는데 여기에는
+ * 없으니 빠진 것처럼 읽힌다. 그래서 그런 대화도 <b>보내지 않는다고 적어</b> 함께 보인다.
+ *
+ * <p>질문이 하나도 없는 대화는 뺀다 — 빈 세션은 그날 한 일이 아니다.
+ */
+export async function collectIdleAiSessions(
+  cwd: string,
+  sent: ReadonlySet<string>,
+): Promise<IdleAiSession[]> {
+  const dir = path.join(ROOT, encodeCwd(cwd))
+  let files: string[]
+  try {
+    files = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
+  } catch {
+    return []
+  }
+
+  const cutoff = Date.now() - IDLE_DAYS * 24 * 60 * 60 * 1000
+  const out: IdleAiSession[] = []
+  for (const file of files) {
+    // 오늘 질문이 있어 이미 위에 오른 대화는 빼고 나머지를 본다. 오늘 열어만 두고 아무
+    // 것도 묻지 않은 대화가 여기 들어온다 — 사이드바에는 있는데 여기에 없던 것들이다.
+    if (sent.has(path.basename(file, '.jsonl'))) continue
+    try {
+      const found = await readIdleSession(path.join(dir, file), cutoff)
+      if (found) out.push(found)
+    } catch (e) {
+      log(`AI 세션 ${file} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  out.sort((a, b) => b.lastAt.localeCompare(a.lastAt))
+  return out.slice(0, MAX_IDLE)
+}
+
+async function readIdleSession(file: string, cutoff: number): Promise<IdleAiSession | undefined> {
+  const info = await stat(file)
+  if (info.mtime.getTime() < cutoff) return undefined
+
+  const buffer = await readFile(file)
+  const text = buffer.subarray(Math.max(0, buffer.length - IDLE_TAIL_BYTES)).toString('utf8')
+
+  let title: string | undefined
+  let asked: string | undefined
+  /** 마지막으로 물어본 시각. 파일 수정 시각은 대화가 아니어도 바뀐다(열기만 해도). */
+  let askedAt: string | undefined
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('{')) continue
+    let entry: SessionEntry
+    try {
+      entry = JSON.parse(line) as SessionEntry
+    } catch {
+      continue
+    }
+    if (entry.type === 'ai-title') {
+      title = entry.aiTitle?.trim() || title
+      continue
+    }
+    if (entry.type !== 'user' || entry.isMeta || entry.isSidechain) continue
+    const said1 = said(entry.message?.content)
+    if (!said1) continue
+    asked ??= said1
+    if (entry.timestamp) askedAt = entry.timestamp
+  }
+  // 질문이 하나도 없으면 뺀다 — 빈 세션은 그날 한 일이 아니다.
+  if (!asked) return undefined
+  return {
+    id: path.basename(file, '.jsonl'),
+    title: title ?? clip(asked, MAX_TITLE_LEN),
+    lastAt: askedAt ?? info.mtime.toISOString(),
+  }
 }
 
 async function readSession(file: string, workDate: string): Promise<AiSessionSummary | undefined> {

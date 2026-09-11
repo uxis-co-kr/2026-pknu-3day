@@ -62,6 +62,18 @@ export interface AiTurn {
   answer?: string
 }
 
+/**
+ * 오늘 질문이 없어 **보내지 않는** 대화. 사이드바 표시 전용이라 payload 에 담지 않는다.
+ *
+ * <p>Claude Code 사이드바에는 있는데 여기에는 없어 빠진 것처럼 보이던 대화들이다.
+ */
+export interface IdleAiSession {
+  id: string
+  title: string
+  /** 마지막으로 손댄 시각 (세션 파일의 수정 시각). ISO-8601 */
+  lastAt: string
+}
+
 export interface EditTimelineEntry {
   path: string
   firstSavedAt: string

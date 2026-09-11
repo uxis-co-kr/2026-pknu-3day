@@ -589,6 +589,10 @@ export function activate(context: vscode.ExtensionContext): void {
     view.onDidChangeVisibility((e) => {
       if (e.visible) void tree.refresh()
     }),
+    // "서버에 저장된 내역" 은 펼칠 때만 부른다 — 열지도 않을 것을 1분마다 받아 올 이유가 없다.
+    view.onDidExpandElement((e) => {
+      if (e.element.kind === 'history') void tree.loadHistory(readConfig())
+    }),
   )
   void tree.refresh()
 

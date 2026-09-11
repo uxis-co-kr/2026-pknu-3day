@@ -1,10 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
-import { collectAiSessions } from './aiSessions'
+import { collectAiSessions, collectIdleAiSessions } from './aiSessions'
 import * as git from './git'
 import { log } from './log'
-import type { EditTimelineEntry, SessionPayload, TodoItem, UncommittedFile } from './types'
+import type { EditTimelineEntry, IdleAiSession, SessionPayload, TodoItem, UncommittedFile } from './types'
 
 /** PRD F6-1 — diff 는 파일당 200줄까지만 보낸다. */
 const DIFF_LINE_LIMIT = 200
@@ -38,6 +38,8 @@ const STATE_KEY = 'worklog.session.v1'
 interface LocalInfo {
   cwd: string
   unpushed?: git.UnpushedCommit[]
+  /** 오늘 질문이 없어 보내지 않는 대화. 사이드바에만 보인다. */
+  idleAi: IdleAiSession[]
 }
 
 /** {@link vscode.Memento} 와 같은 모양. 테스트·미리보기에서는 주지 않는다. */
@@ -94,6 +96,11 @@ export class Collector {
   /** 아직 푸시하지 않은 커밋. 업스트림이 없으면 undefined (0 과 다르다). */
   unpushedOf(payload: SessionPayload): git.UnpushedCommit[] | undefined {
     return this.locals.get(payload)?.unpushed
+  }
+
+  /** 오늘 질문이 없어 보내지 않는 대화. 사이드바가 "보내지 않음" 으로 함께 보여 준다. */
+  idleAiOf(payload: SessionPayload): IdleAiSession[] {
+    return this.locals.get(payload)?.idleAi ?? []
   }
 
   /** 마지막 수집에서 센 미푸시 커밋 수. 셀 수 없으면 undefined. */
@@ -207,6 +214,8 @@ export class Collector {
       const todos = await this.scanTodos(cwd, changed)
       const workDate = todayKst()
       const aiSessions = await collectAiSessions(cwd, workDate)
+      // 오늘 질문이 있는 대화를 먼저 고르고, 나머지를 "보내지 않음" 으로 따로 모은다.
+      const idleAi = await collectIdleAiSessions(cwd, new Set(aiSessions.map((a) => a.id)))
       total += uncommittedFiles.length
 
       const plans = this.plans.get(cwd) ?? []
@@ -223,7 +232,7 @@ export class Collector {
         lastCommitAt,
         aiSessions,
       }
-      this.locals.set(payload, { cwd, unpushed })
+      this.locals.set(payload, { cwd, unpushed, idleAi })
       if (unpushed) unpushedTotal = (unpushedTotal ?? 0) + unpushed.length
       payloads.push(payload)
     }
