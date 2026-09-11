@@ -28,6 +28,7 @@ export const qk = {
   draftRange: (f: DraftRangeFilter) => ['drafts', 'range', f] as const,
   draft: (id: number) => ['drafts', id] as const,
   repos: ['repos'] as const,
+  knownRepos: ['repos', 'known'] as const,
   apiKeys: ['api-keys'] as const,
   notify: ['settings', 'notify'] as const,
   llm: ['settings', 'llm'] as const,
@@ -131,6 +132,15 @@ export const useDraft = (id: number | undefined) =>
   useQuery({ queryKey: qk.draft(id!), queryFn: () => api.get<Draft>(`/drafts/${id}`), enabled: id !== undefined })
 
 export const useRepos = () => useQuery({ queryKey: qk.repos, queryFn: () => api.get<Repo[]>('/repos'), ...LIVE })
+/**
+ * 팀이 등록해 둔 리포 이름 — 등록자를 가리지 않는다.
+ *
+ * <p>리포는 한 사람만 등록할 수 있어(수집이 등록자 토큰으로 돈다) 두 번째 사람은 등록할 길이
+ * 없다. 그 사람 화면에서 목록이 비어 있으면 "아직 아무것도 안 됐다" 로 읽히므로, 이미 팀이
+ * 덮어 둔 리포를 알려 준다 (BACKLOG2 §2-4).
+ */
+export const useKnownRepos = () =>
+  useQuery({ queryKey: qk.knownRepos, queryFn: () => api.get<string[]>('/repos/known') })
 export const useApiKeys = () => useQuery({ queryKey: qk.apiKeys, queryFn: () => api.get<ApiKey[]>('/me/api-keys') })
 export const useNotifySettings = () =>
   useQuery({ queryKey: qk.notify, queryFn: () => api.get<NotifySettings>('/settings/notify') })
