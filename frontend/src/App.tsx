@@ -20,6 +20,7 @@ const PeoplePage = lazy(() => import('@/pages/PeoplePage'))
 const AdminShell = lazy(() => import('@/pages/admin/AdminShell'))
 const AdminOverviewPage = lazy(() => import('@/pages/admin/AdminOverviewPage'))
 const AdminPeoplePage = lazy(() => import('@/pages/admin/AdminPeoplePage'))
+const AdminDraftsPage = lazy(() => import('@/pages/admin/AdminDraftsPage'))
 const AdminActivityPage = lazy(() => import('@/pages/admin/AdminActivityPage'))
 const AdminLlmPage = lazy(() => import('@/pages/admin/AdminLlmPage'))
 const AdminNotifyPage = lazy(() => import('@/pages/admin/AdminNotifyPage'))
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/admin" element={<AdminShell />}>
             <Route index element={<AdminOverviewPage />} />
             <Route path="people" element={<AdminPeoplePage />} />
+            <Route path="drafts" element={<AdminDraftsPage />} />
             <Route path="activity" element={<AdminActivityPage />} />
             <Route path="llm" element={<AdminLlmPage />} />
             <Route path="notify" element={<AdminNotifyPage />} />
