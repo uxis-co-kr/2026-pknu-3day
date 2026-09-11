@@ -59,6 +59,11 @@ cd backend && set -a && source .env && set +a && ./gradlew bootRun
 cd frontend && npm run dev
 ```
 
+### 세팅이 됐는지 확인
+
+[docs/SMOKE_CHECK.md](docs/SMOKE_CHECK.md) 를 따라 로그인 → 확장 전송 → 일지 생성·확정까지
+한 바퀴 돌려 본다. 10분이면 된다. 고친 것이 무엇을 깨뜨리지 않았는지 볼 때도 같은 길을 쓴다.
+
 ### 기능 켜기
 
 세팅만 하면 로그인·화면·업무 일지 작성까지 된다. GitHub 수집·AI 요약·사원 명부·Mattermost
