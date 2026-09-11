@@ -59,9 +59,11 @@ public class AdminAccountInitializer implements ApplicationRunner {
         admin.setName("관리자");
         admin.setRole(UserRole.ADMIN);
         admin.setPasswordHash(PasswordHasher.hash(adminPassword));
-        // 사원번호와 달리 관리자 비밀번호는 설정 파일에만 있어 공개 정보가 아니다.
-        // 그래서 강제 변경을 걸지 않는다 — 설정한 값으로 바로 들어간다.
-        admin.setMustChangePassword(false);
+        // 설정 파일에 적어 둔 값이면 공개 정보가 아니므로 강제 변경을 걸지 않는다 — 설정한
+        // 값으로 바로 들어간다. 다만 **기본값 그대로**면 이야기가 다르다. `admin1234` 는
+        // `.env.example` 에도 README 에도 적혀 있는, 사실상 공개된 비밀번호다. 새로 세팅한
+        // 서버가 그 상태로 사내망에 뜨면 누구나 관리자 콘솔에 들어온다 (BACKLOG2 §2-2).
+        admin.setMustChangePassword(adminPassword.equals(DEFAULT_PASSWORD));
         userRepository.save(admin);
         log.info("관리자 계정 {} 을 만들었다.", adminId);
     }
