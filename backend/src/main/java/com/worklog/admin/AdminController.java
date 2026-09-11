@@ -55,6 +55,8 @@ public class AdminController {
     private final SummaryService summaryService;
     private final MattermostBot mattermostBot;
     private final ChatBotSettingsService chatBotSettings;
+    private final com.worklog.auth.AdminAccountInitializer adminAccount;
+    private final com.worklog.chat.WorkLogAnswerService answerService;
 
     public AdminController(
             PeopleDirectoryService directoryService,
@@ -67,7 +69,11 @@ public class AdminController {
             GitHubCollector collector,
             SummaryService summaryService,
             MattermostBot mattermostBot,
-            ChatBotSettingsService chatBotSettings) {
+            ChatBotSettingsService chatBotSettings,
+            com.worklog.auth.AdminAccountInitializer adminAccount,
+            com.worklog.chat.WorkLogAnswerService answerService) {
+        this.adminAccount = adminAccount;
+        this.answerService = answerService;
         this.directoryService = directoryService;
         this.notifySettingRepository = notifySettingRepository;
         this.llmSettingService = llmSettingService;
@@ -120,6 +126,18 @@ public class AdminController {
         return mattermostBot.status();
     }
 
+    /**
+     * 대표 채널 — 사원이 [Mattermost 전송] 을 누르면 "요약되었습니다" 알림이 가는 채널 (V10.1).
+     * {@code channelId} 를 비우면 해제하고, 그때는 전역 웹훅으로 간다.
+     */
+    @PutMapping("/chat/primary-channel")
+    public java.util.Map<String, Object> setPrimaryChannel(@RequestBody PrimaryChannelRequest request) {
+        chatBotSettings.setPrimaryChannel(request.channelId(), mattermostBot.knownChannelIds());
+        return mattermostBot.status();
+    }
+
+    public record PrimaryChannelRequest(String channelId) {}
+
     /** 채널 하나를 읽을지 말지. */
     @PutMapping("/chat/channels/{channelId}")
     public java.util.Map<String, Object> setChannelWatching(
@@ -127,6 +145,23 @@ public class AdminController {
         chatBotSettings.setWatching(channelId, request.watching(), mattermostBot.knownChannelIds());
         return mattermostBot.status();
     }
+
+    /**
+     * 채널에 쓰지 않고 봇에게 바로 묻는다 — 같은 파서·같은 답이다. Mattermost 없이 시험하고,
+     * 콘솔에 입력창을 붙일 때 그대로 쓴다.
+     */
+    @PostMapping("/chat/ask")
+    public AskResponse ask(@RequestBody AskRequest request) {
+        if (request.text() == null || request.text().isBlank()) {
+            throw ApiException.badRequest("TEXT_REQUIRED", "물어볼 말을 적어 주세요.");
+        }
+        return new AskResponse(request.text(), answerService.answer(request.text()).orElse(null));
+    }
+
+    public record AskRequest(String text) {}
+
+    /** @param answer 업무 일지를 묻는 말이 아니면 null — 채널에서도 그때는 답하지 않는다 */
+    public record AskResponse(String text, String answer) {}
 
     public record ChatSettingsResponse(
             String baseUrl, String loginId, boolean passwordSet, boolean enabled, String source) {}
@@ -164,8 +199,40 @@ public class AdminController {
                 repos.stream().anyMatch(r -> r.getLastSyncStatus() != com.worklog.github.SyncStatus.OK),
                 activityRepository.count(),
                 pending,
-                failed);
+                failed,
+                adminAccount.usesDefaultPassword());
     }
+
+    /**
+     * 비밀번호를 사원번호로 되돌린다 (DAY3_plan C-3).
+     *
+     * <p>최초 비밀번호가 사원번호라 남이 먼저 들어갈 수 있다는 것은 회의가 알고 유지한 결정이다.
+     * 정책을 뒤집지 않고 <b>사고 뒤 되돌릴 수단</b>만 둔다 — 초기화하면 이전 토큰이 전부 죽고
+     * (password_changed_at), 본인이 다시 들어와 바꾼다.
+     */
+    @PostMapping("/users/{userId}/password-reset")
+    @Transactional
+    public PasswordResetResponse resetPassword(
+            @AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long userId) {
+        User user = userRepository
+                .findById(userId)
+                .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+        if (user.getLoginId() == null || user.getLoginId().isBlank()) {
+            throw ApiException.badRequest("NO_LOCAL_LOGIN", "이 계정은 GitHub 으로만 로그인합니다. 되돌릴 비밀번호가 없습니다.");
+        }
+        if (user.getRole() == com.worklog.auth.UserRole.ADMIN && !user.getId().equals(principal.id())) {
+            // 다른 관리자를 잠그는 길은 두지 않는다. 자기 것은 설정에서 바꾸면 된다.
+            throw ApiException.forbidden("CANNOT_RESET_ADMIN", "다른 관리자의 비밀번호는 초기화할 수 없습니다.");
+        }
+        user.setPasswordHash(com.worklog.auth.PasswordHasher.hash(user.getLoginId()));
+        user.setMustChangePassword(true);
+        user.setPasswordChangedAt(java.time.OffsetDateTime.now());
+        userRepository.save(user);
+        return new PasswordResetResponse(user.getId(), user.getLoginId());
+    }
+
+    /** @param loginId 초기화된 비밀번호는 이 값(사원번호)과 같다 */
+    public record PasswordResetResponse(Long userId, String loginId) {}
 
     /**
      * 등록된 리포를 한꺼번에 동기화한다 (TODO_0910 §1-2 "전체 동기화").
@@ -341,7 +408,9 @@ public class AdminController {
             boolean anyRepoSyncFailed,
             long activityCount,
             long pendingSummaryCount,
-            long failedSummaryCount) {}
+            long failedSummaryCount,
+            /** 관리자 비밀번호가 아직 기본값인가 — 콘솔이 띠를 띄운다 (BACKLOG2 §2-2) */
+            boolean defaultAdminPassword) {}
 
     public record SyncAllResponse(int repoCount, boolean full) {}
 

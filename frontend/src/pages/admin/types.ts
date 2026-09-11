@@ -22,6 +22,8 @@ export interface AdminOverview {
   pendingSummaryCount: number
   /** 3회까지 실패해 포기한 활동 */
   failedSummaryCount: number
+  /** 관리자 비밀번호가 아직 기본값(admin1234)인지. true 면 콘솔이 띠를 띄운다 (BACKLOG2 §2-2) */
+  defaultAdminPassword: boolean
 }
 
 /** 그 사람이 등록한 리포. 사원 행을 펼치면 보인다. */
@@ -105,6 +107,8 @@ export interface ChatBotChannel {
   type: 'O' | 'P' | 'D' | 'G' | string
   /** 이 채널의 글을 읽고 답하는지 (관리자가 끌 수 있다) */
   watching: boolean
+  /** 대표 채널인지 — 사원이 [Mattermost 전송] 을 누르면 알림이 가는 곳 */
+  primary: boolean
   answeredCount: number
   lastAnsweredAt: string | null
 }
@@ -124,6 +128,8 @@ export interface ChatBotStatus {
   lastError: string | null
   channels: ChatBotChannel[]
   checkedAt: string
+  /** 대표 채널 id. null 이면 전역 웹훅으로 알림이 간다 */
+  primaryChannelId: string | null
 }
 
 /** `GET /admin/chat/settings` — 저장된 연결 설정. 비밀번호는 있는지만 알려 준다. */
