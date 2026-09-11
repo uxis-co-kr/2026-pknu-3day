@@ -112,18 +112,20 @@ class VscodeSessionServiceTest {
     }
 
     @Test
-    @DisplayName("계획 메모를 안 보내오면 서버에 남은 메모를 지우지 않는다")
-    void keepsPlanNoteWhenAbsent() {
+    @DisplayName("계획을 다 지우고 보내면 서버에 남은 메모도 지운다")
+    void clearsPlanNoteWhenEmpty() {
         VscodeSession existing = new VscodeSession();
         existing.setUser(user);
         existing.setPlanNote("오후에 출석 중복 검증 로직 마무리");
         when(sessions.findByUserIdAndRemoteUrlAndBranchAndWorkDate(USER_ID, REMOTE, BRANCH, WORK_DATE))
                 .thenReturn(Optional.of(existing));
 
-        assertThat(service.upsert(USER_ID, request(null)).getPlanNote())
-                .isEqualTo("오후에 출석 중복 검증 로직 마무리");
-        assertThat(service.upsert(USER_ID, request("   ")).getPlanNote())
-                .isEqualTo("오후에 출석 중복 검증 로직 마무리");
+        // 확장은 계획을 globalState 에 두고 재시작해도 되살린다. 빈 값은 "잃어버렸다" 가
+        // 아니라 "지웠다" 는 뜻이다 (BACKLOG2_client C-2).
+        assertThat(service.upsert(USER_ID, request(null)).getPlanNote()).isNull();
+        assertThat(service.upsert(USER_ID, request("   ")).getPlanNote()).isNull();
+        assertThat(service.upsert(USER_ID, request("오전: 확장 정리")).getPlanNote())
+                .isEqualTo("오전: 확장 정리");
     }
 
     @Test
