@@ -68,6 +68,21 @@ class WorklogWriterTest {
         assertThat(request.system()).contains("## 완료한 작업");
     }
 
+    @Test
+    @DisplayName("프롬프트에 푸시 전 커밋이 커밋 메시지로 실린다 (V10)")
+    void promptCarriesUnpushedCommits() {
+        com.worklog.vscode.VscodeSession s = new com.worklog.vscode.VscodeSession();
+        s.setRemoteUrl("https://github.com/uxis-co-kr/2026-pknu-3day.git");
+        s.setBranch("feature/attendance");
+        s.setUnpushedCommits(List.of(
+                new com.worklog.vscode.UnpushedCommit("be292b4", "fix: 재생성 후 흰 화면", "2026-09-10T10:00:00+09:00")));
+
+        LlmProvider provider = mock(LlmProvider.class);
+        var request = writer(provider).request(DAY, "배태일", List.of(), List.of(s));
+
+        assertThat(request.user()).contains("커밋(푸시 전) be292b4 fix: 재생성 후 흰 화면");
+    }
+
     private static WorklogWriter writer(LlmProvider provider) {
         LlmProviderResolver resolver = mock(LlmProviderResolver.class);
         when(resolver.resolve(any())).thenReturn(provider);

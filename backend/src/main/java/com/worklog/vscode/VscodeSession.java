@@ -83,6 +83,11 @@ public class VscodeSession {
     @Column(name = "ai_sessions", nullable = false, columnDefinition = "jsonb")
     private List<AiSessionSummary> aiSessions = new ArrayList<>();
 
+    /** 커밋했지만 아직 푸시하지 않은 구간 (V10). 확장이 보낸다. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "unpushed_commits", nullable = false, columnDefinition = "jsonb")
+    private List<UnpushedCommit> unpushedCommits = new ArrayList<>();
+
     @Column(columnDefinition = "text")
     private String summary;
 

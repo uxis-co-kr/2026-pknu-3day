@@ -21,6 +21,8 @@ public record SessionResponse(
         List<EditTimelineEntry> editTimeline,
         /** 그 폴더에서 오간 AI 대화 (V9). 없으면 빈 배열. */
         List<AiSessionSummary> aiSessions,
+        /** 아직 원격에 없는 커밋 (V10). 없으면 빈 배열. */
+        List<UnpushedCommit> unpushedCommits,
         String summary,
         OffsetDateTime lastCommitAt,
         OffsetDateTime reportedAt) {
@@ -40,6 +42,7 @@ public record SessionResponse(
                 s.getPlanNote(),
                 s.getEditTimeline(),
                 s.getAiSessions(),
+                s.getUnpushedCommits(),
                 s.getSummary(),
                 s.getLastCommitAt(),
                 s.getReportedAt());

@@ -10,6 +10,7 @@ import com.worklog.llm.PromptLoader;
 import com.worklog.vscode.AiSessionSummary;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
+import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -42,6 +43,8 @@ public class WorklogWriter {
     private static final int MAX_AI_PROMPTS_PER_SESSION = 6;
     /** 전체 AI 프롬프트 상한. */
     private static final int MAX_AI_PROMPTS = 20;
+    /** 세션 하나에서 프롬프트에 넣을 미푸시 커밋 수. */
+    private static final int MAX_UNPUSHED_PER_SESSION = 15;
 
     private final LlmProviderResolver resolver;
     private final LlmSettingService settingService;
@@ -139,6 +142,13 @@ public class WorklogWriter {
         for (VscodeSession s : sessions) {
             String repo = s.getRepo() != null ? s.getRepo().getFullName() : s.getRemoteUrl();
             sb.append("- [%s] %s 브랜치\n".formatted(repo, s.getBranch()));
+            // 커밋 메시지는 사람이 이미 쓴 요약이다. 미커밋 파일 목록보다 위에 둔다 (V10).
+            List<UnpushedCommit> unpushed = s.getUnpushedCommits();
+            if (unpushed != null) {
+                for (UnpushedCommit c : unpushed.stream().limit(MAX_UNPUSHED_PER_SESSION).toList()) {
+                    sb.append("  · 커밋(푸시 전) %s %s\n".formatted(c.shortSha(), nullToEmpty(c.subject())));
+                }
+            }
             List<UncommittedFile> files = s.getUncommittedFiles();
             if (files != null) {
                 for (UncommittedFile f : files.stream().limit(20).toList()) {
@@ -172,6 +182,10 @@ public class WorklogWriter {
                 .map(p -> "- " + p)
                 .collect(Collectors.joining("\n"));
         return lines.isEmpty() ? "(없음)" : lines;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value.strip();
     }
 
     private static String planLines(List<VscodeSession> sessions) {

@@ -4,6 +4,7 @@ import com.worklog.activity.Activity;
 import com.worklog.activity.ActivityType;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
+import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.List;
@@ -58,7 +59,11 @@ public final class DraftTemplate {
         if (sessions.isEmpty()) {
             md.append("- (미커밋 작업 없음)\n");
         } else {
-            sessions.forEach(s -> md.append(inProgressLine(s)).append('\n'));
+            sessions.forEach(s -> {
+                // 커밋했지만 푸시 전인 것을 먼저 — 사람이 쓴 커밋 메시지가 파일 목록보다 낫다 (V10).
+                unpushedLines(s).forEach(line -> md.append(line).append('\n'));
+                md.append(inProgressLine(s)).append('\n');
+            });
         }
 
         md.append("\n## 계획 / TODO\n");
@@ -85,6 +90,18 @@ public final class DraftTemplate {
         }
         String label = a.getType() == ActivityType.PR_MERGED ? "머지" : "생성";
         return "- [%s] PR #%s %s: %s".formatted(repo, a.getExternalId(), label, text);
+    }
+
+    private static List<String> unpushedLines(VscodeSession s) {
+        List<UnpushedCommit> commits = s.getUnpushedCommits();
+        if (commits == null || commits.isEmpty()) {
+            return List.of();
+        }
+        String repo = s.getRepo() != null ? s.getRepo().getFullName() : s.getRemoteUrl();
+        return commits.stream()
+                .limit(10)
+                .map(c -> "- [%s] %s  (commit %s, 푸시 전)".formatted(repo, nullToEmpty(c.subject()).strip(), c.shortSha()))
+                .toList();
     }
 
     private static String inProgressLine(VscodeSession s) {

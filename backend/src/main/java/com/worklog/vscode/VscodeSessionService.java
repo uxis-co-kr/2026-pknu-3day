@@ -18,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class VscodeSessionService {
 
+    /** 미푸시 커밋 상한. 이보다 많이 안 올린 사람은 없다고 본다 — 프롬프트를 지키는 안전판이다. */
+    static final int MAX_UNPUSHED = 50;
+
     private final VscodeSessionRepository sessions;
     private final UserRepository users;
     private final RepoRepository repos;
@@ -55,6 +58,10 @@ public class VscodeSessionService {
         session.setTodos(orEmpty(request.todos()));
         session.setEditTimeline(orEmpty(request.editTimeline()));
         session.setAiSessions(orEmpty(request.aiSessions()));
+        session.setUnpushedCommits(orEmpty(request.unpushedCommits()).stream()
+                .filter(c -> c != null && c.sha() != null && !c.sha().isBlank())
+                .limit(MAX_UNPUSHED)
+                .toList());
         session.setLastCommitAt(request.lastCommitAt());
         // 계획 메모는 명령 팔레트로 한 번 적으면 그날 내내 유지되어야 한다. VS Code 를 다시 켜면
         // 확장이 메모를 잃고 null 로 보내는데, 그때 서버에 남은 메모까지 지우지는 않는다.

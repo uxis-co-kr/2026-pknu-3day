@@ -141,6 +141,20 @@ class DraftTemplateTest {
     }
 
     @Test
+    @DisplayName("커밋했지만 푸시 전인 것은 커밋 메시지로, 미커밋 파일 줄보다 먼저 (V10)")
+    void rendersUnpushedCommits() {
+        VscodeSession s = session();
+        s.setUnpushedCommits(List.of(
+                new com.worklog.vscode.UnpushedCommit("be292b4", "fix: 재생성 후 흰 화면", "2026-09-10T10:00:00+09:00")));
+        s.setUncommittedFiles(List.of(new UncommittedFile("src/api/user.ts", 2, 0, "@@")));
+
+        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
+
+        assertThat(md).contains("fix: 재생성 후 흰 화면  (commit be292b4, 푸시 전)");
+        assertThat(md.indexOf("푸시 전")).isLessThan(md.indexOf("미커밋 1개"));
+    }
+
+    @Test
     @DisplayName("계획 메모와 TODO 주석이 계획 섹션에 들어간다")
     void rendersPlansAndTodos() {
         VscodeSession s = session();

@@ -1,6 +1,7 @@
 package com.worklog.notify;
 
 import com.worklog.vscode.UncommittedFile;
+import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -30,8 +31,26 @@ public final class RemindPolicy {
 
     /** 커밋 이력이 아예 없는 세션도 방치로 본다. */
     public static boolean isStale(VscodeSession session, OffsetDateTime now) {
-        OffsetDateTime lastCommit = session.getLastCommitAt();
+        OffsetDateTime lastCommit = lastCommitAt(session);
         return lastCommit == null || lastCommit.isBefore(staleThreshold(now));
+    }
+
+    /**
+     * 마지막 커밋 시각. 확장이 준 {@code lastCommitAt} 과 미푸시 커밋(V10) 중 늦은 쪽이다 —
+     * 커밋은 했는데 푸시만 안 한 사람에게 "커밋하세요" 라고 하면 틀린 말이다.
+     */
+    public static OffsetDateTime lastCommitAt(VscodeSession session) {
+        OffsetDateTime last = session.getLastCommitAt();
+        List<UnpushedCommit> unpushed = session.getUnpushedCommits();
+        if (unpushed != null) {
+            for (UnpushedCommit c : unpushed) {
+                OffsetDateTime at = c.committedAtOrNull();
+                if (at != null && (last == null || at.isAfter(last))) {
+                    last = at;
+                }
+            }
+        }
+        return last;
     }
 
     /** 미커밋 변경 줄 수 (추가 + 삭제). */
@@ -63,8 +82,8 @@ public final class RemindPolicy {
 
     /** 마지막 커밋 이후 몇 시간이 지났는지. 커밋 이력이 없으면 세션 보고 시각을 기준으로 센다. */
     public static long hoursSinceLastCommit(VscodeSession session, OffsetDateTime now) {
-        OffsetDateTime base =
-                session.getLastCommitAt() != null ? session.getLastCommitAt() : session.getReportedAt();
+        OffsetDateTime lastCommit = lastCommitAt(session);
+        OffsetDateTime base = lastCommit != null ? lastCommit : session.getReportedAt();
         if (base == null) {
             return 0;
         }
