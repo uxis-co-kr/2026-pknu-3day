@@ -76,6 +76,18 @@ export default function DraftWorkspace({
     ? content !== draft.contentMd
     : content.trim() !== blankTemplate(workDate ?? '', displayName).trim()
 
+  /**
+   * AI 가 쓴 초안은 아직 <b>사람이 받아들인 적이 없다</b> (`userEdited === false`).
+   *
+   * <p>서버는 사람이 한 번 저장한 일지만 Mattermost 로 내보낸다 — 자동 생성 그대로를 채널에
+   * 흘리지 않기 위해서다 (V6). 그런데 저장 버튼을 "고친 데가 있을 때" 로만 열어 두면, AI 생성
+   * 직후에는 저장도 전송도 잠긴다. 고칠 데가 없는 초안은 아무 글자나 쳤다 지워야 풀렸다.
+   *
+   * <p>그래서 아직 받아들이지 않은 초안은 <b>고친 데가 없어도 한 번은 저장할 수 있다.</b>
+   * 그 저장이 곧 "이대로 쓰겠다" 는 표시다.
+   */
+  const needsAccept = Boolean(draft && !draft.userEdited)
+
   /** 일지가 없으면 저장할 때 만든다 — 열어만 보고 나간 날에 빈 일지가 쌓이지 않게. */
   async function saveContent() {
     const id = draft?.id ?? (await createBlank.mutateAsync(workDate ?? '')).id
@@ -222,16 +234,20 @@ export default function DraftWorkspace({
           <div className="flex items-center gap-2">
             <Button
               size="sm" className="h-[34px]"
-              disabled={!dirty || busy}
+              disabled={(!dirty && !needsAccept) || busy}
+              title={!dirty && needsAccept
+                ? 'AI 가 쓴 그대로 저장합니다. 저장해야 Mattermost 로 보낼 수 있습니다'
+                : undefined}
               onClick={() => void run(saveContent, '저장했습니다')}
             >
-              저장
+              {/* 고친 데가 없는데 눌리는 이유를 글자로 말해 준다 — "저장" 만 있으면 고장으로 보인다. */}
+              {!dirty && needsAccept ? '이대로 저장' : '저장'}
             </Button>
             <Button
               variant="outline" size="sm" className="h-[34px]"
               disabled={busy || !draft?.userEdited || dirty}
               title={
-                !draft?.userEdited ? '한 번 저장한 뒤에 보낼 수 있습니다'
+                !draft?.userEdited ? '왼쪽 저장을 누른 뒤에 보낼 수 있습니다'
                   : dirty ? '먼저 저장해 주세요' : undefined
               }
               onClick={() => draft && void run(() => notify.mutateAsync({ id: draft.id }), 'Mattermost로 보냈습니다')}
