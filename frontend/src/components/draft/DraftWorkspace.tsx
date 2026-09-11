@@ -4,6 +4,9 @@ import EvidencePanel from '@/components/draft/EvidencePanel'
 import MarkdownPreview from '@/components/draft/MarkdownPreview'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -57,6 +60,8 @@ export default function DraftWorkspace({
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [content, setContent] = useState('')
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null)
+  // 담당자 2 (9/11): Mattermost 전송은 관리자에게 "요약이 끝났다" 고 알리는 것이라, 누르기 전에 한 번 묻는다.
+  const [confirmNotify, setConfirmNotify] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -250,7 +255,7 @@ export default function DraftWorkspace({
                 !draft?.userEdited ? '왼쪽 저장을 누른 뒤에 보낼 수 있습니다'
                   : dirty ? '먼저 저장해 주세요' : undefined
               }
-              onClick={() => draft && void run(() => notify.mutateAsync({ id: draft.id }), 'Mattermost로 보냈습니다')}
+              onClick={() => setConfirmNotify(true)}
             >
               Mattermost 전송
             </Button>
@@ -258,7 +263,39 @@ export default function DraftWorkspace({
         </div>
       </Card>
 
+      <Dialog open={confirmNotify} onOpenChange={setConfirmNotify}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-base">관리자에게 알리기</DialogTitle>
+            <DialogDescription>
+              관리자에게 업무 일지 요약이 완료되었음을 알리시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-[13px] text-muted-foreground">
+            관리자가 요약본을 받도록 정해 둔 채팅방에 &quot;{displayName}의 {workDate === today() ? '오늘' : workDate}
+            {' '}업무일지가 요약되었습니다&quot; 라는 알림이 갑니다. 일지 본문은 보내지 않습니다.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setConfirmNotify(false)}>취소</Button>
+            <Button
+              size="sm" disabled={busy}
+              onClick={() => {
+                setConfirmNotify(false)
+                if (draft) void run(() => notify.mutateAsync({ id: draft.id }), '관리자에게 알렸습니다')
+              }}
+            >
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <EvidencePanel activities={sourceActivities} sessions={sourceSessions} onJump={jumpTo} />
     </div>
   )
+}
+
+/** KST 기준 오늘 (YYYY-MM-DD). 알림 문구의 "오늘" 판단에만 쓴다. */
+function today(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }

@@ -43,6 +43,19 @@ export const useSaveGlobalNotify = () => {
   })
 }
 
+/**
+ * 비밀번호를 사원번호로 되돌린다 (DAY3_plan C-3). 되돌리면 그 사람의 이전 토큰이 전부 죽고,
+ * 다음 로그인에서 비밀번호를 바꾸게 된다. 계정을 남이 선점했을 때 되찾는 길이다.
+ */
+export const useResetPassword = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: number) =>
+      api.post<{ userId: number; loginId: string }>(`/admin/users/${userId}/password-reset`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.people }),
+  })
+}
+
 /** 사원과 계정을 잇는다. 동명이인이 있어 이름이 아니라 번호로 잇는다. */
 export const useLinkEmployee = () => {
   const qc = useQueryClient()
@@ -135,6 +148,16 @@ export const useDisconnectChatBot = () => {
       void qc.invalidateQueries({ queryKey: adminQk.chatStatus })
       void qc.invalidateQueries({ queryKey: adminQk.chatSettings })
     },
+  })
+}
+
+/** 대표 채널 — 사원이 [Mattermost 전송] 을 누르면 "요약되었습니다" 알림이 가는 채널. null 이면 해제. */
+export const useSetPrimaryChannel = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (channelId: string | null) =>
+      api.put<ChatBotStatus>('/admin/chat/primary-channel', { channelId }),
+    onSuccess: (status) => qc.setQueryData(adminQk.chatStatus, status),
   })
 }
 

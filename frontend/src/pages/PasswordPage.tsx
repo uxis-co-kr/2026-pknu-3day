@@ -33,7 +33,9 @@ export default function PasswordPage() {
     setError(null)
     if (next !== confirm) return
     try {
-      await change.mutateAsync({ currentPassword: current, newPassword: next })
+      const res = await change.mutateAsync({ currentPassword: current, newPassword: next })
+      // 담당자 2 (9/11): 이전 토큰은 방금 죽었다. 새 토큰으로 갈아 끼워야 다음 요청이 401 이 안 난다.
+      if (res?.token) auth.save(res.token)
       auth.clearMustChangePassword()
       setDone(true)
       setCurrent(''); setNext(''); setConfirm('')

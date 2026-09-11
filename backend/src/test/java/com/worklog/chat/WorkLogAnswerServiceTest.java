@@ -46,7 +46,12 @@ class WorkLogAnswerServiceTest {
         drafts = mock(DraftRepository.class);
         activities = mock(ActivityRepository.class);
         sessions = mock(VscodeSessionRepository.class);
-        service = new WorkLogAnswerService(users, people, drafts, activities, sessions, "http://front/");
+        com.worklog.llm.LlmProviderResolver resolver = mock(com.worklog.llm.LlmProviderResolver.class);
+        when(resolver.resolve(any())).thenReturn(new com.worklog.llm.MockLlmProvider());
+        com.worklog.llm.LlmSettingService llmSettings = mock(com.worklog.llm.LlmSettingService.class);
+        service = new WorkLogAnswerService(
+                users, people, drafts, activities, sessions, resolver, llmSettings,
+                new com.worklog.llm.PromptLoader(), "http://front/");
 
         ungsik = new User();
         ungsik.setId(1L);
@@ -109,6 +114,74 @@ class WorkLogAnswerServiceTest {
         assertThat(answer).contains("초안 미생성").contains("활동 1건");
         assertThat(answer).contains("로그인 405 를 고쳤다");
         org.mockito.Mockito.verify(drafts, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    @DisplayName("기간을 물으면 날짜마다 초안 또는 조립한 일지를 모아 주고, 기록 없는 날은 건너뛴다")
+    void answersRange() {
+        Draft d = new Draft();
+        d.setId(11L);
+        d.setUser(ungsik);
+        d.setWorkDate(LocalDate.of(2026, 9, 8));
+        d.setVersion(1);
+        d.setStatus(DraftStatus.CONFIRMED);
+        d.setContentMd("# 2026-09-08 업무 일지\n\n## 완료한 작업\n- [r] 관리자 콘솔 뼈대\n\n## 메모\n(직접 작성)\n");
+        when(drafts.findLatestBetween(LocalDate.of(2026, 9, 8), LocalDate.of(2026, 9, 10))).thenReturn(List.of(d));
+
+        Repo repo = new Repo();
+        repo.setFullName("uxis/worklog");
+        Activity a = new Activity();
+        a.setType(ActivityType.COMMIT);
+        a.setTitle("fix: 로그인");
+        a.setSummary("로그인 405 를 고쳤다");
+        a.setSha("abcdef1234567890");
+        a.setRepo(repo);
+        a.setOccurredAt(OffsetDateTime.parse("2026-09-10T10:00:00+09:00"));
+        when(activities.findForUserBetween(eq(1L), eq(KstDates.startOf(LocalDate.of(2026, 9, 10))), any()))
+                .thenReturn(List.of(a));
+
+        String answer = service.answer("조웅식 9월 8일~9월 10일 업무일지 요약해서 줘").orElseThrow();
+
+        assertThat(answer).startsWith("**조웅식 · 2026-09-08 ~ 2026-09-10 업무 일지** _(3일 중 2일 기록)_");
+        assertThat(answer).contains("### 2026-09-08 _(확정본)_").contains("관리자 콘솔 뼈대").contains("http://front/drafts/11");
+        assertThat(answer).contains("### 2026-09-10 _(초안 미생성 — 활동 1건)_").contains("로그인 405 를 고쳤다");
+        assertThat(answer).doesNotContain("2026-09-09");
+        // mock 프로바이더에서는 기간 요약을 얹지 않는다
+        assertThat(answer).doesNotContain("기간 요약");
+        org.mockito.Mockito.verify(drafts, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이름을 여럿 대면 문장에 나온 순서대로 한 사람씩 답하고, 같은 사람을 두 이름으로 불러도 한 번만")
+    void answersSeveralPeopleInOrder() {
+        Draft d = new Draft();
+        d.setId(9L);
+        d.setUser(ungsik);
+        d.setWorkDate(KstDates.today());
+        d.setVersion(1);
+        d.setStatus(DraftStatus.DRAFT);
+        d.setContentMd("# x\n\n## 완료한 작업\n- [r] 로그인 고침\n");
+        when(drafts.findFirstByUserIdAndWorkDateOrderByVersionDesc(eq(1L), eq(KstDates.today()))).thenReturn(Optional.of(d));
+
+        String a = service.answer("배태일 조웅식 오늘 업무일지").orElseThrow();
+        assertThat(a.indexOf("**배태일** 님은")).isLessThan(a.indexOf("**조웅식 · "));
+        assertThat(a).contains("\n\n---\n\n").contains("로그인 고침");
+
+        String b = service.answer("조웅식이랑 배태일 오늘 업무일지").orElseThrow();
+        assertThat(b.indexOf("**조웅식 · ")).isLessThan(b.indexOf("**배태일** 님은"));
+
+        // "조웅식" 과 "UngsikJo" 는 같은 사람 — 한 번만
+        String c = service.answer("조웅식 UngsikJo 오늘 업무일지").orElseThrow();
+        assertThat(c).doesNotContain("---");
+        assertThat(c.indexOf("로그인 고침")).isEqualTo(c.lastIndexOf("로그인 고침"));
+    }
+
+    @Test
+    @DisplayName("기간에 기록이 하나도 없으면 그렇게 말한다")
+    void rangeWithoutRecords() {
+        when(drafts.findLatestBetween(any(), any())).thenReturn(List.of());
+        String answer = service.answer("조웅식 이번 주 업무일지").orElseThrow();
+        assertThat(answer).contains("기록된 활동이 없습니다").contains(KstDates.today().toString());
     }
 
     @Test

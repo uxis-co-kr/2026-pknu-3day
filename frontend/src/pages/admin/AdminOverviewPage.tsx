@@ -69,6 +69,23 @@ export default function AdminOverviewPage() {
           </p>
         </div>
 
+        {data?.defaultAdminPassword && (
+          // 관리자 비밀번호가 배포 기본값 그대로다. 사원번호와 달리 설정 파일에만 있지만,
+          // 저장소가 공개라 기본값은 누구나 안다 (BACKLOG2 §2-2).
+          <div className="flex items-start gap-3 rounded border border-destructive/40 bg-destructive/5 p-3">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-destructive">관리자 비밀번호가 기본값입니다</p>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                누구나 아는 값으로 관리자 콘솔에 들어올 수 있습니다. 설정에서 바꿔 두세요.
+              </p>
+            </div>
+            <Link to="/settings" className="ml-auto shrink-0 text-[13px] text-primary hover:underline">
+              바꾸러 가기
+            </Link>
+          </div>
+        )}
+
         <div className="grid grid-cols-4 gap-3">
           {isLoading || !data ? (
             <>

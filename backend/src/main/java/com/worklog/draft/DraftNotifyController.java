@@ -47,12 +47,13 @@ public class DraftNotifyController {
             throw ApiException.conflict(
                     "DRAFT_NOT_EDITED", "한 번 저장한 뒤에 전송할 수 있습니다.");
         }
-        if (!notifyService.notifyDraftContent(draft)) {
+        // 관리자에게 "요약이 끝났다" 고 알린다 (9/11). 본문은 링크 너머에 있다.
+        if (!notifyService.notifyDraftSummarized(draft)) {
             // 설정이 없거나 전송에 실패한 경우. 화면이 "설정하세요"를 띄울 수 있게 구분해 알린다.
             throw new ApiException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "NOTIFY_FAILED",
-                    "Mattermost 전송에 실패했습니다. /settings 에서 webhook URL 을 확인해 주세요.");
+                    "관리자에게 알리지 못했습니다. 관리자 콘솔 → Mattermost 에서 대표 채널이나 웹훅 주소를 확인해 주세요.");
         }
         return ResponseEntity.ok(new NotifyResponse(true));
     }

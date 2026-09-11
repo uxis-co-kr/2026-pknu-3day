@@ -341,6 +341,11 @@ public class GitHubCollector {
         activity.setAdditions(dto.stats() == null || dto.stats().additions() == null ? 0 : dto.stats().additions());
         activity.setDeletions(dto.stats() == null || dto.stats().deletions() == null ? 0 : dto.stats().deletions());
         activity.setRawDiff(DiffTruncator.truncate(files));
+        // 화면이 파일 단위로 그릴 목록 (V11, F-2). diff 본문은 위 rawDiff 한 덩어리로 둔다.
+        activity.setFiles(files.stream()
+                .map(f -> new com.worklog.activity.ChangedFile(
+                        f.filename(), f.status(), nullToZero(f.additions()), nullToZero(f.deletions())))
+                .toList());
 
         String login = dto.authorLogin();
         activity.setExternalLogin(login);
@@ -352,5 +357,9 @@ public class GitHubCollector {
         activity.setOccurredAt(dto.occurredAt() == null ? OffsetDateTime.now() : dto.occurredAt());
         activity.setSummaryStatus(SummaryStatus.PENDING); // 요약 파이프라인은 2일차 2-7
         return activity;
+    }
+
+    private static int nullToZero(Integer value) {
+        return value == null ? 0 : value;
     }
 }

@@ -1,7 +1,10 @@
 import { Fragment, useState } from 'react'
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, KeyRound } from 'lucide-react'
+import { ApiError } from '@/api/apiClient'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { useResetPassword } from './api'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -35,6 +38,45 @@ function AccountCell({ account }: { account: AdminAccount }) {
         <Badge variant="outline" className="border-amber-300 font-normal text-amber-700">
           관리자
         </Badge>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 비밀번호를 사원번호로 되돌리는 버튼 (DAY3_plan C-3).
+ *
+ * 최초 비밀번호가 사원번호라 남이 먼저 들어갈 수 있다는 것은 회의가 알고 유지한 결정이다.
+ * 정책을 뒤집지 않고, 사고가 났을 때 되돌릴 수단만 둔다.
+ */
+function ResetPasswordButton({ account, empSeq }: { account: AdminAccount; empSeq: number }) {
+  const reset = useResetPassword()
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function onClick() {
+    if (!window.confirm(`${account.login} 의 비밀번호를 사원번호(${empSeq})로 되돌립니다.\n지금 로그인된 세션은 모두 끊깁니다. 계속할까요?`)) return
+    setMessage(null)
+    try {
+      const r = await reset.mutateAsync(account.userId)
+      setMessage({ ok: true, text: `되돌렸습니다. 이제 비밀번호는 ${r.loginId} 이고, 다음 로그인에서 바꾸게 됩니다.` })
+    } catch (e) {
+      setMessage({ ok: false, text: e instanceof ApiError ? e.message : '초기화에 실패했습니다.' })
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t px-4 py-3">
+      <Button variant="outline" size="sm" disabled={reset.isPending} onClick={() => void onClick()}>
+        <KeyRound />
+        비밀번호 초기화
+      </Button>
+      <span className="text-[12px] text-muted-foreground">
+        계정을 남이 먼저 차지했거나 비밀번호를 잊었을 때. 사원번호로 되돌리고 이전 로그인을 모두 끊습니다.
+      </span>
+      {message && (
+        <span className={message.ok ? 'text-[12px] text-emerald-700' : 'text-[12px] text-destructive'}>
+          {message.text}
+        </span>
       )}
     </div>
   )
@@ -164,7 +206,10 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={8} className="bg-muted/30 p-0">
                     {acc ? (
-                      <RepoList account={acc} />
+                      <>
+                        <RepoList account={acc} />
+                        <ResetPasswordButton account={acc} empSeq={e.empSeq} />
+                      </>
                     ) : (
                       <p className="px-4 py-3 text-[13px] text-muted-foreground">
                         이 사원은 아직 서비스에 로그인한 적이 없습니다. 로그인하면 계정이 생기고,

@@ -49,6 +49,56 @@ class WorkLogQueryParserTest {
     }
 
     @Test
+    @DisplayName("날짜 둘, 이번 주·지난 주·이번 달, 최근 N일을 기간으로 읽는다")
+    void ranges() {
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 9월 8일~9월 10일 업무일지 요약해서 줘", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 8), LocalDate.of(2026, 9, 10)));
+        assertThat(WorkLogQueryParser.rangeIn("9/8 - 9/10 배태일 일지", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 8), LocalDate.of(2026, 9, 10)));
+        assertThat(WorkLogQueryParser.rangeIn("2026-09-08부터 2026-09-10까지 조웅식 작업 내역", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 8), LocalDate.of(2026, 9, 10)));
+        // 뒤쪽은 일만 적어도, 순서를 바꿔 적어도
+        assertThat(WorkLogQueryParser.rangeIn("9월 8일 ~ 10일 조웅식 일지", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 8), LocalDate.of(2026, 9, 10)));
+        assertThat(WorkLogQueryParser.rangeIn("9/10~9/8 조웅식 일지", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 8), LocalDate.of(2026, 9, 10)));
+        // 상대 표현 (TODAY = 2026-09-10 목요일)
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 이번 주 업무일지", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 7), TODAY));
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 지난주 뭐함", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 8, 31), LocalDate.of(2026, 9, 6)));
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 이번 달 업무일지", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 1), TODAY));
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 최근 7일 업무일지", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 4), TODAY));
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 3일간 작업 내역", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 8), TODAY));
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 일주일 업무 정리", TODAY))
+                .contains(new WorkLogQueryParser.DateRange(LocalDate.of(2026, 9, 4), TODAY));
+    }
+
+    @Test
+    @DisplayName("이름이 여럿이면 나온 순서대로 전부, 겹치는 자리는 긴 이름만, 같은 이름은 한 번")
+    void manyPeople() {
+        assertThat(WorkLogQueryParser.peopleIn("배태일이랑 조웅식 이번 주 업무일지", NAMES)).containsExactly("배태일", "조웅식");
+        assertThat(WorkLogQueryParser.peopleIn("조웅식, 김민수, 배태일 어제 뭐함", NAMES)).containsExactly("조웅식", "김민수", "배태일");
+        assertThat(WorkLogQueryParser.peopleIn("김민수의 일지", NAMES)).containsExactly("김민수");
+        assertThat(WorkLogQueryParser.peopleIn("김민 그리고 김민수 일지", NAMES)).containsExactly("김민", "김민수");
+        assertThat(WorkLogQueryParser.peopleIn("오늘 업무일지 요약", NAMES)).isEmpty();
+        assertThat(WorkLogQueryParser.peopleIn(null, NAMES)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("날짜가 하나뿐이거나 같은 날 둘이면 기간이 아니다")
+    void notARange() {
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 9월 9일 업무일지", TODAY)).isEmpty();
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 어제 업무일지", TODAY)).isEmpty();
+        assertThat(WorkLogQueryParser.rangeIn("9/9~9/9 조웅식 일지", TODAY)).isEmpty();
+        assertThat(WorkLogQueryParser.rangeIn("조웅식 1일간 일지", TODAY)).isEmpty();
+        assertThat(WorkLogQueryParser.rangeIn(null, TODAY)).isEmpty();
+    }
+
+    @Test
     @DisplayName("조사가 붙어도 명단의 이름을 찾고, 겹치면 긴 이름을 고른다")
     void person() {
         assertThat(WorkLogQueryParser.personIn("조웅식의 오늘 업무일지", NAMES)).contains("조웅식");

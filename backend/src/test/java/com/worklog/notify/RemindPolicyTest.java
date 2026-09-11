@@ -30,6 +30,22 @@ class RemindPolicyTest {
     }
 
     @Test
+    @DisplayName("푸시 전 커밋이 최근이면 방치가 아니다 — 커밋은 했는데 푸시만 안 한 사람에게 '커밋하세요' 는 틀린 말이다 (V11)")
+    void unpushedCommitCountsAsCommit() {
+        VscodeSession s = session(null, 10);
+        assertThat(RemindPolicy.isStale(s, NOW)).isTrue();
+
+        s.setUnpushedCommits(List.of(new com.worklog.vscode.UnpushedCommit(
+                "be292b4", "fix", NOW.minusHours(1))));
+        assertThat(RemindPolicy.isStale(s, NOW)).isFalse();
+        assertThat(RemindPolicy.hoursSinceLastCommit(s, NOW)).isEqualTo(1);
+
+        // 시각이 없는 항목은 무시한다
+        s.setUnpushedCommits(List.of(new com.worklog.vscode.UnpushedCommit("x", "y", null)));
+        assertThat(RemindPolicy.isStale(s, NOW)).isTrue();
+    }
+
+    @Test
     @DisplayName("6시간 정확히 지나면 방치 — 경계는 포함이다")
     void exactlySixHoursIsStale() {
         // 5시간 59분: 아직 아니다

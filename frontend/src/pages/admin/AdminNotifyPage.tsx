@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -18,9 +19,13 @@ import {
   useGlobalNotify,
   useSaveGlobalNotify,
   useSetChannelWatching,
+  useSetPrimaryChannel,
   useTestWebhook,
 } from './api'
 import type { ChatBotChannel, ChatBotStatus } from './types'
+
+/** Select 는 빈 문자열 값을 받지 않는다 — '정하지 않음' 의 자리표시 값. */
+const NONE = '__none__'
 
 export default function AdminNotifyPage() {
   const { data, isLoading, error } = useGlobalNotify()
@@ -153,6 +158,24 @@ function ChatBotSection() {
   const connect = useConnectChatBot()
   const disconnect = useDisconnectChatBot()
   const setWatching = useSetChannelWatching()
+  const setPrimary = useSetPrimaryChannel()
+  const [primaryResult, setPrimaryResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  async function onPickPrimary(value: string) {
+    setPrimaryResult(null)
+    try {
+      const status = await setPrimary.mutateAsync(value === NONE ? null : value)
+      const picked = status.channels.find((c) => c.primary)
+      setPrimaryResult({
+        ok: true,
+        message: picked
+          ? `${channelLabel(picked)} 을(를) 대표 채널로 정했습니다. 사원이 [Mattermost 전송]을 누르면 이 채널로 알림이 갑니다.`
+          : '대표 채널을 해제했습니다. 알림은 위의 웹훅 주소로 갑니다.',
+      })
+    } catch (e) {
+      setPrimaryResult({ ok: false, message: e instanceof ApiError ? e.message : '대표 채널을 정하지 못했습니다.' })
+    }
+  }
 
   const [baseUrl, setBaseUrl] = useState('')
   const [loginId, setLoginId] = useState('')
@@ -252,6 +275,44 @@ function ChatBotSection() {
           )}
         </div>
 
+        {/* 대표 채널 — 사원이 [Mattermost 전송] 을 누르면 "요약되었습니다" 알림이 가는 곳 */}
+        <div className="space-y-2 border-t pt-4">
+          <p className="text-[13px] font-medium">대표 채널</p>
+          <p className="text-[13px] text-muted-foreground">
+            사원이 업무 일지를 저장하고 <b>Mattermost 전송</b>을 누르면
+            &quot;OOO의 오늘 업무일지가 요약되었습니다&quot; 알림이 <b>이 채널 하나</b>로 갑니다.
+            봇 계정이 들어가 있는 채널 중에서 고릅니다. 정하지 않으면 위의 웹훅 주소로 갑니다.
+          </p>
+          {!bot?.connected ? (
+            <p className="text-[13px] text-muted-foreground">봇을 먼저 연결하면 고를 수 있습니다.</p>
+          ) : (
+            <Select
+              value={bot.primaryChannelId ?? NONE}
+              onValueChange={(v) => void onPickPrimary(v)}
+              disabled={setPrimary.isPending}
+            >
+              <SelectTrigger className="h-[34px] w-full max-w-md text-[13px]">
+                <SelectValue placeholder="대표 채널을 고르세요" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>정하지 않음 — 웹훅 주소로 보냄</SelectItem>
+                {bot.channels.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {channelLabel(c)} · {channelType(c.type)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {primaryResult && (
+            <p className={primaryResult.ok
+              ? 'rounded border border-emerald-200 bg-emerald-50 p-2.5 text-[13px] text-emerald-800'
+              : 'rounded border border-destructive/30 bg-destructive/5 p-2.5 text-[13px] text-destructive'}>
+              {primaryResult.message}
+            </p>
+          )}
+        </div>
+
         {/* 채널 */}
         <div className="space-y-2 border-t pt-4">
           <div className="flex items-baseline justify-between">
@@ -284,6 +345,9 @@ function ChatBotSection() {
                       <span className="inline-flex items-center gap-2">
                         <span className={`size-2 rounded-full ${c.watching ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
                         {channelLabel(c)}
+                        {c.primary && (
+                          <span className="rounded border border-primary/40 px-1.5 text-[11px] font-normal text-primary">대표</span>
+                        )}
                       </span>
                     </TableCell>
                     <TableCell>{channelType(c.type)}</TableCell>

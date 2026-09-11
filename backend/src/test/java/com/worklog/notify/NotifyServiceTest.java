@@ -37,7 +37,7 @@ class NotifyServiceTest {
     }
 
     private NotifyService service() {
-        return new NotifyService(notifier, settingRepository, ENV_URL, "http://localhost:5173");
+        return new NotifyService(notifier, settingRepository, null, ENV_URL, "http://localhost:5173");
     }
 
     private static NotifySetting setting(String url) {
@@ -106,36 +106,63 @@ class NotifyServiceTest {
     @DisplayName("어디에도 URL 이 없으면 보내지 않는다 — 예외를 던지지 않는다")
     void doesNothingWithoutUrl() {
         NotifyService service =
-                new NotifyService(notifier, settingRepository, "", "http://localhost:5173");
+                new NotifyService(notifier, settingRepository, null, "", "http://localhost:5173");
 
-        assertThat(service.notifyDraftCreated(draft())).isFalse();
+        assertThat(service.notifyDraftSummarized(draft())).isFalse();
         verify(notifier, never()).send(any(), any());
     }
 
     @Test
-    @DisplayName("초안 생성 알림에 이름·날짜·링크와 완료 작업 3줄이 들어간다")
-    void buildsCreatedMessage() {
-        assertThat(service().notifyDraftCreated(draft())).isTrue();
+    @DisplayName("전송 버튼은 관리자 채팅방(전역 웹훅)에 '요약되었습니다' 한 줄과 링크를 보낸다 — 본문은 보내지 않는다")
+    void notifiesAdminThatSummaryIsDone() {
+        Draft draft = draft();
+
+        assertThat(service().notifyDraftSummarized(draft)).isTrue();
 
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         verify(notifier).send(eq(ENV_URL), text.capture());
-
         assertThat(text.getValue())
-                .contains("📝 배태일의 2026-09-10 업무 일지 초안이 생성되었습니다.")
+                .contains("배태일의 ")
+                .contains("2026-09-10)의 업무일지가 요약되었습니다. 확인해주시기 바랍니다.")
                 .contains("http://localhost:5173/drafts/7")
-                .contains("- [repo] 첫째 줄")
-                .contains("- [repo] 셋째 줄")
-                .doesNotContain("넷째 줄");
+                .doesNotContain("첫째 줄");
     }
 
     @Test
-    @DisplayName("전송 버튼은 초안 전체 Markdown 을 그대로 보낸다")
-    void sendsFullContent() {
+    @DisplayName("대표 채널이 있으면 봇이 그 채널에 쓰고 웹훅은 건드리지 않는다. 봇이 못 쓰면 웹훅으로")
+    void prefersPrimaryChannelOverWebhook() {
+        com.worklog.chat.MattermostBot bot = mock(com.worklog.chat.MattermostBot.class);
+        NotifyService withBot = new NotifyService(notifier, settingRepository, bot, ENV_URL, "http://localhost:5173");
         Draft draft = draft();
 
-        assertThat(service().notifyDraftContent(draft)).isTrue();
+        when(bot.postToPrimaryChannel(any(), any())).thenReturn(true);
+        assertThat(withBot.notifyDraftSummarized(draft)).isTrue();
+        verify(notifier, org.mockito.Mockito.never()).send(any(), any());
+        // 봇 경로에는 예/아니오 안내가 붙고, 초안 id 로 확인 대기를 건다
+        verify(bot).postToPrimaryChannel(
+                org.mockito.ArgumentMatchers.contains("✅"), eq(draft.getId()));
 
-        verify(notifier).send(ENV_URL, draft.getContentMd());
+        when(bot.postToPrimaryChannel(any(), any())).thenReturn(false);
+        assertThat(withBot.notifyDraftSummarized(draft)).isTrue();
+        verify(notifier).send(eq(ENV_URL), org.mockito.ArgumentMatchers.contains("업무일지가 요약되었습니다"));
+    }
+
+    @Test
+    @DisplayName("확인 안내는 링크 줄 앞에 들어가고, 이모지와 글 답을 함께 알린다")
+    void confirmQuestionBeforeLink() {
+        String s = NotifyService.withConfirmQuestion("A의 오늘 업무일지가 요약되었습니다.\n🔗 http://x/drafts/1");
+        assertThat(s).startsWith("A의 오늘 업무일지가 요약되었습니다.\n").endsWith("\n🔗 http://x/drafts/1");
+
+        assertThat(s).contains("✅").contains("❌").contains("**예**/**아니오**라고 답해도 됩니다");
+    }
+
+    @Test
+    @DisplayName("날짜 표시 — 오늘·어제는 말로, 그 밖은 날짜만")
+    void dayLabel() {
+        java.time.LocalDate today = java.time.LocalDate.of(2026, 9, 11);
+        assertThat(NotifyService.dayLabel(today, today)).isEqualTo("오늘(2026-09-11)");
+        assertThat(NotifyService.dayLabel(today.minusDays(1), today)).isEqualTo("어제(2026-09-10)");
+        assertThat(NotifyService.dayLabel(today.minusDays(2), today)).isEqualTo("2026-09-09");
     }
 
     @Test
@@ -143,14 +170,7 @@ class NotifyServiceTest {
     void survivesSendFailure() {
         when(notifier.send(any(), any())).thenReturn(false);
 
-        assertThat(service().notifyDraftCreated(draft())).isFalse();
+        assertThat(service().notifyDraftSummarized(draft())).isFalse();
     }
 
-    @Test
-    @DisplayName("완료한 작업이 없으면 미리보기는 비어 있다")
-    void emptyPreviewWhenNoWork() {
-        assertThat(NotifyService.previewOf("# 제목\n\n## 완료한 작업\n- (기록된 활동 없음)\n"))
-                .isEqualTo("- (기록된 활동 없음)");
-        assertThat(NotifyService.previewOf("# 제목만 있는 문서")).isEmpty();
-    }
 }

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.worklog.activity.Activity;
@@ -106,17 +107,8 @@ class DraftGeneratorTest {
         assertThat(draft.getContentMd()).contains("# 2026-09-10 업무 일지 — 배태일");
         assertThat(draft.getSourceActivityIds()).containsExactly(101L, 102L);
         assertThat(draft.getSourceSessionIds()).isEmpty();
-        // 생성 완료 알림 (PRD F7 이벤트 1)
-        verify(notifyService).notifyDraftCreated(draft);
-    }
-
-    @Test
-    @DisplayName("초안을 만들지 않았으면 알림도 보내지 않는다")
-    void doesNotNotifyWhenNothingGenerated() {
-        givenActivities();
-
-        assertThat(generator.generate(USER_ID, DAY)).isEmpty();
-        verify(notifyService, never()).notifyDraftCreated(any());
+        // 초안을 만든 것 자체는 알리지 않는다 (9/11). 알림은 [Mattermost 전송] 을 눌렀을 때만.
+        verifyNoInteractions(notifyService);
     }
 
     @Test

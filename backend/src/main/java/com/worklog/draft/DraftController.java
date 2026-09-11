@@ -1,6 +1,7 @@
 package com.worklog.draft;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
 import com.worklog.config.ApiException;
 import com.worklog.draft.dto.DraftDetailResponse;
 import com.worklog.draft.dto.DraftSummaryResponse;
@@ -42,6 +43,7 @@ public class DraftController {
      */
     @GetMapping
     public List<DraftSummaryResponse> list(
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -51,10 +53,12 @@ public class DraftController {
             throw ApiException.badRequest(
                     "DATE_REQUIRED", "date 또는 from·to 를 함께 주어야 합니다.");
         }
+        // MEMBER 는 자기 것만 (DataScope).
+        Long scoped = DataScope.userIdFor(principal, userId);
         if (date == null) {
-            return draftService.listBetween(from, to, userId, status);
+            return draftService.listBetween(from, to, scoped, status);
         }
-        return draftService.list(date, userId, status);
+        return draftService.list(date, scoped, status);
     }
 
     /**
@@ -68,8 +72,10 @@ public class DraftController {
     }
 
     @GetMapping("/{id}")
-    public DraftDetailResponse detail(@PathVariable Long id) {
-        return draftService.detail(id);
+    public DraftDetailResponse detail(
+            @AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        // 남의 일지는 있는지 없는지도 알리지 않는다 — 본문이 통째로 나가던 자리다.
+        return draftService.detail(id, principal);
     }
 
     @PatchMapping("/{id}")

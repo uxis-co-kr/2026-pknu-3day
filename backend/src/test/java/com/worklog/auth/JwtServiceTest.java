@@ -26,6 +26,33 @@ class JwtServiceTest {
     }
 
     @Test
+    @DisplayName("비밀번호를 바꾸면 그 전에 발급한 토큰은 죽는다 — 같은 초 안이라도 (V11)")
+    void rejectsTokensFromBeforePasswordChange() {
+        User user = user(3L, "ungsik");
+        String before = jwtService.issue(user);
+        assertThat(jwtService.verifyDetailed(before).passwordVersion()).isNull();
+
+        // 바꾼 적이 없으면 옛 토큰 그대로
+        assertThat(JwtService.matchesPasswordVersion(null, null)).isTrue();
+
+        java.time.OffsetDateTime changed = java.time.OffsetDateTime.parse("2026-09-11T10:00:00.123456+09:00");
+        user.setPasswordChangedAt(changed);
+        String after = jwtService.issue(user);
+        JwtService.Verified v = jwtService.verifyDetailed(after);
+
+        assertThat(v.issuedAt()).isNotNull();
+        assertThat(v.user().id()).isEqualTo(3L);
+        assertThat(JwtService.matchesPasswordVersion(v.passwordVersion(), changed)).isTrue();
+        // DB 에서 마이크로초로 돌아와도 같다
+        assertThat(JwtService.matchesPasswordVersion(
+                v.passwordVersion(), java.time.OffsetDateTime.parse("2026-09-11T10:00:00.123999+09:00"))).isTrue();
+        // 바꾸기 전 토큰(버전 없음)과 다른 버전은 거절
+        assertThat(JwtService.matchesPasswordVersion(
+                jwtService.verifyDetailed(before).passwordVersion(), changed)).isFalse();
+        assertThat(JwtService.matchesPasswordVersion(v.passwordVersion(), changed.plusSeconds(1))).isFalse();
+    }
+
+    @Test
     @DisplayName("발급한 토큰을 검증하면 사용자 id 와 login 이 나온다")
     void issueAndVerify() {
         String token = jwtService.issue(user(3L, "ungsik"));

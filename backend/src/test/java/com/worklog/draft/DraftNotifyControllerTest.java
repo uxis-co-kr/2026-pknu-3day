@@ -65,7 +65,7 @@ class DraftNotifyControllerTest {
     @DisplayName("저장한 적 있는 일지는 전송된다")
     void sendsConfirmedDraft() {
         Draft draft = givenDraft(true);
-        when(notifyService.notifyDraftContent(draft)).thenReturn(true);
+        when(notifyService.notifyDraftSummarized(draft)).thenReturn(true);
 
         var response = controller.notifyDraft(DRAFT_ID);
 
@@ -85,7 +85,7 @@ class DraftNotifyControllerTest {
                     assertThat(api.getStatus()).isEqualTo(HttpStatus.CONFLICT);
                     assertThat(api.getCode()).isEqualTo("DRAFT_NOT_EDITED");
                 });
-        verify(notifyService, never()).notifyDraftContent(any());
+        verify(notifyService, never()).notifyDraftSummarized(any());
     }
 
     @Test
@@ -93,7 +93,7 @@ class DraftNotifyControllerTest {
     void confirmCheckComesBeforeSendFailure() {
         givenDraft(false);
         // webhook 이 없어 전송이 실패하는 상황을 만들어도
-        when(notifyService.notifyDraftContent(any())).thenReturn(false);
+        when(notifyService.notifyDraftSummarized(any())).thenReturn(false);
 
         assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
                 .isInstanceOf(ApiException.class)
@@ -105,7 +105,7 @@ class DraftNotifyControllerTest {
     @DisplayName("저장한 일지인데 webhook 이 없으면 503")
     void reportsSendFailure() {
         Draft draft = givenDraft(true);
-        when(notifyService.notifyDraftContent(draft)).thenReturn(false);
+        when(notifyService.notifyDraftSummarized(draft)).thenReturn(false);
 
         assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
                 .isInstanceOf(ApiException.class)

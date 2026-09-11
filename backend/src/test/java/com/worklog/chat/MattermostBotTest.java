@@ -1,5 +1,6 @@
 package com.worklog.chat;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -60,13 +61,153 @@ class MattermostBotTest {
                 .thenReturn(List.of(
                         post("p1", "bot-id", "조웅식 오늘 업무일지", later), // 봇 계정 = 사람 계정인 경우
                         botPost("p2", "**조웅식 · 업무 일지** …", later + 1),
-                        post("p3", "someone", "점심 뭐 먹지", later + 2)))
+                        post("p3", "someone", "점심 뭐 먹지", later + 2),
+                        // 웹훅 알림 — "업무일지" 와 이름이 있어도 사람이 물은 것이 아니다
+                        new MmPost("p4", "hook", "ch1", "조웅식의 오늘(2026-09-11)의 업무일지가 요약되었습니다.", later + 3, "",
+                                java.util.Map.of("from_webhook", "true", "override_username", "uxis")),
+                        new MmPost("p5", "bot2", "ch1", "조웅식 오늘 업무일지", later + 4, "",
+                                java.util.Map.of("from_bot", "true"))))
                 .thenReturn(List.of(post("p1", "bot-id", "조웅식 오늘 업무일지", later))); // 경계의 글이 다시 온다
 
         bot.poll();
         bot.poll();
 
         verify(client, times(1)).createPost(BASE, "tok", "ch1", "답");
+    }
+
+    @Test
+    @DisplayName("대표 채널이 있으면 로그인된 봇이 그 채널에 쓴다. 없거나 로그인 전이면 false")
+    void postsToPrimaryChannel() {
+        assertThat(bot.postToPrimaryChannel("알림")).isFalse(); // 로그인 전
+
+        bot.poll(); // 로그인
+        assertThat(bot.postToPrimaryChannel("알림")).isFalse(); // 대표 채널 없음
+        verify(client, never()).createPost(BASE, "tok", "ch1", "알림");
+
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db", "ch1"));
+        assertThat(bot.postToPrimaryChannel("알림")).isTrue();
+        verify(client).createPost(BASE, "tok", "ch1", "알림");
+        assertThat(bot.status().get("primaryChannelId")).isEqualTo("ch1");
+    }
+
+    @Test
+    @DisplayName("알림 뒤의 '예' 에만 요약본을 보내고, '아니오' 면 취소한다. 대기가 없으면 예/아니오는 지나간다")
+    void confirmsSummaryAfterNotification() {
+        long later = System.currentTimeMillis() + 10_000;
+        when(answers.answerDraft(7L)).thenReturn(Optional.of("**조웅식 · 2026-09-11 업무 일지** …"));
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db", "ch1"));
+
+        // 대기 없음 — "예" 는 그냥 지나간다
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p0", "someone", "예", later)));
+        bot.poll();
+        verify(client, never()).createPost(eq(BASE), eq("tok"), eq("ch1"), anyString());
+
+        // 알림 → 예
+        assertThat(bot.postToPrimaryChannel("요약되었습니다. 예/아니오", 7L)).isTrue();
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p1", "someone", " 예! ", later + 1)));
+        bot.poll();
+        verify(client).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+        verify(client).createPost(BASE, "tok", "ch1", "**조웅식 · 2026-09-11 업무 일지** …");
+
+        // 대기는 한 번뿐 — 다시 "예" 해도 안 보낸다
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p2", "someone", "예", later + 2)));
+        bot.poll();
+        verify(client, times(1)).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+
+        // 알림 → 아니오
+        bot.postToPrimaryChannel("요약되었습니다. 예/아니오", 8L);
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p3", "someone", "아니요", later + 3)));
+        bot.poll();
+        verify(client).createPost(BASE, "tok", "ch1", "전송을 취소했습니다.");
+        verify(answers, never()).answerDraft(8L);
+
+        // 예/아니오가 아닌 글은 대기를 지우지 않고 보통 질문으로 본다
+        bot.postToPrimaryChannel("요약되었습니다. 예/아니오", 9L);
+        when(answers.answerDraft(9L)).thenReturn(Optional.of("9번"));
+        when(client.postsSince(eq(BASE), eq("tok"), eq("ch1"), anyLong()))
+                .thenReturn(List.of(post("p4", "someone", "조웅식 오늘 업무일지", later + 4), post("p5", "someone", "넵", later + 5)));
+        bot.poll();
+        verify(client).createPost(BASE, "tok", "ch1", "답");
+        verify(client).createPost(BASE, "tok", "ch1", "9번");
+    }
+
+    @Test
+    @DisplayName("알림을 쓰면 봇이 ✅ ❌ 를 미리 달아 둔다 — 사람은 누르기만 하면 된다")
+    void addsReactionsToNotification() {
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db", "ch1"));
+        when(client.createPost(BASE, "tok", "ch1", "알림")).thenReturn("post1");
+
+        bot.poll();
+        assertThat(bot.postToPrimaryChannel("알림", 7L)).isTrue();
+
+        verify(client).addReaction(BASE, "tok", "bot-id", "post1", MattermostBot.YES_EMOJI);
+        verify(client).addReaction(BASE, "tok", "bot-id", "post1", MattermostBot.NO_EMOJI);
+    }
+
+    @Test
+    @DisplayName("사람이 ✅ 를 누르면 요약본을, ❌ 면 취소를 보낸다 — 봇이 미리 단 반응은 답으로 세지 않는다")
+    void reactionDecidesSummary() {
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db", "ch1"));
+        when(client.createPost(eq(BASE), eq("tok"), eq("ch1"), anyString())).thenReturn("post1");
+        when(answers.answerDraft(7L)).thenReturn(Optional.of("요약본"));
+        bot.poll();
+        bot.postToPrimaryChannel("알림", 7L);
+
+        // 봇이 단 것만 있으면 아무 일도 없다
+        when(client.reactions(BASE, "tok", "post1")).thenReturn(List.of(
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.YES_EMOJI, 1),
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.NO_EMOJI, 1)));
+        bot.poll();
+        verify(client, never()).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+
+        // 다른 사람이 ✅ 를 눌렀다
+        when(client.reactions(BASE, "tok", "post1")).thenReturn(List.of(
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.YES_EMOJI, 1),
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.NO_EMOJI, 1),
+                new MattermostClient.MmReaction("manager", "post1", MattermostBot.YES_EMOJI, 2)));
+        bot.poll();
+        verify(client).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+        verify(client).createPost(BASE, "tok", "ch1", "요약본");
+
+        // 대기는 한 번뿐 — 반응이 그대로 남아 있어도 다시 보내지 않는다
+        bot.poll();
+        verify(client, times(1)).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+    }
+
+    @Test
+    @DisplayName("봇 계정이 사람 계정과 같으면 누를 때 반응이 토글로 사라진다 — 그것도 답으로 본다")
+    void toggledOffReactionCountsAsAnswer() {
+        when(settings.effective()).thenReturn(
+                new ChatBotSettingsService.Effective(BASE, "worklog-bot", "pw", true, null, "db", "ch1"));
+        when(client.createPost(eq(BASE), eq("tok"), eq("ch1"), anyString())).thenReturn("post1");
+        when(answers.answerDraft(7L)).thenReturn(Optional.of("요약본"));
+        bot.poll();
+        bot.postToPrimaryChannel("알림", 7L);
+
+        // ✅ 가 사라졌다 = 같은 계정의 사람이 눌러 토글했다
+        when(client.reactions(BASE, "tok", "post1")).thenReturn(List.of(
+                new MattermostClient.MmReaction("bot-id", "post1", MattermostBot.NO_EMOJI, 1)));
+        bot.poll();
+
+        verify(client).createPost(BASE, "tok", "ch1", "요약본을 전송합니다.");
+        verify(client).createPost(BASE, "tok", "ch1", "요약본");
+    }
+
+    @Test
+    @DisplayName("예/아니오 정규화 — 앞뒤 공백·문장부호·대소문자를 무시한다")
+    void normalizesReply() {
+        assertThat(MattermostBot.normalizeReply(" 예! ")).isEqualTo("예");
+        assertThat(MattermostBot.normalizeReply("Yes.")).isEqualTo("yes");
+        assertThat(MattermostBot.normalizeReply("아니요~")).isEqualTo("아니요");
+        assertThat(MattermostBot.normalizeReply(null)).isEqualTo("");
     }
 
     @Test

@@ -88,7 +88,8 @@ public class EmployeeAccountService {
             user.setLoginId(loginId);
             user.setPasswordHash(PasswordHasher.hash(password));
             user.setMustChangePassword(true);
-            log.info("사원 {} 에 이어져 있던 계정 {} 에 로그인 수단을 붙였다.", loginId, user.getLogin());
+            // 사고 났을 때 언제 누가 처음 들어왔는지 볼 최소한의 흔적 (BACKLOG2 §2-2 최초 비밀번호).
+            log.info("사원 {} 최초 로그인 — 이어져 있던 계정 {} 에 로그인 수단을 붙였다.", loginId, user.getLogin());
             return Optional.of(userRepository.save(user));
         }
 

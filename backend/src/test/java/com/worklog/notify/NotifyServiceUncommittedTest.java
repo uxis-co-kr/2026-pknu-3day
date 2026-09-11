@@ -42,7 +42,7 @@ class NotifyServiceUncommittedTest {
         settingRepository = mock(NotifySettingRepository.class);
         when(settingRepository.findByUserId(anyLong())).thenReturn(Optional.empty());
         when(settingRepository.findGlobal()).thenReturn(Optional.empty());
-        service = new NotifyService(notifier, settingRepository, WEBHOOK, "http://localhost:5173");
+        service = new NotifyService(notifier, settingRepository, null, WEBHOOK, "http://localhost:5173");
     }
 
     private static VscodeSession session(int fileCount, OffsetDateTime lastCommitAt) {

@@ -73,6 +73,10 @@ public class User {
     @Column(name = "emp_seq")
     private Long empSeq;
 
+    /** 비밀번호를 마지막으로 바꾼 시각 (V11). 이보다 먼저 발급된 JWT 는 거절한다. */
+    @Column(name = "password_changed_at")
+    private OffsetDateTime passwordChangedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

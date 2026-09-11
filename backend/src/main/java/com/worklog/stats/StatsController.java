@@ -1,5 +1,9 @@
 package com.worklog.stats;
 
+import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import com.worklog.config.KstDates;
 import com.worklog.stats.dto.DailyStatsResponse;
 import com.worklog.stats.dto.PeopleStatsResponse;
@@ -25,11 +29,17 @@ public class StatsController {
         this.peopleStatsService = peopleStatsService;
     }
 
+    /**
+     * 그날 요약. {@code userId} 를 주면 그 사람 것만 — MEMBER 는 생략해도 자기 것만이다 (DataScope).
+     * 담당자 1 이 "팀 전원 숫자가 실려 온다" 고 한 자리다 (BACKLOG2 §1).
+     */
     @GetMapping("/daily")
     public DailyStatsResponse daily(
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-                    LocalDate date) {
-        return statsService.daily(date == null ? KstDates.today() : date);
+                    LocalDate date,
+            @RequestParam(required = false) Long userId) {
+        return statsService.daily(date == null ? KstDates.today() : date, DataScope.userIdFor(principal, userId));
     }
 
     /**
@@ -39,12 +49,14 @@ public class StatsController {
      */
     @GetMapping("/people")
     public PeopleStatsResponse people(
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to,
             @RequestParam(defaultValue = "day") String granularity,
             @RequestParam(required = false) Long userId) {
-        return peopleStatsService.people(from, to, Granularity.from(granularity), userId);
+        return peopleStatsService.people(
+                from, to, Granularity.from(granularity), DataScope.userIdFor(principal, userId));
     }
 }

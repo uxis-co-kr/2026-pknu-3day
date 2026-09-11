@@ -19,9 +19,14 @@ public class AdminAccountInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AdminAccountInitializer.class);
 
+    /** 배포 뒤 바꾸지 않았는지 볼 기준. 설정에 다른 값을 넣었으면 그 값과 견준다. */
+    static final String DEFAULT_PASSWORD = "admin1234";
+
     private final UserRepository userRepository;
     private final String adminId;
     private final String adminPassword;
+    /** 해시 문자열 → 기본값인지. bcrypt 비교는 느려서 같은 해시를 두 번 재지 않는다. */
+    private final java.util.Map<String, Boolean> defaultCheckCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public AdminAccountInitializer(
             UserRepository userRepository,
@@ -41,7 +46,13 @@ public class AdminAccountInitializer implements ApplicationRunner {
         }
         if (userRepository.findByLoginId(adminId).isPresent()) {
             log.info("관리자 계정 {} 이 이미 있다.", adminId);
+            if (usesDefaultPassword()) {
+                log.warn("관리자 계정 {} 의 비밀번호가 기본값이다. 콘솔에서 바꿔 두어야 한다.", adminId);
+            }
             return;
+        }
+        if (adminPassword.equals(DEFAULT_PASSWORD)) {
+            log.warn("관리자 계정 {} 을 기본 비밀번호로 만든다. 콘솔에서 바꿔 두어야 한다.", adminId);
         }
         User admin = new User();
         admin.setLoginId(adminId);
@@ -53,5 +64,23 @@ public class AdminAccountInitializer implements ApplicationRunner {
         admin.setMustChangePassword(false);
         userRepository.save(admin);
         log.info("관리자 계정 {} 을 만들었다.", adminId);
+    }
+
+    /**
+     * 관리자 계정이 아직 기본 비밀번호({@code admin1234} 또는 설정의 초기값)를 쓰는가 (BACKLOG2 §2-2).
+     * 콘솔 개요가 띠를 띄우는 데 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public boolean usesDefaultPassword() {
+        if (adminId.isEmpty()) {
+            return false;
+        }
+        return userRepository.findByLoginId(adminId)
+                .map(User::getPasswordHash)
+                .filter(hash -> hash != null && !hash.isBlank())
+                .map(hash -> defaultCheckCache.computeIfAbsent(hash, h ->
+                        PasswordHasher.matches(DEFAULT_PASSWORD, h)
+                                || (!adminPassword.isEmpty() && PasswordHasher.matches(adminPassword, h))))
+                .orElse(false);
     }
 }

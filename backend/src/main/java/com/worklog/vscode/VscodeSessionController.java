@@ -1,6 +1,7 @@
 package com.worklog.vscode;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
 import com.worklog.config.ApiException;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -64,13 +65,11 @@ public class VscodeSessionController {
         if (date == null && (from == null || to == null)) {
             throw ApiException.badRequest("DATE_REQUIRED", "date 또는 from·to 를 함께 주어야 합니다.");
         }
-        Long owner = userId;
-        if (mine) {
-            if (principal == null) {
-                throw ApiException.forbidden("AUTH_REQUIRED", "mine=true 는 로그인이 필요합니다.");
-            }
-            owner = principal.id();
-        }
+        // mine=true 는 "내 것만" 을 명시하는 지름길이다 (담당자 1). 범위 판단 자체는 DataScope
+        // 한 곳에 맡긴다 — MEMBER 는 어차피 자기 것으로 좁혀지고, 미커밋 diff 본문이
+        // 통째로 나가던 자리라 서버에서 막아야 한다.
+        Long requested = mine ? (principal == null ? null : principal.id()) : userId;
+        Long owner = DataScope.userIdFor(principal, requested);
         List<VscodeSession> found = date == null
                 ? service.findBetween(from, to, owner)
                 : service.findForDay(date, owner);

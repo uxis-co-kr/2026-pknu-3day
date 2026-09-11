@@ -52,8 +52,9 @@ export const useLogin = () =>
 export const useChangePassword = () => {
   const qc = useQueryClient()
   return useMutation({
+    // 담당자 2 (9/11): 변경 뒤 서버가 새 토큰을 준다 — 이전 토큰은 그 순간 죽는다 (V10 password_changed_at).
     mutationFn: (req: { currentPassword: string; newPassword: string }) =>
-      api.post<null>('/me/password', req),
+      api.post<{ changed: boolean; token?: string } | null>('/me/password', req),
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.me }),
   })
 }
