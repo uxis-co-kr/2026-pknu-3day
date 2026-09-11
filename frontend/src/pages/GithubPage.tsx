@@ -69,70 +69,71 @@ export default function GithubPage() {
 
 
   return (
-    // 날짜 사이드바를 오른쪽에 붙인다. 본문은 남는 폭을 다 쓰되 min-w-0 로 두어야
-    // 안쪽 표가 넘칠 때 사이드바를 밀지 않는다.
-    <div className="flex items-start gap-4">
-      <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex items-center gap-3">
-          <DayFilters
-            repos={repos.data ?? []}
-            repoFilter={repoFilter}
-            onRepo={(v) => { setRepoFilter(v); setPage(0) }}
-          />
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          {activities.isLoading ? (
-            TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
-          ) : (
-            <>
-              <SummaryCard label="커밋" value={myStat.commits} />
-              <SummaryCard label="열린 PR" value={myStat.prs} />
-              <SummaryCard label="머지된 PR" value={myStat.merges} />
-            </>
-          )}
-        </div>
-
-        <div className="flex h-[34px] w-fit overflow-hidden rounded-md border">
-          {TYPE_TABS.map((t, i) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => {
-                setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
-                setPage(0)
-              }}
-              className={cn(
-                'px-3 text-[13px] transition-colors',
-                i > 0 && 'border-l',
-                types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        <Card className="overflow-hidden rounded-lg shadow-none">
-          {activities.isLoading ? (
-            <div className="space-y-2 p-4"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
-          ) : shown.length === 0 ? (
-            <EmptyHint hasAny={mine.length > 0} />
-          ) : (
-            <>
-              {rows.map((a) => <ActivityDetailRow key={a.id} activity={a} />)}
-              <Pagination
-                page={current}
-                pageCount={pageCount}
-                total={shown.length}
-                onChange={setPage}
-              />
-            </>
-          )}
-        </Card>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <DayFilters
+          repos={repos.data ?? []}
+          repoFilter={repoFilter}
+          onRepo={(v) => { setRepoFilter(v); setPage(0) }}
+        />
       </div>
 
-      <DateSidebar />
+      {/* 달력은 요약 박스와 같은 줄에서 시작한다. 필터 줄은 위에 통째로 둔다. */}
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {activities.isLoading ? (
+              TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
+            ) : (
+              <>
+                <SummaryCard label="커밋" value={myStat.commits} />
+                <SummaryCard label="열린 PR" value={myStat.prs} />
+                <SummaryCard label="머지된 PR" value={myStat.merges} />
+              </>
+            )}
+          </div>
+
+          <div className="flex h-[34px] w-fit overflow-hidden rounded-md border">
+            {TYPE_TABS.map((t, i) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => {
+                  setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
+                  setPage(0)
+                }}
+                className={cn(
+                  'px-3 text-[13px] transition-colors',
+                  i > 0 && 'border-l',
+                  types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <Card className="overflow-hidden rounded-lg shadow-none">
+            {activities.isLoading ? (
+              <div className="space-y-2 p-4"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+            ) : shown.length === 0 ? (
+              <EmptyHint hasAny={mine.length > 0} />
+            ) : (
+              <>
+                {rows.map((a) => <ActivityDetailRow key={a.id} activity={a} />)}
+                <Pagination
+                  page={current}
+                  pageCount={pageCount}
+                  total={shown.length}
+                  onChange={setPage}
+                />
+              </>
+            )}
+          </Card>
+        </div>
+
+        <DateSidebar />
+      </div>
     </div>
   )
 }

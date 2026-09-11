@@ -48,45 +48,46 @@ export default function VscodePage() {
   const aiSessions = new Set(shown.flatMap((x) => (x.aiSessions ?? []).map((a) => a.id))).size
 
   return (
-    // 날짜 사이드바를 오른쪽에 붙인다. 본문은 남는 폭을 다 쓰되 min-w-0 로 두어야
-    // 안쪽 표가 넘칠 때 사이드바를 밀지 않는다.
-    <div className="flex items-start gap-4">
-      <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex items-center gap-3">
-          <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          {sessions.isLoading ? (
-            [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
-          ) : (
-            <>
-              {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
-              <SummaryCard label="저장소" value={shown.length} />
-              <SummaryCard label="미커밋 파일" value={files} />
-              <SummaryCard label="AI 대화 세션" value={aiSessions} />
-            </>
-          )}
-        </div>
-
-        <Card className="overflow-hidden rounded-lg shadow-none">
-          {shown.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <p className="text-[13px] text-muted-foreground">이 날짜에는 VS Code 에서 보낸 작업이 없습니다.</p>
-              <p className="mx-auto mt-2 max-w-[420px] text-[12px] leading-relaxed text-muted-foreground/70">
-                VS Code 에서 <strong>WorkLog: 지금 전송</strong> 을 누르거나, 확장 사이드바의 전송 버튼을 쓰면
-                여기에 나타납니다.
-              </p>
-            </div>
-          ) : (
-            shown.map((session) => <SessionDetail key={session.id} session={session} />)
-          )}
-        </Card>
-
-        <MonthList selectedDate={date} userId={me?.id} />
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
       </div>
 
-      <DateSidebar />
+      {/* 달력은 요약 박스와 같은 줄에서 시작한다. 필터 줄은 위에 통째로 둔다. */}
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {sessions.isLoading ? (
+              [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
+            ) : (
+              <>
+                {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
+                <SummaryCard label="저장소" value={shown.length} />
+                <SummaryCard label="미커밋 파일" value={files} />
+                <SummaryCard label="AI 대화 세션" value={aiSessions} />
+              </>
+            )}
+          </div>
+
+          <Card className="overflow-hidden rounded-lg shadow-none">
+            {shown.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <p className="text-[13px] text-muted-foreground">이 날짜에는 VS Code 에서 보낸 작업이 없습니다.</p>
+                <p className="mx-auto mt-2 max-w-[420px] text-[12px] leading-relaxed text-muted-foreground/70">
+                  VS Code 에서 <strong>WorkLog: 지금 전송</strong> 을 누르거나, 확장 사이드바의 전송 버튼을 쓰면
+                  여기에 나타납니다.
+                </p>
+              </div>
+            ) : (
+              shown.map((session) => <SessionDetail key={session.id} session={session} />)
+            )}
+          </Card>
+
+          <MonthList selectedDate={date} userId={me?.id} />
+        </div>
+
+        <DateSidebar />
+      </div>
     </div>
   )
 }

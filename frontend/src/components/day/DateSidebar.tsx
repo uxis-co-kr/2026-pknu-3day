@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useSelectedDate } from '@/hooks/useSelectedDate'
@@ -9,16 +9,6 @@ import {
 import { cn } from '@/lib/utils'
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const
-const OPEN_KEY = 'worklog.dateSidebar.open'
-
-/** 브라우저가 막아 둔 환경(사생활 보호 창 등)에서도 화면은 떠야 한다. */
-function readOpen(): boolean {
-  try {
-    return localStorage.getItem(OPEN_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
 
 /**
  * 오른쪽 날짜 사이드바 — 깃허브 내역과 VSCode 내역이 함께 쓴다.
@@ -26,46 +16,19 @@ function readOpen(): boolean {
  * <p>날짜 이동은 `← 9월 11일 →` 하루씩뿐이었다. 지난주 화요일을 보려면 다섯 번 눌러야 하고,
  * 지금 보는 날이 무슨 요일인지도 알 수 없었다. 달력을 붙여 한 번에 고르게 한다.
  *
- * <p>접을 수 있게 둔다 — 목록을 넓게 보고 싶을 때가 있고, 날짜를 자주 바꾸지 않는 사람에게는
- * 늘 펼쳐져 있을 이유가 없다. 접었는지는 브라우저에 기억시킨다.
+ * <p>옆의 요약 박스와 윗줄을 맞춘다 — 필터 줄은 본문 위에 통째로 두고, 그 아래에서 본문과
+ * 나란히 시작한다. 여백을 숫자로 맞추면 필터 줄 높이가 바뀔 때마다 어긋난다.
  */
 export default function DateSidebar() {
   const { date, setDate } = useSelectedDate()
-  const [open, setOpen] = useState(readOpen)
   // 보고 있는 달. 날짜를 고르면 그 달로 따라가고, 화살표로만 달을 넘길 수도 있다.
   const [month, setMonth] = useState(date)
 
   const today = todayKst()
 
-  function toggle() {
-    setOpen((prev) => {
-      try {
-        localStorage.setItem(OPEN_KEY, prev ? '0' : '1')
-      } catch {
-        // 기억하지 못할 뿐이다. 화면은 그대로 동작한다.
-      }
-      return !prev
-    })
-  }
-
   function pick(next: string) {
     setDate(next)
     setMonth(next)
-  }
-
-  if (!open) {
-    return (
-      <div className="shrink-0">
-        <Button
-          variant="outline" size="icon" className="size-[34px]"
-          onClick={toggle}
-          aria-label="날짜 사이드바 펼치기"
-          title={`날짜 선택 — 지금 ${date}`}
-        >
-          <PanelRightOpen />
-        </Button>
-      </div>
-    )
   }
 
   const first = startOfMonth(month)
@@ -79,18 +42,10 @@ export default function DateSidebar() {
 
   return (
     <Card className="h-fit w-[236px] shrink-0 rounded-lg p-3 shadow-none">
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-1.5 text-[13px] font-medium">
-          <CalendarDays className="size-3.5 text-muted-foreground" />
-          날짜
-        </p>
-        <Button
-          variant="ghost" size="icon" className="size-7 text-muted-foreground"
-          onClick={toggle} aria-label="날짜 사이드바 접기"
-        >
-          <PanelRightClose />
-        </Button>
-      </div>
+      <p className="flex items-center gap-1.5 text-[13px] font-medium">
+        <CalendarDays className="size-3.5 text-muted-foreground" />
+        날짜
+      </p>
 
       <div className="mt-2 flex items-center justify-between">
         <Button
