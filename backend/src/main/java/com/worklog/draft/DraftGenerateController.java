@@ -1,6 +1,7 @@
 package com.worklog.draft;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
 import com.worklog.config.ApiException;
 import com.worklog.config.KstDates;
 import java.time.LocalDate;
@@ -44,7 +45,7 @@ public class DraftGenerateController {
     public ResponseEntity<GenerateResponse> generateWeekly(
             @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestBody PeriodRequest request) {
-        Long userId = request.userId() == null ? principal.id() : request.userId();
+        Long userId = targetUser(principal, request.userId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(GenerateResponse.from(periodGenerator.weekly(userId, request.week())));
     }
@@ -60,7 +61,7 @@ public class DraftGenerateController {
     public ResponseEntity<GenerateResponse> generateRepo(
             @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestBody PeriodRequest request) {
-        Long userId = request.userId() == null ? principal.id() : request.userId();
+        Long userId = targetUser(principal, request.userId());
         if (request.repoId() == null) {
             throw ApiException.badRequest("REPO_REQUIRED", "저장소를 골라 주세요.");
         }
@@ -90,12 +91,26 @@ public class DraftGenerateController {
             @RequestBody(required = false) GenerateRequest request) {
 
         LocalDate date = request == null || request.date() == null ? KstDates.today() : request.date();
-        // userId 를 생략하면 본인 (PRD 7).
-        Long userId = request == null || request.userId() == null ? principal.id() : request.userId();
+        // userId 를 생략하면 본인 (PRD 7). 남의 id 는 ADMIN 만.
+        Long userId = targetUser(principal, request == null ? null : request.userId());
 
         Optional<Draft> draft = draftGenerator.generate(userId, date);
         return draft.map(d -> ResponseEntity.status(HttpStatus.CREATED).body(GenerateResponse.from(d)))
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
+     * 누구 이름으로 만들 것인가.
+     *
+     * <p>생략하면 자기 것이다. <b>남의 id 를 적으면 MEMBER 는 403</b> — 조회는
+     * {@link DataScope} 로 막아 두었는데 생성은 열려 있어, 일반 회원이 남의 이름으로 일지를
+     * 만들고 <b>그 사람 활동이 담긴 본문까지 응답으로 받아 볼 수 있었다</b> (9/11 점검에서 확인).
+     *
+     * <p>{@code DataScope.userIdFor} 를 그대로 쓰지 않는 이유는 하나다 — 그쪽은 ADMIN 이
+     * 생략하면 null(전원)을 돌려주는데, 생성에는 "전원" 이라는 대상이 없다.
+     */
+    private static Long targetUser(AuthenticatedUser principal, Long requested) {
+        return requested == null ? principal.id() : DataScope.userIdFor(principal, requested);
     }
 
     public record GenerateRequest(LocalDate date, Long userId) {}
