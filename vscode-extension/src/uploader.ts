@@ -36,6 +36,58 @@ export type FetchResult =
 const TIMEOUT_MS = 10_000
 
 /**
+ * 등록 리포 목록은 자주 바뀌지 않는다. 전송 주기(기본 10분)보다 짧게 두어, 리포를 새로
+ * 등록한 뒤 다음 전송에는 반영되게 한다.
+ */
+const REPOS_TTL_MS = 5 * 60 * 1000
+
+/** 마지막으로 읽어 둔 등록 리포(owner/repo). 전송과 사이드바가 함께 쓴다. */
+let repoCache: { at: number; names: Set<string> } | undefined
+
+/**
+ * 서버에 <b>등록된</b> 리포 이름. 캐시가 살아 있으면 서버를 부르지 않는다.
+ *
+ * <p>확장은 워크스페이스가 git 저장소이기만 하면 수집한다. 등록하지 않은 리포 — 개인
+ * 프로젝트나 남의 코드를 열어 둔 창 — 까지 보내면 그 코드가 회사 서버에 쌓인다.
+ *
+ * @return 등록 리포 이름. 서버에 닿지 못하면 undefined (모른다 — 0개와 다르다)
+ */
+export async function registeredRepos(config: UploaderConfig): Promise<Set<string> | undefined> {
+  if (repoCache && Date.now() - repoCache.at < REPOS_TTL_MS) return repoCache.names
+  if (!config.apiKey) return undefined
+
+  const base = config.serverUrl.replace(/\/+$/, '')
+  const url = `${base}/api/repos`
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-Api-Key': config.apiKey },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!res.ok) {
+      log(`등록 리포 목록을 읽지 못했습니다 (${res.status}). 이번에는 거르지 않고 보냅니다`)
+      return undefined
+    }
+    const body = (await res.json()) as { fullName?: string }[]
+    const names = new Set(
+      (Array.isArray(body) ? body : [])
+        .map((r) => (r.fullName ?? '').toLowerCase())
+        .filter(Boolean),
+    )
+    repoCache = { at: Date.now(), names }
+    log(`등록된 리포 ${names.size}곳을 읽었습니다`)
+    return names
+  } catch (e) {
+    log(`등록 리포 목록을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+    return undefined
+  }
+}
+
+/** 마지막으로 읽어 둔 등록 리포. 서버를 부르지 않는다 — 사이드바가 그릴 때 쓴다. */
+export function cachedRegisteredRepos(): Set<string> | undefined {
+  return repoCache?.names
+}
+
+/**
  * 수집한 세션을 백엔드로 보낸다 (PRD 7. POST /vscode/sessions, 헤더 X-Api-Key).
  *
  * <p>어떤 실패도 밖으로 던지지 않는다. 확장이 예외로 죽으면 안 되고, 사용자에게는

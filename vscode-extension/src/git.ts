@@ -122,3 +122,14 @@ export async function unpushedCommits(cwd: string): Promise<UnpushedCommit[] | u
   }
   return commits
 }
+
+/**
+ * origin URL 에서 `owner/repo` 만 뽑는다. 못 뽑으면 URL 그대로.
+ *
+ * <p>`https://github.com/a/b.git` 과 `git@github.com:a/b.git` 이 같은 리포로 읽혀야 한다 —
+ * 서버는 이 이름으로 등록 리포를 맞춘다.
+ */
+export function repoFullName(remoteUrl: string): string {
+  const m = /([^/:]+\/[^/]+?)(?:\.git)?$/.exec(remoteUrl)
+  return m ? m[1] : remoteUrl
+}

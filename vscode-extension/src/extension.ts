@@ -4,7 +4,8 @@ import * as vscode from 'vscode'
 import { Collector, todayKst } from './collector'
 import { initLog, log } from './log'
 import { WorkLogTreeProvider } from './sidebar'
-import { Uploader } from './uploader'
+import { registeredRepos, Uploader } from './uploader'
+import { repoFullName } from './git'
 
 let collector: Collector
 let tree: WorkLogTreeProvider
@@ -94,8 +95,17 @@ async function send(reason: string): Promise<SendResult> {
   sending = true
   try {
     const { serverUrl, apiKey, collectDiff } = readConfig()
-    const payloads = await collector.collect(collectDiff)
-    log(`${reason}: 저장소 ${payloads.length}곳, 미커밋 ${collector.uncommittedCount}파일`)
+    const all = await collector.collect(collectDiff)
+    // 등록하지 않은 리포는 보내지 않는다 (BACKLOG2_client C-3 4번). 개인 프로젝트를 열어 둔
+    // 창까지 회사 서버로 올라가던 것을 막는다. 목록을 못 읽었으면(undefined) 거르지 않는다 —
+    // 서버가 잠깐 삐끗했다고 그날 보고가 통째로 멈추는 편이 더 나쁘다.
+    const registered = await registeredRepos({ serverUrl, apiKey })
+    const payloads = registered
+      ? all.filter((p) => registered.has(repoFullName(p.remoteUrl).toLowerCase()))
+      : all
+    const skipped = all.length - payloads.length
+    log(`${reason}: 저장소 ${payloads.length}곳${skipped > 0 ? ` (등록 안 된 ${skipped}곳 제외)` : ''}, `
+      + `미커밋 ${collector.uncommittedCount}파일`)
 
     if (payloads.length === 0) {
       renderStatusBar()
@@ -343,8 +353,24 @@ const planDocs = new Map<string, string>()
 
 /** 두 번 누른 것으로 볼 간격. macOS 기본 더블클릭 간격과 맞췄다. */
 const DOUBLE_CLICK_MS = 500
-/** 마지막으로 계획 줄을 누른 폴더와 시각. 두 번 눌렀는지 가리는 데만 쓴다. */
-let lastPlanClick: { folder: string; at: number } | undefined
+/** 마지막으로 누른 항목과 시각. 두 번 눌렀는지 가리는 데만 쓴다. */
+let lastClick: { key: string; at: number } | undefined
+
+/**
+ * 같은 항목을 두 번 잇따라 눌렀는지.
+ *
+ * <p>트리 항목에는 더블클릭 이벤트가 없다 — 한 번 누를 때마다 `command` 가 올 뿐이라
+ * 간격을 재서 가린다. 한 번은 고르기, 두 번은 열기다 (탐색기와 같은 몸짓).
+ */
+function isDoubleClick(key: string): boolean {
+  const now = Date.now()
+  if (lastClick?.key === key && now - lastClick.at < DOUBLE_CLICK_MS) {
+    lastClick = undefined
+    return true
+  }
+  lastClick = { key, at: now }
+  return false
+}
 
 /** 계획 문서를 두는 곳(확장의 globalStorage). activate 에서 채운다. */
 let plansDir: vscode.Uri | undefined
@@ -639,19 +665,35 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   )
 
-  // 계획 줄을 **두 번** 눌렀을 때만 연다. 트리 항목에는 더블클릭 이벤트가 없어 (한 번
-  // 누를 때마다 command 가 올 뿐이다) 간격을 재서 가린다. 연필 버튼은 한 번으로 연다.
+  // 계획 줄을 **두 번** 눌렀을 때만 연다. 연필 버튼은 한 번으로 연다.
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.planClicked', (node?: { folder?: string }) => {
-      const folder = node?.folder ?? ''
-      const now = Date.now()
-      if (lastPlanClick?.folder === folder && now - lastPlanClick.at < DOUBLE_CLICK_MS) {
-        lastPlanClick = undefined
-        return openPlanDocument(context, node?.folder)
-      }
-      lastPlanClick = { folder, at: now }
-      return undefined
-    }),
+    vscode.commands.registerCommand('worklog.planClicked', (node?: { folder?: string }) =>
+      isDoubleClick(`plan:${node?.folder ?? ''}`) ? openPlanDocument(context, node?.folder) : undefined,
+    ),
+  )
+
+  /**
+   * 사이드바의 파일 줄(미커밋·미저장·TODO)을 **두 번** 누르면 그 파일을 연다.
+   *
+   * <p>한 번에 열면 목록을 화살표로 훑기만 해도 편집기가 계속 갈아엎어진다. 계획 줄과
+   * 같은 몸짓으로 맞춘다.
+   */
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'worklog.openFile',
+      async (target?: { uri?: vscode.Uri; line?: number }) => {
+        if (!target?.uri) return
+        const key = `file:${target.uri.fsPath}:${target.line ?? ''}`
+        if (!isDoubleClick(key)) return
+        const doc = await vscode.workspace.openTextDocument(target.uri)
+        const editor = await vscode.window.showTextDocument(doc, { preview: false })
+        if (target.line === undefined) return
+        // TODO 는 1부터 세지만 VS Code 의 자리는 0부터다.
+        const at = new vscode.Position(Math.max(0, target.line - 1), 0)
+        editor.selection = new vscode.Selection(at, at)
+        editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenter)
+      },
+    ),
   )
 
   context.subscriptions.push(

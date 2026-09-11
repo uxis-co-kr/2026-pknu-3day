@@ -2,8 +2,9 @@ import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { todayKst } from './collector'
 import type { Collector } from './collector'
+import { repoFullName } from './git'
 import type { UnpushedCommit } from './git'
-import { Uploader } from './uploader'
+import { cachedRegisteredRepos, Uploader } from './uploader'
 import type { RemoteSession } from './uploader'
 import type {
   AiSessionSummary, AiTurn, SessionPayload, TodoItem, UncommittedFile, UnsavedFile,
@@ -83,6 +84,7 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
       return nodes
     }
 
+    const registered = cachedRegisteredRepos()
     for (const p of this.payloads) {
       const cwd = this.collector.folderOf(p)
       const name = repoName(p.remoteUrl)
@@ -100,7 +102,16 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
         ),
       )
 
-      nodes.push(group(`${name} · ${p.branch}`, 'repo', children, true))
+      const repo = group(`${name} · ${p.branch}`, 'repo', children, true)
+      // 등록하지 않은 리포는 수집만 하고 보내지 않는다. 목록을 아직 못 읽었으면 아무 말도
+      // 하지 않는다 — "보내지 않음" 이라고 잘못 적으면 보낸 것을 안 보냈다고 읽게 된다.
+      if (registered && !registered.has(name.toLowerCase())) {
+        repo.item.description = '등록되지 않은 리포 · 보내지 않음'
+        repo.item.tooltip = `${name} 은(는) 설정 > 리포지터리에 등록되지 않았습니다.\n`
+          + '등록하기 전까지 이 폴더의 작업은 서버로 가지 않습니다.'
+        repo.item.iconPath = new vscode.ThemeIcon('circle-slash')
+      }
+      nodes.push(repo)
     }
 
     nodes.push(historyNode(this.history, this.payloads.map((p) => p.remoteUrl)))
@@ -345,11 +356,9 @@ function turnNode(turn: AiTurn): Node {
 
 /** 파일 노드는 누르면 열린다. 새 파일은 diff 대신 본문이 가므로 표시를 나눈다. */
 function fileNode(f: UncommittedFile, cwd: string | undefined): Node {
-  const node = leaf(path.basename(f.path), 'file', f.path, `+${f.additions} −${f.deletions}`)
+  const node = leaf(path.basename(f.path), 'file', `${f.path}\n\n두 번 누르면 엽니다`, `+${f.additions} −${f.deletions}`)
   node.item.resourceUri = cwd ? vscode.Uri.file(path.join(cwd, f.path)) : undefined
-  if (node.item.resourceUri) {
-    node.item.command = { command: 'vscode.open', title: '열기', arguments: [node.item.resourceUri] }
-  }
+  openOnDoubleClick(node)
   return node
 }
 
@@ -360,12 +369,17 @@ function fileNode(f: UncommittedFile, cwd: string | undefined): Node {
  * 저장하지 않은 내용은 디스크에 없어 diff 에도 없다.
  */
 function unsavedNode(f: UnsavedFile, cwd: string | undefined): Node {
-  const node = leaf(path.basename(f.path), 'circle-filled', f.path, sinceLabel(f.dirtySince))
+  const node = leaf(path.basename(f.path), 'circle-filled', `${f.path}\n\n두 번 누르면 엽니다`, sinceLabel(f.dirtySince))
   node.item.resourceUri = cwd ? vscode.Uri.file(path.join(cwd, f.path)) : undefined
-  if (node.item.resourceUri) {
-    node.item.command = { command: 'vscode.open', title: '열기', arguments: [node.item.resourceUri] }
-  }
+  openOnDoubleClick(node)
   return node
+}
+
+/** 두 번 눌렀을 때만 열리게 한다. 한 번에 열면 목록을 훑기만 해도 편집기가 갈아엎어진다. */
+function openOnDoubleClick(node: Node, line?: number): void {
+  const uri = node.item.resourceUri
+  if (!uri) return
+  node.item.command = { command: 'worklog.openFile', title: '열기', arguments: [{ uri, line }] }
 }
 
 /** "12분째" — 언제부터 저장하지 않았는지. 확장을 다시 켠 뒤라 모르면 비운다. */
@@ -378,24 +392,19 @@ function sinceLabel(iso: string | undefined): string | undefined {
 }
 
 function todoNode(t: TodoItem, cwd: string | undefined): Node {
-  const node = leaf(t.text, 'checklist', `${t.path}:${t.line}`, `${path.basename(t.path)}:${t.line}`)
-  if (cwd) {
-    const uri = vscode.Uri.file(path.join(cwd, t.path))
-    node.item.command = {
-      command: 'vscode.open',
-      title: '열기',
-      // TODO 는 1부터 세지만 VS Code 의 selection 은 0부터다.
-      arguments: [uri, { selection: new vscode.Range(t.line - 1, 0, t.line - 1, 0) }],
-    }
-  }
+  const node = leaf(
+    t.text,
+    'checklist',
+    `${t.path}:${t.line}\n\n두 번 누르면 그 줄로 엽니다`,
+    `${path.basename(t.path)}:${t.line}`,
+  )
+  node.item.resourceUri = cwd ? vscode.Uri.file(path.join(cwd, t.path)) : undefined
+  openOnDoubleClick(node, t.line)
   return node
 }
 
-/** origin URL 에서 owner/repo 만 뽑는다. 못 뽑으면 URL 그대로. */
-function repoName(remoteUrl: string): string {
-  const m = /([^/:]+\/[^/]+?)(?:\.git)?$/.exec(remoteUrl)
-  return m ? m[1] : remoteUrl
-}
+/** origin URL 에서 owner/repo 만. 전송 쪽과 같은 규칙을 써야 등록 여부 판정이 어긋나지 않는다. */
+const repoName = repoFullName
 
 function time(iso: string): string {
   const d = new Date(iso)
