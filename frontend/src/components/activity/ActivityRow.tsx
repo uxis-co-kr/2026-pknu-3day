@@ -49,20 +49,32 @@ export default function ActivityRow({
         )}
       </span>
 
-      <span className="flex min-w-0 flex-1 items-center gap-2">
-        {!dense && activity.summaryStatus === 'PENDING' && (
-          <>
-            <Skeleton className="h-3 w-40" />
-            <span className="text-[12px] text-muted-foreground">요약 생성 중…</span>
-          </>
-        )}
-        {!dense && activity.summaryStatus === 'FAILED' && <SummaryStatusBadge status="FAILED" />}
-        {!dense && activity.summaryStatus === 'DONE' && activity.summary && (
-          <span className="truncate text-[12px] text-muted-foreground">{activity.summary}</span>
-        )}
-      </span>
+      {/*
+        좁은 모드에는 요약을 싣지 않는다. 그런데도 이 칸을 그리면 빈 칸이 폭의 절반을 먹어,
+        제목이 자리가 남는데도 잘리고 줄마다 오른쪽이 들쭉날쭉해 보인다.
+      */}
+      {!dense && (
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          {activity.summaryStatus === 'PENDING' && (
+            <>
+              <Skeleton className="h-3 w-40" />
+              <span className="text-[12px] text-muted-foreground">요약 생성 중…</span>
+            </>
+          )}
+          {activity.summaryStatus === 'FAILED' && <SummaryStatusBadge status="FAILED" />}
+          {activity.summaryStatus === 'DONE' && activity.summary && (
+            <span className="truncate text-[12px] text-muted-foreground">{activity.summary}</span>
+          )}
+        </span>
+      )}
 
-      <DiffStat additions={activity.additions} deletions={activity.deletions} />
+      {/*
+        변경량은 있는 줄과 없는 줄이 섞인다 (PR 행에는 없다). 칸을 늘 잡아 두어야 줄마다
+        오른쪽 끝이 같은 자리에서 끝난다.
+      */}
+      <span className="w-[76px] shrink-0 text-right">
+        <DiffStat additions={activity.additions} deletions={activity.deletions} />
+      </span>
     </Tag>
   )
 }

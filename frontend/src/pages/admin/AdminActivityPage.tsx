@@ -201,7 +201,6 @@ export default function AdminActivityPage() {
                   <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">계정이 없습니다.</TableCell></TableRow>
                 ) : peopleRows.map((i) => {
                   const drafts = i.series.filter((p) => p.draft)
-                  const confirmed = drafts.filter((p) => p.draft?.status === 'CONFIRMED').length
                   return (
                     <TableRow key={i.user.id} className="cursor-pointer" onClick={() => setSelected(String(i.user.id))}>
                       <TableCell>
@@ -212,7 +211,7 @@ export default function AdminActivityPage() {
                       <TableCell className="text-right tabular-nums">{i.totals.prs}</TableCell>
                       <TableCell className="text-right tabular-nums">{i.totals.merges}</TableCell>
                       <TableCell className="text-[12px] text-muted-foreground">
-                        {drafts.length === 0 ? '없음' : `${drafts.length}건 · 확정 ${confirmed}`}
+                        {drafts.length === 0 ? '없음' : `${drafts.length}건`}
                       </TableCell>
                     </TableRow>
                   )
