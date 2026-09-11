@@ -56,10 +56,8 @@ public class VscodeSessionService {
         session.setRepo(matchRepo(request.remoteUrl()));
         session.setUncommittedFiles(orEmpty(request.uncommittedFiles()));
         session.setTodos(orEmpty(request.todos()));
-        // 저장 이벤트는 더 이상 오지 않는다. 지난 기록을 지우지 않으려고, 보내 줄 때만 덮는다.
-        if (request.editTimeline() != null) {
-            session.setEditTimeline(request.editTimeline());
-        }
+        // 저장 이벤트는 은퇴했다 (2026-09-11). 확장이 보내지 않고 화면도 그리지 않는다.
+        // 옛 확장이 아직 보내 오더라도 받아 쓰지 않는다 — 지난 행의 값은 그대로 둔다.
         session.setUnsavedFiles(orEmpty(request.unsavedFiles()));
         // 확장은 요약을 모른다. 서버가 적어 둔 것을 물려주지 않으면 10분마다 지워진다.
         session.setAiSessions(carryOverSummaries(session.getAiSessions(), orEmpty(request.aiSessions())));

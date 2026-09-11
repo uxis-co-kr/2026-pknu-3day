@@ -243,20 +243,6 @@ function SessionDetail({ session }: { session: VscodeSession }) {
             </div>
           ))}
         </Group>
-
-        {/* 2026-09-11 부터 모으지 않는다. 그전 기록에만 남아 있어, 있을 때만 보여 준다. */}
-        {session.editTimeline.length > 0 && (
-          <Group label="저장 이벤트 (지난 기록)" count={session.editTimeline.length} Icon={Clock}>
-            {session.editTimeline.map((e) => (
-              <div key={e.path} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate">{e.path}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground/70">
-                  {e.saveCount}회 · {formatTime(e.lastSavedAt)}
-                </span>
-              </div>
-            ))}
-          </Group>
-        )}
       </div>
     </div>
   )

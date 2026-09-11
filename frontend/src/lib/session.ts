@@ -7,14 +7,14 @@ import type { VscodeSession } from '@/types/api'
  * 빈 세션이 쌓인다. "세션이 있다" 를 "일한 기록이 있다" 로 읽으면, 아무것도 하지 않은 날에도
  * AI 생성 버튼이 열려 일지를 지어내게 된다 (9/11 확인).
  *
- * <p>미푸시 커밋의 `null` 은 "셀 수 없음"(업스트림 없는 브랜치)이지 기록이 아니다.
+ * <p>미푸시 커밋의 `null` 은 "셀 수 없음"(업스트림 없는 브랜치)이지 기록이 아니다. 저장
+ * 이벤트(`editTimeline`)도 세지 않는다 — 은퇴한 필드라 옛 기록에만 남아 있다.
  */
 export function sessionHasContent(s: VscodeSession): boolean {
   return (s.uncommittedFiles?.length ?? 0) > 0
     || (s.todos?.length ?? 0) > 0
     || (s.unsavedFiles?.length ?? 0) > 0
     || (s.aiSessions?.length ?? 0) > 0
-    || (s.editTimeline?.length ?? 0) > 0
     || (s.unpushedCommits?.length ?? 0) > 0
     || !!s.planNote?.trim()
 }

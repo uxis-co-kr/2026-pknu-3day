@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Clock, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, ListTodo, MessagesSquare, NotebookPen, Save } from 'lucide-react'
+import { ChevronRight, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, ListTodo, MessagesSquare, NotebookPen, Save } from 'lucide-react'
 import ActivityRow from '@/components/activity/ActivityRow'
 import DiffStat from '@/components/common/DiffStat'
 import { Card } from '@/components/ui/card'
@@ -160,20 +160,6 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
           </Row>
         ))}
       </Category>
-
-      {/* 2026-09-11 부터 모으지 않는다. 그전 기록에만 남아 있다. */}
-      {session.editTimeline.length > 0 && (
-        <Category label="저장 이벤트 (지난 기록)" count={session.editTimeline.length} Icon={Clock}>
-          {session.editTimeline.map((e) => (
-            <Row key={e.path}>
-              <span className="min-w-0 flex-1 truncate">{e.path}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground/70">
-                {e.saveCount}회 · {formatTime(e.lastSavedAt)}
-              </span>
-            </Row>
-          ))}
-        </Category>
-      )}
     </div>
   )
 }

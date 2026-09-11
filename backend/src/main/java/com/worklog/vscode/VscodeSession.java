@@ -130,13 +130,14 @@ public class VscodeSession {
      * 날에도 AI 가 일지를 지어낸다 (9/11 확인).
      *
      * <p>미푸시 커밋의 {@code null} 은 "셀 수 없음"(업스트림 없는 브랜치)이지 기록이 아니다.
+     * 저장 이벤트({@code editTimeline})도 세지 않는다 — 은퇴한 필드라 옛 행에만 남아 있고,
+     * 그 찌꺼기 한 줄 때문에 아무것도 하지 않은 날의 초안이 열리면 안 된다 (9/11).
      */
     public boolean hasContent() {
         return notEmpty(uncommittedFiles)
                 || notEmpty(todos)
                 || notEmpty(unsavedFiles)
                 || notEmpty(aiSessions)
-                || notEmpty(editTimeline)
                 || notEmpty(unpushedCommits)
                 || (planNote != null && !planNote.isBlank());
     }
