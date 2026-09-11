@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
+import { AI_SCHEME, AiConversationProvider, openAiTurn } from './aiDocument'
 import { Collector, todayKst } from './collector'
 import { initLog, log } from './log'
 import { WorkLogTreeProvider } from './sidebar'
@@ -656,6 +657,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.setApiKey', () => askServerAndKey()),
     vscode.commands.registerCommand('worklog.setServerUrl', () => askServerUrl()),
+  )
+
+  // AI 대화를 읽을 수 있는 문서로 여는 자리. 가상 문서라 파일을 만들지 않는다.
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(AI_SCHEME, new AiConversationProvider()),
+    vscode.commands.registerCommand('worklog.openAiTurn', (args) => void openAiTurn(args)),
   )
 
   // 커밋·푸시는 대개 터미널이나 소스 제어 패널에서 한다. 파일 저장만 보고 있으면 그때

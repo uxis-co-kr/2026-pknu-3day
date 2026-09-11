@@ -57,6 +57,8 @@ public class AdminController {
     private final ChatBotSettingsService chatBotSettings;
     private final com.worklog.auth.AdminAccountInitializer adminAccount;
     private final com.worklog.chat.WorkLogAnswerService answerService;
+    private final com.worklog.vscode.VscodeSessionRepository sessionRepository;
+    private final com.worklog.vscode.AiSessionSummarizer aiSummarizer;
 
     public AdminController(
             PeopleDirectoryService directoryService,
@@ -71,7 +73,11 @@ public class AdminController {
             MattermostBot mattermostBot,
             ChatBotSettingsService chatBotSettings,
             com.worklog.auth.AdminAccountInitializer adminAccount,
-            com.worklog.chat.WorkLogAnswerService answerService) {
+            com.worklog.chat.WorkLogAnswerService answerService,
+            com.worklog.vscode.VscodeSessionRepository sessionRepository,
+            com.worklog.vscode.AiSessionSummarizer aiSummarizer) {
+        this.sessionRepository = sessionRepository;
+        this.aiSummarizer = aiSummarizer;
         this.adminAccount = adminAccount;
         this.answerService = answerService;
         this.directoryService = directoryService;
@@ -259,6 +265,22 @@ public class AdminController {
         return new SummaryRunResponse(summaryService.runOnce());
     }
 
+    /**
+     * 요약이 빠진 AI 대화를 채운다.
+     *
+     * <p>대화 요약은 확장이 보낼 때 채운다. 지난 세션은 다시 전송될 일이 없어 영영 빈 채로
+     * 남는다 — 요약 기능이 생기기 전에 끝난 날이 그렇다. VS 내역 탭은 이제 요약만 보여 주므로
+     * (9/11), 그 날들이 빈칸으로 남는다. 여기서 한 번 훑어 채운다.
+     *
+     * <p>세션마다 비동기로 돈다. 돌려주는 수는 "채운 건수" 가 아니라 "훑기 시작한 세션 수" 다.
+     */
+    @PostMapping("/ai-summaries/run")
+    public AiSummaryRunResponse runAiSummaries() {
+        List<Long> ids = sessionRepository.findIdsWithUnsummarizedAi();
+        ids.forEach(aiSummarizer::summarizeMissing);
+        return new AiSummaryRunResponse(ids.size());
+    }
+
     /** 회사 직원 목록 + GitHub 활성화 상태 (§1-3 넷째). */
     @GetMapping("/people")
     public PeopleDirectoryResponse people() {
@@ -415,6 +437,8 @@ public class AdminController {
     public record SyncAllResponse(int repoCount, boolean full) {}
 
     public record SummaryRunResponse(int summarized) {}
+
+    public record AiSummaryRunResponse(int sessions) {}
 
     public record LinkEmployeeRequest(Long coSeq, Long empSeq) {}
 

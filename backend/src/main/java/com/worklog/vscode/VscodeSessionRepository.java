@@ -65,6 +65,18 @@ public interface VscodeSessionRepository extends JpaRepository<VscodeSession, Lo
     @Query("select s.user.id, count(s) from VscodeSession s where s.workDate = :workDate group by s.user.id")
     List<Object[]> countByUser(@Param("workDate") LocalDate workDate);
 
+    /**
+     * 요약이 아직 없는 AI 대화를 품은 세션 id.
+     *
+     * <p>요약은 전송 때 채운다. 그래서 <b>다시 전송될 일이 없는 지난 세션</b>은 영영 빈 채로
+     * 남는다 — 요약 기능이 생기기 전에 마지막 전송이 끝난 날이 그렇다. 관리자 콘솔에서 손으로
+     * 채울 수 있게 대상을 찾아 준다.
+     */
+    @Query(value = "select distinct s.id from vscode_sessions s,"
+            + " jsonb_array_elements(s.ai_sessions) a"
+            + " where a->>'summary' is null or a->>'summary' = ''", nativeQuery = true)
+    List<Long> findIdsWithUnsummarizedAi();
+
     /** 관리자 콘솔 — 사용자별 전체 세션 수. 확장을 실제로 쓰고 있는지 판단한다. */
     @Query("select s.user.id, count(s) from VscodeSession s group by s.user.id")
     List<Object[]> countAllByUser();

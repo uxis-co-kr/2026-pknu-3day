@@ -138,6 +138,20 @@ export const useRunSummaries = () => {
   })
 }
 
+/**
+ * 요약이 빠진 AI 대화를 채운다.
+ *
+ * <p>대화 요약은 확장이 보낼 때 채우므로, 다시 전송될 일이 없는 지난 세션은 영영 빈 채로
+ * 남는다. VS 내역 탭이 요약만 보여 주게 된 뒤로는 그 날들이 빈칸이 된다.
+ */
+export const useRunAiSummaries = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<{ sessions: number }>('/admin/ai-summaries/run'),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.overview }),
+  })
+}
+
 /** 봇 상태는 몇 초마다 다시 본다 — 연결하거나 채널에 초대하면 화면이 따라 바뀐다. */
 export const useChatBotStatus = () =>
   useQuery({

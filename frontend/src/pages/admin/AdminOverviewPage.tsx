@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, MessagesSquare, RefreshCw, Sparkles } from 'lucide-react'
 import { ApiError } from '@/api/apiClient'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import AdminGuard from './AdminGuard'
-import { useAdminOverview, useRunSummaries, useSyncAllRepos } from './api'
+import { useAdminOverview, useRunAiSummaries, useRunSummaries, useSyncAllRepos } from './api'
 
 function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
@@ -48,6 +48,7 @@ export default function AdminOverviewPage() {
   const { data, isLoading, error } = useAdminOverview()
   const syncAll = useSyncAllRepos()
   const runSummaries = useRunSummaries()
+  const runAiSummaries = useRunAiSummaries()
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
   async function run(fn: () => Promise<string>) {
@@ -182,6 +183,27 @@ export default function AdminOverviewPage() {
                   {data?.pendingSummaryCount ?? 0}건</b>)을 <b className="font-medium text-foreground">한 번에 최대
                   20건</b>까지 LLM 에 보내 한 줄 요약을 채웁니다. 업무 일지가 이 요약을 재료로 씁니다.
                   실패한 활동은 3번까지 다시 시도합니다.
+                </span>
+              </li>
+              <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+                <Button
+                  variant="outline" size="sm" className="w-[148px] shrink-0 justify-start"
+                  disabled={runAiSummaries.isPending}
+                  onClick={() => void run(async () => {
+                    const r = await runAiSummaries.mutateAsync()
+                    return r.sessions > 0
+                      ? `세션 ${r.sessions}개의 대화 요약을 채웁니다. 잠시 뒤 새로고침하세요.`
+                      : '요약이 빠진 대화가 없습니다.'
+                  })}
+                >
+                  <MessagesSquare />
+                  대화 요약 채우기
+                </Button>
+                <span className="flex-1 text-[13px] text-muted-foreground">
+                  <b className="font-medium text-foreground">AI 대화</b> 중 요약이 빠진 것을 채웁니다. 대화
+                  요약은 확장이 보낼 때 만들어지므로, 다시 전송될 일이 없는 <b className="font-medium text-foreground">지난
+                  날의 대화</b>는 그냥 두면 영영 빈칸입니다 — VSCode 내역 탭이 요약만 보여 주기 때문에
+                  그 자리가 비어 보입니다.
                 </span>
               </li>
             </ul>

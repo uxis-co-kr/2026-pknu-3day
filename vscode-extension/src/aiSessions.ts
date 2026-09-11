@@ -118,6 +118,11 @@ function newestPerOrigin(files: SessionFile[]): SessionFile[] {
 }
 
 /** `/Users/me/work/app` → `-Users-me-work-app` */
+/** 그 폴더의 그 대화가 담긴 기록 파일. 사이드바에서 문서를 열 때 쓴다. */
+export function sessionFilePath(cwd: string, id: string): string {
+  return path.join(ROOT, encodeCwd(cwd), `${id}.jsonl`)
+}
+
 function encodeCwd(cwd: string): string {
   return cwd.replace(/[/\\]/g, '-')
 }
@@ -328,6 +333,64 @@ function said(content: unknown): string | undefined {
 
 function clip(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text
+}
+
+/** 자르지 않은 질문·답변 하나. 읽으라고 여는 문서에 쓴다. */
+export interface FullTurn {
+  at: string
+  prompt: string
+  answer?: string
+}
+
+/**
+ * 대화 하나를 <b>자르지 않고</b> 읽는다 — 사람이 읽을 문서를 만들기 위해서다.
+ *
+ * <p>{@link collectAiSessions} 가 만드는 요약본은 질문 200자·답변 300자로 자르고 최근
+ * 12개만 담는다. 서버로 보낼 것이라 그렇다. 여기서는 그 반대가 필요하다.
+ *
+ * @param workDate 주면 그날 것만. 비우면 파일에 담긴 전부
+ */
+export async function readFullConversation(
+  file: string,
+  workDate?: string,
+): Promise<{ title: string | undefined; turns: FullTurn[] }> {
+  const buffer = await readFile(file)
+  const text = buffer.subarray(Math.max(0, buffer.length - TAIL_BYTES)).toString('utf8')
+
+  const turns: FullTurn[] = []
+  let title: string | undefined
+  let current: FullTurn | undefined
+
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('{')) continue
+    let entry: SessionEntry
+    try {
+      entry = JSON.parse(line) as SessionEntry
+    } catch {
+      continue
+    }
+    if (entry.type === 'ai-title') {
+      const recorded = entry.aiTitle?.trim()
+      if (recorded) title = recorded
+      continue
+    }
+    const at = entry.timestamp
+    if (!at || (workDate && kstDate(at) !== workDate)) continue
+    if (entry.isMeta || entry.isSidechain) continue
+
+    if (entry.type === 'user') {
+      const prompt = said(entry.message?.content)
+      if (!prompt) continue
+      current = { at, prompt }
+      turns.push(current)
+      continue
+    }
+    if (entry.type === 'assistant' && current) {
+      const answer = said(entry.message?.content)
+      if (answer) current.answer = answer
+    }
+  }
+  return { title, turns }
 }
 
 /** ISO 문자열을 KST 기준 YYYY-MM-DD 로. 업무 일자는 KST 다 (PRD 12). */
