@@ -70,6 +70,17 @@ public interface VscodeSessionRepository extends JpaRepository<VscodeSession, Lo
     List<Object[]> countAllByUser();
 
     /**
+     * 관리자 콘솔 — (사용자, 리포)별 세션 수.
+     *
+     * <p>리포를 <b>등록하지 않은</b> 사람도 그 리포에서 일한다 — 등록은 한 사람만 할 수 있다.
+     * 등록만 보면 그 사람은 아무 리포에도 붙어 있지 않은 것처럼 보인다 (BACKLOG2 §2-4).
+     * 연결을 못 찾은 세션(repo_id NULL)은 뺀다.
+     */
+    @Query("select s.user.id, s.repo.id, count(s) from VscodeSession s"
+            + " where s.user is not null and s.repo is not null group by s.user.id, s.repo.id")
+    List<Object[]> countByUserAndRepo();
+
+    /**
      * 마지막 커밋이 오래된 세션 수 (PRD 7. staleSessions, F7-2 리마인드와 같은 기준).
      * 커밋 이력이 아예 없는 세션도 방치로 본다.
      */

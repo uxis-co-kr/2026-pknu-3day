@@ -13,6 +13,9 @@ import com.worklog.vscode.VscodeSessionRepository;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -106,13 +109,17 @@ public class PeopleDirectoryService {
         for (Object[] row : sessionRepository.countAllByUser()) {
             sessions.put((Long) row[0], (Long) row[1]);
         }
-        Map<Long, List<Repo>> repos = new HashMap<>();
-        for (Repo repo : repoRepository.findAllWithRegistrant()) {
-            if (repo.getRegisteredBy() != null) {
-                repos.computeIfAbsent(repo.getRegisteredBy().getId(), k -> new ArrayList<>()).add(repo);
-            }
+        Map<Long, Map<Long, Long>> sessionsPerRepo = new HashMap<>();
+        for (Object[] row : sessionRepository.countByUserAndRepo()) {
+            sessionsPerRepo.computeIfAbsent((Long) row[0], k -> new HashMap<>())
+                    .put((Long) row[1], (Long) row[2]);
         }
-        return new Context(activity, perRepo, apiKeys, sessions, repos);
+        // 등록자별로 나누지 않고 id 로 찾는다 — 등록하지 않은 사람의 리포도 붙여야 한다.
+        Map<Long, Repo> reposById = new LinkedHashMap<>();
+        for (Repo repo : repoRepository.findAllWithRegistrant()) {
+            reposById.put(repo.getId(), repo);
+        }
+        return new Context(activity, perRepo, apiKeys, sessions, sessionsPerRepo, reposById);
     }
 
     private List<PeopleDirectoryResponse.ContributorRow> unclaimed() {
@@ -128,16 +135,34 @@ public class PeopleDirectoryService {
         Long userId = user.getId();
         Map<Long, Long> perRepo = ctx.activityByUserAndRepo().getOrDefault(userId, Map.of());
 
-        List<PeopleDirectoryResponse.RepoRow> repos =
-                ctx.reposByUser().getOrDefault(userId, List.of()).stream()
-                        .map(r -> new PeopleDirectoryResponse.RepoRow(
-                                r.getId(),
-                                r.getFullName(),
-                                r.getDefaultBranch(),
-                                r.getLastSyncedAt(),
-                                syncStatusOf(r).name(),
-                                perRepo.getOrDefault(r.getId(), 0L)))
-                        .toList();
+        Map<Long, Long> perRepoSessions = ctx.sessionsByUserAndRepo().getOrDefault(userId, Map.of());
+
+        // 등록했거나, 활동이 잡혔거나, VS 기록을 보낸 리포 — 셋을 합쳐 "연결된 리포" 로 본다.
+        // 등록만 세면 팀원은 어느 리포에도 붙어 있지 않은 것처럼 보인다 (BACKLOG2 §2-4).
+        Set<Long> linked = new LinkedHashSet<>();
+        ctx.reposById().values().stream()
+                .filter(r -> r.getRegisteredBy() != null && r.getRegisteredBy().getId().equals(userId))
+                .forEach(r -> linked.add(r.getId()));
+        linked.addAll(perRepo.keySet());
+        linked.addAll(perRepoSessions.keySet());
+
+        List<PeopleDirectoryResponse.RepoRow> repos = linked.stream()
+                .map(id -> ctx.reposById().get(id))
+                .filter(java.util.Objects::nonNull)
+                .map(r -> new PeopleDirectoryResponse.RepoRow(
+                        r.getId(),
+                        r.getFullName(),
+                        r.getDefaultBranch(),
+                        r.getLastSyncedAt(),
+                        syncStatusOf(r).name(),
+                        r.getRegisteredBy() != null && r.getRegisteredBy().getId().equals(userId),
+                        perRepo.getOrDefault(r.getId(), 0L),
+                        perRepoSessions.getOrDefault(r.getId(), 0L)))
+                // 등록한 리포를 앞에, 그다음 활동이 많은 순.
+                .sorted((a, b) -> a.registered() != b.registered()
+                        ? Boolean.compare(b.registered(), a.registered())
+                        : Long.compare(b.activityCount(), a.activityCount()))
+                .toList();
 
         return new PeopleDirectoryResponse.AccountRow(
                 userId,
@@ -166,5 +191,6 @@ public class PeopleDirectoryService {
             Map<Long, Map<Long, Long>> activityByUserAndRepo,
             Map<Long, Long> apiKeysByUser,
             Map<Long, Long> sessionsByUser,
-            Map<Long, List<Repo>> reposByUser) {}
+            Map<Long, Map<Long, Long>> sessionsByUserAndRepo,
+            Map<Long, Repo> reposById) {}
 }
