@@ -55,6 +55,21 @@ public class RepoController {
                 .toList();
     }
 
+    /**
+     * 등록된 리포 이름 전부 — 확장이 쓴다 (BACKLOG2 §2-4).
+     *
+     * <p>확장은 "이 폴더의 작업을 서버로 보낼까" 를 이 목록으로 가린다. 개인 프로젝트를 열어
+     * 두었다고 그것까지 보내지 않기 위해서다 (§4 결정 7). 그런데 위 {@link #list} 는 <b>내가
+     * 등록한 것만</b> 주므로, 그것으로 가리면 남이 등록한 리포에서 일하는 팀원의 기록이 통째로
+     * 버려진다 — 리포는 한 사람만 등록할 수 있어 두 번째 사람은 등록할 길도 없다.
+     *
+     * <p>그래서 이 경로는 등록자를 가리지 않는다. 나가는 것은 이름뿐이다.
+     */
+    @GetMapping("/known")
+    public List<String> known() {
+        return repoService.knownFullNames();
+    }
+
     /** 리포별 오늘(KST) 커밋 수를 한 번의 쿼리로 모은다 — 리포마다 세면 N+1 이 된다. */
     private Map<Long, Long> todayCommitCounts() {
         LocalDate today = KstDates.today();

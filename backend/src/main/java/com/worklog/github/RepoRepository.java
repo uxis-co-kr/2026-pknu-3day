@@ -26,4 +26,11 @@ public interface RepoRepository extends JpaRepository<Repo, Long> {
 
     @Query("select r from Repo r left join fetch r.registeredBy where r.id = :id")
     Optional<Repo> findWithRegistrant(@Param("id") Long id);
+
+    /**
+     * 등록된 리포 이름 전부. <b>누가 등록했든</b> 상관없다 — 확장이 "이 폴더를 서버가 아는가"
+     * 를 가리는 데 쓴다 (BACKLOG2 §2-4). 행을 통째로 읽을 이유가 없어 이름만 가져온다.
+     */
+    @Query("select r.fullName from Repo r order by r.fullName asc")
+    List<String> findAllFullNames();
 }

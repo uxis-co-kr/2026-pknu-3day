@@ -7,6 +7,7 @@ import com.worklog.config.ApiException;
 import com.worklog.github.dto.GitHubRepoDto;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,30 @@ public class RepoService {
     @Transactional(readOnly = true)
     public List<Repo> listMine(Long userId) {
         return repoRepository.findMineWithRegistrant(userId);
+    }
+
+    /**
+     * 등록된 리포 이름 전부 — <b>등록자가 누구든</b>.
+     *
+     * <p>화면 목록({@link #listMine})과 달라야 하는 자리다. 확장은 "이 폴더의 작업을 보낼까"
+     * 를 이 목록으로 가리는데, 내 것만 주면 <b>남이 등록한 리포에서 일하는 팀원의 기록이
+     * 통째로 버려진다</b> — 리포는 한 사람만 등록할 수 있으므로(full_name UNIQUE) 두 번째
+     * 사람은 등록할 길도 없다 (BACKLOG2 §2-4).
+     */
+    @Transactional(readOnly = true)
+    public List<String> knownFullNames() {
+        return repoRepository.findAllFullNames();
+    }
+
+    /** 사람을 부를 이름 — 이름이 없으면 GitHub 로그인, 그것도 없으면 사원번호. */
+    private static String displayName(User user) {
+        if (user.getName() != null && !user.getName().isBlank()) {
+            return user.getName();
+        }
+        if (user.getLogin() != null && !user.getLogin().isBlank()) {
+            return user.getLogin();
+        }
+        return user.getLoginId() == null ? "다른 사람" : user.getLoginId();
     }
 
     /**
@@ -138,8 +163,18 @@ public class RepoService {
                     "INVALID_FULL_NAME",
                     "GitHub 주소를 붙여 넣어 주세요. 예) https://github.com/owner/repo");
         }
-        if (repoRepository.existsByFullName(normalized)) {
-            throw ApiException.conflict("REPO_ALREADY_REGISTERED", "이미 등록된 리포입니다.");
+        // 리포는 한 사람만 등록한다 — 수집이 등록자 토큰으로 돌기 때문이다. 두 사람이 같은
+        // 리포를 등록하면 같은 커밋을 두 번 모은다. 그래서 여기서 막되, 막힌 사람이 "그럼 내
+        // 기록은 어떻게 되지" 를 알 수 있게 누가 등록했는지와 다음에 할 일을 함께 알린다.
+        Optional<Repo> already = repoRepository.findByFullName(normalized);
+        if (already.isPresent()) {
+            User owner = already.get().getRegisteredBy();
+            String who = owner == null ? "다른 사람" : displayName(owner);
+            throw ApiException.conflict(
+                    "REPO_ALREADY_REGISTERED",
+                    "%s 님이 이미 등록한 리포입니다. 한 사람만 등록하면 팀 전체의 커밋이 모이고,"
+                            .formatted(who)
+                            + " VS Code 확장도 이 리포의 작업을 그대로 보냅니다.");
         }
 
         User registrant = userRepository

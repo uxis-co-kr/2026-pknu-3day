@@ -50,6 +50,10 @@ let repoCache: { at: number; names: Set<string> } | undefined
  * <p>확장은 워크스페이스가 git 저장소이기만 하면 수집한다. 등록하지 않은 리포 — 개인
  * 프로젝트나 남의 코드를 열어 둔 창 — 까지 보내면 그 코드가 회사 서버에 쌓인다.
  *
+ * <p>`/api/repos` 가 아니라 `/api/repos/known` 을 부른다. 앞의 것은 <b>내가 등록한 것만</b>
+ * 준다 — 리포는 한 사람만 등록할 수 있으므로(팀에서 두 번째 사람은 등록할 길이 없다),
+ * 그것으로 가리면 남이 등록한 리포에서 일하는 팀원의 기록이 통째로 버려진다 (BACKLOG2 §2-4).
+ *
  * @return 등록 리포 이름. 서버에 닿지 못하면 undefined (모른다 — 0개와 다르다)
  */
 export async function registeredRepos(config: UploaderConfig): Promise<Set<string> | undefined> {
@@ -57,7 +61,7 @@ export async function registeredRepos(config: UploaderConfig): Promise<Set<strin
   if (!config.apiKey) return undefined
 
   const base = config.serverUrl.replace(/\/+$/, '')
-  const url = `${base}/api/repos`
+  const url = `${base}/api/repos/known`
   try {
     const res = await fetch(url, {
       headers: { 'X-Api-Key': config.apiKey },
@@ -67,10 +71,11 @@ export async function registeredRepos(config: UploaderConfig): Promise<Set<strin
       log(`등록 리포 목록을 읽지 못했습니다 (${res.status}). 이번에는 거르지 않고 보냅니다`)
       return undefined
     }
-    const body = (await res.json()) as { fullName?: string }[]
+    // 이름 배열이다. 예전 서버는 객체 배열({fullName})을 주므로 둘 다 받는다.
+    const body = (await res.json()) as (string | { fullName?: string })[]
     const names = new Set(
       (Array.isArray(body) ? body : [])
-        .map((r) => (r.fullName ?? '').toLowerCase())
+        .map((r) => (typeof r === 'string' ? r : r.fullName ?? '').toLowerCase())
         .filter(Boolean),
     )
     repoCache = { at: Date.now(), names }
