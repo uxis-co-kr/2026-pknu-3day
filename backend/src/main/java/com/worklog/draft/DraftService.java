@@ -120,6 +120,10 @@ public class DraftService {
         if (!com.worklog.auth.DataScope.canSee(principal, draft.getUser().getId())) {
             throw ApiException.notFound("DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다.");
         }
+        // 저장소별은 관리자만 (9/11 결정). 자기가 만든 것이라도 사원 화면에서는 보이지 않는다.
+        if (draft.getKind() == DraftKind.REPO && (principal == null || !principal.isAdmin())) {
+            throw ApiException.notFound("DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다.");
+        }
         return toDetail(draft);
     }
 

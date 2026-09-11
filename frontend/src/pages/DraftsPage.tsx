@@ -22,7 +22,7 @@ import { sessionHasContent } from '@/lib/session'
  * 함께 모아 쓴다 (PRD F3).
  */
 /** 일별·주간·저장소별 — 셋 다 AI 생성·저장·Mattermost 전송까지 같은 방식으로 쓴다 (V15). */
-type Kind = 'daily' | 'weekly' | 'repo'
+type Kind = 'daily' | 'weekly'
 
 const KIND_TAB =
   'h-[32px] rounded-none border-b-2 border-transparent px-4 text-[13px] shadow-none'
@@ -62,13 +62,14 @@ export default function DraftsPage() {
         <TabsList className="h-auto w-full justify-start rounded-none border-b bg-transparent p-0">
           <TabsTrigger value="daily" className={KIND_TAB}>일별</TabsTrigger>
           <TabsTrigger value="weekly" className={KIND_TAB}>주간 업무일지</TabsTrigger>
-          <TabsTrigger value="repo" className={KIND_TAB}>저장소별 업무일지</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {kind !== 'daily' && (
+      {/* 저장소별은 관리자 콘솔로 옮겼다 (9/11) — 한 사람의 일지가 아니라 그 저장소에서
+          팀이 무엇을 했는지를 보는 것이라, 사원 화면에 두면 남의 활동까지 묶어 보게 된다. */}
+      {kind === 'weekly' && (
         <PeriodDraftWorkspace
-          kind={kind}
+          kind="weekly"
           userId={me?.id}
           displayName={me?.name ?? me?.login}
         />

@@ -59,6 +59,10 @@ public class DraftController {
         // 종류를 주면 그것만 (V15). 안 주면 하루치만 준다 — 기존 화면이 주간·저장소별을
         // 날짜 목록에 섞어 보여 주면 안 된다.
         DraftKind wanted = kind == null ? DraftKind.DAILY : kind;
+        // 저장소별은 그 저장소에서 팀이 무엇을 했는지를 본다 — 관리자만 (9/11 결정).
+        if (wanted == DraftKind.REPO && (principal == null || !principal.isAdmin())) {
+            throw ApiException.forbidden("ADMIN_ONLY", "저장소별 업무일지는 관리자만 볼 수 있습니다.");
+        }
         List<DraftSummaryResponse> rows = date == null
                 ? draftService.listBetween(from, to, scoped, status)
                 : draftService.list(date, scoped, status);

@@ -54,12 +54,18 @@ public class DraftGenerateController {
      *
      * <p>주간과 같은 단위다 — 저장소마다 주에 하나씩 이어지고, 다시 만들면 버전이 올라간다.
      *
+     * <p><b>관리자만 만든다 (9/11 결정).</b> 저장소별은 한 사람의 일지가 아니라 그 저장소에서
+     * 팀이 무엇을 했는지를 본다. 사원 개인 화면에 두면 남의 활동까지 묶어 보게 된다.
+     *
      * @param request {@code mineOnly} 가 true 면 내 활동만, false 면 그 저장소의 팀 전체
      */
     @PostMapping("/generate/repo")
     public ResponseEntity<GenerateResponse> generateRepo(
             @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestBody PeriodRequest request) {
+        if (!principal.isAdmin()) {
+            throw ApiException.forbidden("ADMIN_ONLY", "저장소별 업무일지는 관리자만 만들 수 있습니다.");
+        }
         Long userId = request.userId() == null ? principal.id() : request.userId();
         if (request.repoId() == null) {
             throw ApiException.badRequest("REPO_REQUIRED", "저장소를 골라 주세요.");

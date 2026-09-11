@@ -52,6 +52,7 @@ export default function AdminShell() {
           <NavLink to="/admin" end className={({ isActive }) => item(isActive)}>개요</NavLink>
           <NavLink to="/admin/people" className={({ isActive }) => item(isActive)}>직원 · 계정</NavLink>
           <NavLink to="/admin/drafts" className={({ isActive }) => item(isActive)}>직원 업무일지</NavLink>
+          <NavLink to="/admin/repo-drafts" className={({ isActive }) => item(isActive)}>저장소별 업무일지</NavLink>
           <NavLink to="/admin/activity" className={({ isActive }) => item(isActive)}>팀원 내역</NavLink>
           <NavLink to="/admin/llm" className={({ isActive }) => item(isActive)}>LLM 모델</NavLink>
           <NavLink to="/admin/notify" className={({ isActive }) => item(isActive)}>Mattermost</NavLink>
