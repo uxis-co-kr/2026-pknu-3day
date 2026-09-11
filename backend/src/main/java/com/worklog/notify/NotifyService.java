@@ -17,15 +17,17 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 알림 이벤트 조립 (PRD F7).
  *
- * <p>webhook URL 은 사용자별 설정 → 전역 설정 → 환경변수 순으로 찾는다.
+ * <p>두 가지만 나간다 — 미커밋 리마인드, 그리고 사원이 [Mattermost 전송] 을 눌렀을 때의
+ * 요약 알림. <b>초안을 만든 것 자체는 알리지 않는다</b> (9/11 결정). AI 생성을 누를 때마다
+ * 관리자 채널에 글이 쌓였는데, 아직 사람이 손대지 않은 초안이라 알릴 것이 못 된다.
+ *
+ * <p>webhook URL 은 사용자별 설정 → 전역 설정 → 환경변수 순으로 찾는다. 다만 요약 알림은
+ * 관리자가 콘솔에서 고른 대표 채널(또는 전역 웹훅)로만 간다 — 개인 채널로 새면 안 된다.
  */
 @Service
 public class NotifyService {
 
     private static final Logger log = LoggerFactory.getLogger(NotifyService.class);
-
-    /** 초안 생성 알림에 붙이는 완료 작업 줄 수 (PRD F7-1 — 상위 3줄). */
-    private static final int PREVIEW_LINES = 3;
 
     private final Notifier notifier;
     private final NotifySettingRepository settingRepository;
@@ -46,21 +48,6 @@ public class NotifyService {
         this.frontendUrl = frontendUrl.endsWith("/")
                 ? frontendUrl.substring(0, frontendUrl.length() - 1)
                 : frontendUrl;
-    }
-
-    /** 이벤트 1 — 초안 생성 완료 (PRD F7). */
-    @Transactional(readOnly = true)
-    public boolean notifyDraftCreated(Draft draft) {
-        User user = draft.getUser();
-        String text = """
-                📝 %s의 %s 업무 일지 초안이 생성되었습니다. %s
-                %s"""
-                .formatted(
-                        displayName(user),
-                        draft.getWorkDate(),
-                        draftLink(draft),
-                        previewOf(draft.getContentMd()));
-        return send(user.getId(), text);
     }
 
     /**
@@ -186,18 +173,6 @@ public class NotifyService {
             return global.get();
         }
         return defaultWebhookUrl == null || defaultWebhookUrl.isBlank() ? null : defaultWebhookUrl;
-    }
-
-    /** "완료한 작업" 상위 몇 줄만 미리보기로 붙인다. */
-    static String previewOf(String contentMd) {
-        List<String> lines = contentMd
-                .lines()
-                .dropWhile(line -> !line.startsWith("## 완료한 작업"))
-                .skip(1)
-                .takeWhile(line -> line.startsWith("- "))
-                .limit(PREVIEW_LINES)
-                .toList();
-        return String.join("\n", lines);
     }
 
     private String draftLink(Draft draft) {

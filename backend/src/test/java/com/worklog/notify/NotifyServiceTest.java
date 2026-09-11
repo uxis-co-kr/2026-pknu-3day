@@ -108,24 +108,8 @@ class NotifyServiceTest {
         NotifyService service =
                 new NotifyService(notifier, settingRepository, null, "", "http://localhost:5173");
 
-        assertThat(service.notifyDraftCreated(draft())).isFalse();
+        assertThat(service.notifyDraftSummarized(draft())).isFalse();
         verify(notifier, never()).send(any(), any());
-    }
-
-    @Test
-    @DisplayName("초안 생성 알림에 이름·날짜·링크와 완료 작업 3줄이 들어간다")
-    void buildsCreatedMessage() {
-        assertThat(service().notifyDraftCreated(draft())).isTrue();
-
-        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(notifier).send(eq(ENV_URL), text.capture());
-
-        assertThat(text.getValue())
-                .contains("📝 배태일의 2026-09-10 업무 일지 초안이 생성되었습니다.")
-                .contains("http://localhost:5173/drafts/7")
-                .contains("- [repo] 첫째 줄")
-                .contains("- [repo] 셋째 줄")
-                .doesNotContain("넷째 줄");
     }
 
     @Test
@@ -186,14 +170,7 @@ class NotifyServiceTest {
     void survivesSendFailure() {
         when(notifier.send(any(), any())).thenReturn(false);
 
-        assertThat(service().notifyDraftCreated(draft())).isFalse();
+        assertThat(service().notifyDraftSummarized(draft())).isFalse();
     }
 
-    @Test
-    @DisplayName("완료한 작업이 없으면 미리보기는 비어 있다")
-    void emptyPreviewWhenNoWork() {
-        assertThat(NotifyService.previewOf("# 제목\n\n## 완료한 작업\n- (기록된 활동 없음)\n"))
-                .isEqualTo("- (기록된 활동 없음)");
-        assertThat(NotifyService.previewOf("# 제목만 있는 문서")).isEmpty();
-    }
 }

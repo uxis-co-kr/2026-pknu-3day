@@ -101,8 +101,9 @@ public class DraftGenerator {
                 saved.getVersion(),
                 activities.size(),
                 sessions.size());
-        // 알림 실패가 초안 생성을 되돌리면 안 된다 (PRD F7).
-        notifyService.notifyDraftCreated(saved);
+        // 초안을 만들었다고 알리지는 않는다 (9/11 결정). 사원이 AI 생성을 누를 때마다
+        // 관리자 채널에 글이 쌓였는데, 아직 사람이 손대지 않은 초안이라 알릴 것이 못 된다.
+        // 알림은 사원이 [Mattermost 전송] 을 눌렀을 때 한 번만 나간다 (NotifyService.notifyDraftSummarized).
         return Optional.of(saved);
     }
 
