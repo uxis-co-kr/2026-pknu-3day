@@ -64,9 +64,9 @@
         },
         "worklog.intervalMinutes": {
           "type": "number",
-          "default": 30,
+          "default": 10,
           "minimum": 5,
-          "description": "자동 전송 주기(분)."
+          "description": "자동 전송 주기(분). AI 대화는 그 사이에도 쌓이므로 너무 길면 서버 값이 낡는다."
         },
         "worklog.collectDiff": {
           "type": "boolean",

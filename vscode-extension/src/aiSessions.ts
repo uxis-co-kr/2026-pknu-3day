@@ -16,7 +16,12 @@ import type { AiSessionSummary } from './types'
  */
 const ROOT = path.join(os.homedir(), '.claude', 'projects')
 
-/** 한 세션에서 가져올 프롬프트 수. 너무 많으면 일지 프롬프트가 넘친다. */
+/**
+ * 한 세션에서 **담아 보낼** 프롬프트 수. 너무 많으면 일지 프롬프트가 넘친다.
+ *
+ * <p>개수({@code promptCount})는 자르지 않고 전부 센다 — 자른 개수를 보고하면 60번 물어본
+ * 세션이 12개로 보인다.
+ */
 const MAX_PROMPTS = 12
 /** 프롬프트 한 줄의 길이 상한. */
 const MAX_LEN = 200
@@ -64,6 +69,8 @@ async function readSession(file: string, workDate: string): Promise<AiSessionSum
   const text = buffer.subarray(Math.max(0, buffer.length - TAIL_BYTES)).toString('utf8')
 
   const prompts: string[] = []
+  /** 실제로 물어본 횟수. prompts 는 잘리지만 이 값은 전부 센다. */
+  let total = 0
   let firstAt: string | undefined
   let lastAt: string | undefined
 
@@ -84,17 +91,20 @@ async function readSession(file: string, workDate: string): Promise<AiSessionSum
 
     firstAt ??= at
     lastAt = at
-    if (prompts.length < MAX_PROMPTS) {
-      prompts.push(said.length > MAX_LEN ? said.slice(0, MAX_LEN) + '…' : said)
-    }
+    total += 1
+    // 최근 것을 남긴다 — 앞쪽 12개만 두면 오후에 한 일이 통째로 빠진다.
+    prompts.push(said.length > MAX_LEN ? said.slice(0, MAX_LEN) + '…' : said)
+    if (prompts.length > MAX_PROMPTS) prompts.shift()
   }
 
-  if (!lastAt || prompts.length === 0) return undefined
+  if (!lastAt || total === 0) return undefined
   return {
     id: path.basename(file, '.jsonl'),
     firstAt: firstAt ?? lastAt,
     lastAt,
-    promptCount: prompts.length,
+    // 담은 개수가 아니라 **실제로 물어본 횟수**다. 60번 물어본 세션이 "12개" 로 보이면
+    // 숫자가 실제와 어긋나 보인다 (BACKLOG2_client C-1).
+    promptCount: total,
     prompts,
   }
 }

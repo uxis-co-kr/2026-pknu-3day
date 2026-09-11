@@ -83,7 +83,10 @@ async function main() {
     const ai = p.aiSessions ?? []
     console.log(`\nAI 대화 ${ai.length}세션`)
     for (const s of ai.slice(0, 3)) {
-      console.log(`  ${s.firstAt.slice(11, 16)}–${s.lastAt.slice(11, 16)}  프롬프트 ${s.promptCount}개`)
+      // 기록은 UTC 다. 그대로 찍으면 9시간 어긋나 보인다.
+      const hm = (iso) => new Date(iso).toTimeString().slice(0, 5)
+      console.log(`  ${hm(s.firstAt)}–${hm(s.lastAt)}  프롬프트 ${s.promptCount}개`
+        + (s.prompts.length < s.promptCount ? ` (최근 ${s.prompts.length}개만 보냄)` : ''))
       for (const q of s.prompts.slice(0, 3)) console.log(`    · ${q.slice(0, 70)}`)
     }
 

@@ -18,7 +18,7 @@ function readConfig() {
   return {
     serverUrl: cfg.get<string>('serverUrl', 'http://localhost:8080'),
     apiKey: cfg.get<string>('apiKey', ''),
-    intervalMinutes: cfg.get<number>('intervalMinutes', 30),
+    intervalMinutes: cfg.get<number>('intervalMinutes', 10),
     collectDiff: cfg.get<boolean>('collectDiff', true),
   }
 }
@@ -215,6 +215,16 @@ async function pickFolder(): Promise<string | undefined> {
 }
 
 /**
+ * 사이드바만 주기적으로 다시 그린다 (보내지는 않는다).
+ *
+ * <p>AI 대화는 workspace 밖(`~/.claude/projects`)에 쌓여 파일 감시가 닿지 않는다. 전송은
+ * 몇 분에 한 번인데 대화는 그 사이에도 는다. 내 화면이라도 맞게 두려고 짧게 다시 읽는다
+ * (BACKLOG2_client C-1 ②).
+ */
+const TREE_REFRESH_MS = 60_000
+let treeTimer: NodeJS.Timeout | undefined
+
+/**
  * 저장할 때마다 git 을 부르면 연속 저장에서 낭비가 크다. 1초 안의 저장은 한 번으로 묶는다.
  */
 let treeRefreshTimer: NodeJS.Timeout | undefined
@@ -336,6 +346,10 @@ export function activate(context: vscode.ExtensionContext): void {
   )
 
   restartTimer()
+  // 창이 보이지 않을 때까지 돌 이유는 없지만, 1분에 한 번 git 을 부르는 정도는 가볍다.
+  treeTimer = setInterval(() => void tree.refresh(), TREE_REFRESH_MS)
+  context.subscriptions.push({ dispose: () => treeTimer && clearInterval(treeTimer) })
+
   // 켤 때 한 번 훑어 상태바를 채운다. 서버가 없어도 상태바 오류만 남는다.
   void send('시작 시 전송')
 }
