@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { readFullConversation, sessionFilePath } from './aiSessions'
+import { readConversation, sourceLabelOf } from './aiSessions'
 import { log } from './log'
 
 /**
@@ -43,21 +43,21 @@ export class AiConversationProvider implements vscode.TextDocumentContentProvide
     const params = new URLSearchParams(uri.query)
     const cwd = params.get('cwd') ?? ''
     const id = params.get('id') ?? ''
-    const file = sessionFilePath(cwd, id)
-
-    let read: Awaited<ReturnType<typeof readFullConversation>>
+    let read: Awaited<ReturnType<typeof readConversation>>
     try {
-      read = await readFullConversation(file)
+      read = await readConversation(cwd, id)
     } catch (e) {
-      log(`대화 기록을 읽지 못했습니다 (${file}): ${e instanceof Error ? e.message : String(e)}`)
-      return `# 대화를 열 수 없습니다\n\n기록 파일을 읽지 못했습니다.\n\n\`${file}\`\n`
+      log(`대화 기록을 읽지 못했습니다 (${id}): ${e instanceof Error ? e.message : String(e)}`)
+      read = undefined
     }
+    if (!read) return `# 대화를 열 수 없습니다\n\n기록 파일을 찾지 못했습니다.\n\n\`${id}\`\n`
 
     const lines: string[] = []
     const index = new Map<string, number>()
     lines.push(`# ${read.title ?? '제목 없는 대화'}`, '')
     // 어디서 온 글인지 적어 둔다. 이 문서는 저장되지 않으므로 원본을 찾을 길을 남긴다.
-    lines.push(`> ${file}`, '')
+    // 도구 이름도 적는다 — 대화가 여러 도구에서 섞여 오므로 제목만으로는 가릴 수 없다.
+    lines.push(`> ${sourceLabelOf(id)} · ${read.file}`, '')
 
     for (const turn of read.turns) {
       index.set(turn.at, lines.length)

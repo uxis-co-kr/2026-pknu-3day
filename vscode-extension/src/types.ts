@@ -52,14 +52,24 @@ export interface TodoItem {
 }
 
 /**
- * 이 폴더에서 오간 AI 대화 한 세션 (Claude Code).
+ * 이 폴더에서 오간 AI 대화 한 세션.
  *
  * <p>커밋에도 미커밋 변경에도 남지 않는 작업이 있다 — 무엇을 어떻게 할지 묻고 정한 과정이다.
+ *
+ * <p>Claude Code 뿐 아니라 VS Code 내장 채팅(Copilot 등)·Codex·Gemini 에서도 모은다.
+ * 어디서 왔는지는 {@link id} 의 접두사에 있다.
  */
 export interface AiSessionSummary {
+  /**
+   * `<도구>:<그 도구의 세션 id>`. 예: `vscode:2cba0f08-…`, `codex:019fea63-…`.
+   *
+   * <p>Claude Code 만 접두사가 없다 — 서버가 id 하나로 대화를 합치는데, 이미 그 id 로 쌓인
+   * 대화에 접두사를 붙이면 같은 대화가 남남이 되어 서버가 적어 둔 요약을 잃는다.
+   */
   id: string
   /**
-   * 세션 제목. Claude Code 가 기록에 남긴 것(`ai-title`)을 쓰고, 없으면 첫 질문에서 만든다.
+   * 세션 제목. 도구가 기록에 남긴 것(Claude 는 `ai-title`, 내장 채팅은 `customTitle`)을
+   * 쓰고, 없으면 첫 질문에서 만든다.
    *
    * <p>시각으로만 구분하면(`02:35–05:49`) 무슨 대화였는지 알 수 없다 (BACKLOG2 §2-3).
    */

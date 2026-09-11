@@ -1,19 +1,24 @@
-import { open, readdir, readFile, stat } from 'node:fs/promises'
-import * as os from 'node:os'
-import * as path from 'node:path'
 import { log } from './log'
+import { claudeSource } from './ai/claude'
+import { codexSource } from './ai/codex'
+import { geminiSource } from './ai/gemini'
+import { type AiSource, type FullTurn, type SessionRef, kstDate } from './ai/source'
+import { setUserDir, vscodeChatSource } from './ai/vscodeChat'
 import type { AiSessionSummary, AiTurn } from './types'
 
 /**
- * 이 폴더에서 오간 AI 대화(Claude Code)를 읽어 요약 재료를 만든다.
+ * 이 폴더에서 오간 AI 대화를 읽어 요약 재료를 만든다.
  *
  * <p>커밋에도 미커밋 변경에도 남지 않는 작업이 있다 — 무엇을 어떻게 할지 묻고 정한 과정이다.
  * 그날 한 일을 모으는 도구라면 이것도 재료다.
  *
- * <p>Claude Code 는 세션을 {@code ~/.claude/projects/<경로를 -로 바꾼 이름>/<세션id>.jsonl}
- * 에 한 줄 한 JSON 으로 남긴다. 여기서는 **질문과 그 답변**을 뽑는다.
+ * <p>도구마다 기록을 두는 곳도 모양도 다르다. 그것은 {@link AiSource} 뒤에 있고, 여기에는
+ * <b>도구가 무엇이든 같은 규칙</b>만 남는다 — 몇 개를 담을지, 몇 자에서 자를지, 어느 것을
+ * 보낼지.
  */
-const ROOT = path.join(os.homedir(), '.claude', 'projects')
+
+/** 읽을 곳들. 순서는 사이드바에 나오는 차례와 상관없다 — 마지막으로 말한 대화가 앞에 온다. */
+const SOURCES: AiSource[] = [claudeSource, vscodeChatSource, codexSource, geminiSource]
 
 /**
  * 한 세션에서 **담아 보낼** 질문·답변 쌍의 수. 너무 많으면 일지 프롬프트가 넘친다.
@@ -28,117 +33,55 @@ const MAX_PROMPT_LEN = 200
 const MAX_ANSWER_LEN = 300
 /** 첫 질문으로 제목을 만들 때의 길이. */
 const MAX_TITLE_LEN = 40
-/** 세션 파일이 커도 끝부분만 읽는다 — 오늘 대화는 뒤에 있다. */
-const TAIL_BYTES = 2 * 1024 * 1024
-/** 대화가 시작된 시각을 찾을 만큼만 앞에서 읽는다. 첫 줄 하나면 되지만 길 수도 있다. */
-const HEAD_BYTES = 64 * 1024
 
 /**
- * 폴더 안의 대화 파일 하나.
+ * 확장이 켜질 때 한 번 부른다.
  *
- * <p>파일 하나가 대화 하나는 아니다 — 이어 쓰거나 갈라 쓰면 Claude Code 는 <b>지금까지의
- * 대화를 통째로 복사한 새 파일</b>을 만들고 세션 id 도 새로 붙인다. 옛 파일은 그대로 남는다.
- * 그래서 파일만 세면 Claude Code 사이드바에 하나로 보이는 대화가 여기서는 둘, 셋으로 늘어난다.
+ * <p>내장 채팅 기록이 어디 있는지는 <b>지금 돌고 있는 편집기</b>에게 물어야 안다 —
+ * VS Code·Cursor·Windsurf 가 저마다 다른 곳에 둔다.
+ *
+ * @param globalStoragePath `context.globalStorageUri.fsPath`
  */
-interface SessionFile {
-  path: string
-  id: string
-  /** 이 대화가 시작된 시각. 복사본끼리는 이 값이 밀리초까지 같다 — 묶는 열쇠다. */
-  origin: string | undefined
-  mtimeMs: number
-}
-
-/** 폴더의 대화 파일을 모두 훑어 시작점까지 읽어 둔다. */
-async function listSessionFiles(cwd: string): Promise<SessionFile[]> {
-  const dir = path.join(ROOT, encodeCwd(cwd))
-  let names: string[]
-  try {
-    names = (await readdir(dir)).filter((f) => f.endsWith('.jsonl'))
-  } catch {
-    // Claude Code 를 쓰지 않는 폴더이면 정상이다. 다만 이름 규칙이 어긋나도 여기로 오므로
-    // 한 줄 남긴다 — 조용히 0건이면 "대화를 안 했나 보다" 로 읽혀 버그가 숨는다.
-    log(`AI 대화 기록 폴더가 없습니다: ${dir}`)
-    return []
-  }
-
-  const files: SessionFile[] = []
-  for (const name of names) {
-    const file = path.join(dir, name)
-    try {
-      const info = await stat(file)
-      files.push({ path: file, id: path.basename(name, '.jsonl'), origin: await originOf(file), mtimeMs: info.mtimeMs })
-    } catch (e) {
-      log(`AI 세션 ${name} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-  return files
-}
-
-/** 파일 앞부분에서 첫 시각을 뽑는다. 대화가 시작된 때이고, 복사본끼리 같다. */
-async function originOf(file: string): Promise<string | undefined> {
-  const handle = await open(file, 'r')
-  try {
-    const buffer = Buffer.alloc(HEAD_BYTES)
-    const { bytesRead } = await handle.read(buffer, 0, HEAD_BYTES, 0)
-    for (const line of buffer.subarray(0, bytesRead).toString('utf8').split('\n')) {
-      if (!line.startsWith('{')) continue
-      let entry: SessionEntry
-      try {
-        entry = JSON.parse(line) as SessionEntry
-      } catch {
-        continue // 마지막 조각이 잘렸다. 앞 줄에서 못 찾았으면 그냥 포기한다.
-      }
-      if (entry.timestamp) return entry.timestamp
-    }
-  } finally {
-    await handle.close()
-  }
-  return undefined
+export function initAiSources(globalStoragePath: string | undefined): void {
+  setUserDir(globalStoragePath)
 }
 
 /**
- * 같은 대화에서 갈라져 나온 파일은 <b>마지막에 손댄 것 하나만</b> 남긴다.
+ * 세션 id 앞에 붙는 이름표. 서버는 id 하나로 대화를 합치므로 도구가 다르면 달라야 한다
+ * — 그러지 않으면 Gemini 의 대화가 Codex 의 대화를 덮는다.
  *
- * <p>새 파일은 옛 파일의 내용을 통째로 안고 있으므로, 마지막 것만 봐도 잃는 것이 없다.
- * 시작점을 읽지 못한 파일은 묶지 않는다 — 남남일 수도 있는 것을 합치는 쪽이 더 나쁘다.
+ * <p>Claude 만 접두사가 없다. 이미 그 id 로 서버에 쌓인 대화가 있어, 붙이는 순간 같은
+ * 대화가 남남이 되고 서버가 적어 둔 요약을 잃는다.
  */
-function newestPerOrigin(files: SessionFile[]): SessionFile[] {
-  const newest = new Map<string, SessionFile>()
-  const loose: SessionFile[] = []
-  for (const file of files) {
-    if (!file.origin) {
-      loose.push(file)
-      continue
-    }
-    const prev = newest.get(file.origin)
-    if (!prev || prev.mtimeMs < file.mtimeMs) newest.set(file.origin, file)
-  }
-  const kept = [...loose, ...newest.values()]
-  if (kept.length < files.length) {
-    log(`AI 대화 ${files.length}개 파일 중 ${files.length - kept.length}개는 같은 대화의 옛 사본이라 뺍니다`)
-  }
-  return kept
+function tag(source: AiSource, id: string): string {
+  return source.key ? `${source.key}:${id}` : id
 }
 
-/** 그 폴더의 그 대화가 담긴 기록 파일. 사이드바에서 문서를 열 때 쓴다. */
-export function sessionFilePath(cwd: string, id: string): string {
-  return path.join(ROOT, encodeCwd(cwd), `${id}.jsonl`)
+/** 접두사를 보고 어디서 온 대화인지 가린다. 접두사가 없으면 Claude 다 (옛 id). */
+function sourceOf(id: string): { source: AiSource; rawId: string } {
+  const at = id.indexOf(':')
+  if (at > 0) {
+    const found = SOURCES.find((s) => s.key === id.slice(0, at))
+    if (found) return { source: found, rawId: id.slice(at + 1) }
+  }
+  return { source: claudeSource, rawId: id }
 }
 
 /**
- * `/Users/me/work/app_v2` → `-Users-me-work-app-v2`
+ * 그 대화가 어느 도구의 것인지.
  *
- * <p>Claude Code 는 폴더 이름에서 <b>영숫자와 `-` 가 아닌 글자를 모두 `-` 로</b> 바꾼다.
- * 슬래시만 바꾸면 밑줄·점·공백이 든 경로에서 엉뚱한 폴더를 찾는다 — `git_collector` 의
- * 기록은 `-…-git-collector` 에 있는데 `-…-git_collector` 를 뒤지고는 조용히 빈 목록을
- * 돌려줬다. 그 저장소의 AI 대화가 통째로 빠져 있었고, 밑줄이 없는 저장소에서는 멀쩡해서
- * 눈에 띄지 않았다.
- *
- * <p>확인: `/Users/ungsik/Desktop/CodeAtlas/CodeAtlas.git` → `-Users-ungsik-Desktop-CodeAtlas-CodeAtlas-git`
- * (점도 `-` 가 된다). 위 sessionFilePath 도 같은 규칙을 써야 문서가 열린다.
+ * <p>{@code key} 가 빈 문자열이면 Claude Code 다 — 접두사를 쓰지 않는 유일한 도구이고,
+ * 사이드바는 그때 도구 이름을 적지 않는다. 대부분 한 도구만 쓰므로 줄마다 같은 이름이
+ * 붙으면 읽을 것만 는다.
  */
-function encodeCwd(cwd: string): string {
-  return cwd.replace(/[^A-Za-z0-9-]/g, '-')
+export function sourceOfId(id: string): { key: string; label: string } {
+  const { source } = sourceOf(id)
+  return { key: source.key, label: source.label }
+}
+
+/** 그 대화가 어느 도구의 것인지, 이름만. */
+export function sourceLabelOf(id: string): string {
+  return sourceOf(id).source.label
 }
 
 /**
@@ -148,28 +91,33 @@ function encodeCwd(cwd: string): string {
  * 남아야 하고(닫는 순간 그날 기록이 서버에서 지워지면 안 된다), 열어 둔 채 아직 묻지
  * 않았거나 어제 묻던 대화는 지금 붙들고 있는 일이니 함께 보이는 편이 맞다.
  *
- * <p>예전에는 뒤쪽을 "보내지 않음" 으로 따로 붙였다. 이제 같은 목록에 들어간다.
- *
  * @param cwd 워크스페이스 폴더의 절대 경로
  * @param workDate YYYY-MM-DD (KST)
  */
 export async function collectAiSessions(cwd: string, workDate: string): Promise<AiSessionSummary[]> {
-  const open = await openSessionIds(cwd)
   const out: AiSessionSummary[] = []
-  for (const file of newestPerOrigin(await listSessionFiles(cwd))) {
+  for (const source of SOURCES) {
+    let refs: SessionRef[]
     try {
-      const today = await readSession(file.path, workDate)
-      if (today) {
-        out.push(today)
-        continue
-      }
-      // 오늘 질문이 없어도 열려 있으면 싣는다. 날짜를 걸지 않고 읽어 마지막 오간 것을 담는다
-      // — 질문이 하나도 없는 대화는 readSession 이 undefined 를 준다(빈 곳은 뺀다).
-      if (!open.has(file.id)) continue
-      const whole = await readSession(file.path)
-      if (whole) out.push(whole)
+      refs = await source.list(cwd, workDate)
     } catch (e) {
-      log(`AI 세션 ${file.id} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+      log(`${source.label} 기록을 훑지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+      continue
+    }
+    // 기록이 아예 없는 것은 그 도구를 안 쓴다는 뜻이라 정상이다. 다만 조용히 0건이면
+    // "대화를 안 했나 보다" 로 읽혀 버그가 숨으므로 한 줄 남긴다.
+    if (refs.length === 0) {
+      log(`${source.label}: 이 폴더의 대화 기록 없음`)
+      continue
+    }
+
+    for (const ref of refs) {
+      try {
+        const summary = await summarize(source, ref, workDate)
+        if (summary) out.push(summary)
+      } catch (e) {
+        log(`${source.label} 세션 ${ref.id} 을 읽지 못했습니다: ${e instanceof Error ? e.message : String(e)}`)
+      }
     }
   }
   // 마지막으로 말한 세션이 앞에 오게.
@@ -177,184 +125,49 @@ export async function collectAiSessions(cwd: string, workDate: string): Promise<
   return out
 }
 
-/** 켜져 있는 Claude Code 세션이 저마다 남기는 곳. 끝나면 파일도 사라진다. */
-const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions')
+/** 기록 하나를 그날치 요약으로. 보낼 것이 없으면 undefined. */
+async function summarize(source: AiSource, ref: SessionRef, workDate: string): Promise<AiSessionSummary | undefined> {
+  // 그날 손대지 않은 기록은 열지 않는다. 열려 있는 대화는 날짜와 상관없이 본다.
+  if (!ref.live && kstDate(new Date(ref.mtimeMs).toISOString()) < workDate) return undefined
 
-/** {@link SESSIONS_DIR} 안의 파일. 필요한 것만 적는다. */
-interface RunningSession {
-  pid?: number
-  sessionId?: string
-  cwd?: string
+  const today = await source.read(ref, workDate)
+  if (today && today.turns.length > 0) return fold(source, ref, today.title, today.turns)
+
+  // 오늘 질문이 없어도 열려 있으면 싣는다. 날짜를 걸지 않고 읽어 마지막 오간 것을 담는다
+  // — 질문이 하나도 없는 대화는 여기서도 걸러진다(빈 곳은 뺀다).
+  if (!ref.live) return undefined
+  const whole = await source.read(ref)
+  if (!whole || whole.turns.length === 0) return undefined
+  return fold(source, ref, whole.title, whole.turns)
 }
 
-/**
- * 이 폴더에서 <b>지금 열려 있는</b> 대화의 id.
- *
- * <p>기록 파일(`~/.claude/projects/…/*.jsonl`)은 대화를 닫아도 그대로 남는다. 그것만 보고는
- * 지금 열린 대화와 지난 대화를 가릴 수 없어, 며칠 전에 닫은 대화가 사이드바에 계속 붙어
- * 있었다. Claude Code 는 켜져 있는 세션마다 `~/.claude/sessions/<n>.json` 을 두고 거기에
- * 대화 id 와 작업 폴더를 적어 둔다 — 그것을 본다.
- */
-async function openSessionIds(cwd: string): Promise<Set<string>> {
-  const ids = new Set<string>()
-  let names: string[]
-  try {
-    names = (await readdir(SESSIONS_DIR)).filter((f) => f.endsWith('.json'))
-  } catch {
-    return ids // Claude Code 가 켜져 있지 않다.
-  }
-
-  for (const name of names) {
-    try {
-      const info = JSON.parse(await readFile(path.join(SESSIONS_DIR, name), 'utf8')) as RunningSession
-      // 다른 폴더에서 켠 대화는 이 저장소의 일이 아니다.
-      if (!info.sessionId || info.cwd !== cwd) continue
-      // 갑자기 꺼지면 파일이 남을 수 있다. 프로세스가 살아 있는지 확인한다.
-      if (info.pid !== undefined && !isAlive(info.pid)) continue
-      ids.add(info.sessionId)
-    } catch {
-      continue // 쓰는 중이라 반쯤 적힌 파일일 수 있다.
-    }
-  }
-  return ids
-}
-
-/** 그 프로세스가 살아 있는지. 신호 0 은 보내지 않고 존재만 확인한다. */
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (e) {
-    // 남의 프로세스면 EPERM 이 온다 — 없는 것이 아니라 못 건드리는 것이다.
-    return (e as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
-
-/**
- * 세션 파일 하나를 요약한다.
- *
- * @param workDate 주면 그날 오간 것만 센다. 주지 않으면 (열려 있는 대화를 실을 때)
- *                 날짜를 가리지 않고 마지막까지 오간 것을 담는다.
- */
-async function readSession(file: string, workDate?: string): Promise<AiSessionSummary | undefined> {
-  const info = await stat(file)
-  // 그날 손대지 않은 세션은 열지 않는다.
-  if (workDate && kstDate(info.mtime.toISOString()) < workDate) return undefined
-
-  const buffer = await readFile(file)
-  const text = buffer.subarray(Math.max(0, buffer.length - TAIL_BYTES)).toString('utf8')
-
-  const turns: AiTurn[] = []
-  /** 실제로 물어본 횟수. turns 는 잘리지만 이 값은 전부 센다. */
-  let total = 0
-  let firstAt: string | undefined
-  let lastAt: string | undefined
-  /** 그날 처음 물어본 말. 제목을 만들 때 쓴다 — turns[0] 은 잘린 뒤의 첫 줄이라 다르다. */
-  let firstPrompt: string | undefined
-  /** Claude Code 가 남긴 세션 제목. 대화 중에 여러 번 고쳐 적히므로 마지막 것을 쓴다. */
-  let recordedTitle: string | undefined
-  /** 지금 답변을 받고 있는 질문. */
-  let current: AiTurn | undefined
-
-  for (const line of text.split('\n')) {
-    if (!line.startsWith('{')) continue // 잘린 첫 줄은 버린다.
-    let entry: SessionEntry
-    try {
-      entry = JSON.parse(line) as SessionEntry
-    } catch {
-      continue
-    }
-
-    // 제목 줄에는 시각이 없다. 아래 날짜 검사에 걸리지 않게 먼저 본다.
-    if (entry.type === 'ai-title') {
-      const title = entry.aiTitle?.trim()
-      if (title) recordedTitle = title
-      continue
-    }
-
-    const at = entry.timestamp
-    if (!at || (workDate && kstDate(at) !== workDate)) continue
-    if (entry.isMeta || entry.isSidechain) continue
-
-    if (entry.type === 'user') {
-      const prompt = said(entry.message?.content)
-      if (!prompt) continue
-      firstAt ??= at
-      firstPrompt ??= prompt
-      lastAt = at
-      total += 1
-      current = { at, prompt: clip(prompt, MAX_PROMPT_LEN) }
-      // 최근 것을 남긴다 — 앞쪽 12개만 두면 오후에 한 일이 통째로 빠진다.
-      turns.push(current)
-      if (turns.length > MAX_TURNS) turns.shift()
-      continue
-    }
-
-    if (entry.type === 'assistant' && current) {
-      const answer = said(entry.message?.content)
-      // 마지막 것만 남긴다. 도구를 부르는 사이에 흘리는 "…하겠습니다" 는 답이 아니다.
-      if (answer) current.answer = clip(answer, MAX_ANSWER_LEN)
-      lastAt = at
-    }
-  }
-
-  if (!lastAt || total === 0) return undefined
+/** 자르지 않은 대화를 보낼 크기로 접는다. */
+function fold(source: AiSource, ref: SessionRef, title: string | undefined, turns: FullTurn[]): AiSessionSummary {
+  // 최근 것을 남긴다 — 앞쪽 12개만 두면 오후에 한 일이 통째로 빠진다.
+  const kept: AiTurn[] = turns.slice(-MAX_TURNS).map((t) => ({
+    at: t.at,
+    prompt: clip(t.prompt, MAX_PROMPT_LEN),
+    ...(t.answer ? { answer: clip(t.answer, MAX_ANSWER_LEN) } : {}),
+  }))
+  const last = turns[turns.length - 1]
   return {
-    id: path.basename(file, '.jsonl'),
-    // 기록에 제목이 있으면 그것이 가장 낫다. 없는 세션도 있어 첫 질문으로 만든다.
-    title: recordedTitle ?? clip(firstPrompt ?? '제목 없는 대화', MAX_TITLE_LEN),
-    firstAt: firstAt ?? lastAt,
-    lastAt,
+    id: tag(source, ref.id),
+    // 기록에 제목이 있으면 그것이 가장 낫다. 없는 도구도 있어 첫 질문으로 만든다.
+    // turns[0] 이 아니라 자르기 전의 첫 질문이다 — 자른 뒤의 첫 줄은 그날의 시작이 아니다.
+    title: title?.trim() || clip(turns[0].prompt, MAX_TITLE_LEN),
+    firstAt: turns[0].at,
+    lastAt: last.answerAt ?? last.at,
     // 담은 개수가 아니라 **실제로 물어본 횟수**다 (BACKLOG2_client C-1).
-    promptCount: total,
-    turns,
+    promptCount: turns.length,
+    turns: kept,
   }
-}
-
-interface SessionEntry {
-  type?: string
-  isMeta?: boolean
-  isSidechain?: boolean
-  timestamp?: string
-  /** {@code type: 'ai-title'} 줄에만 있다. */
-  aiTitle?: string
-  message?: { role?: string; content?: unknown }
-}
-
-/**
- * 사람이 친 말, 또는 모델이 답한 말만 남긴다.
- *
- * <p>도구 결과나 편집기가 끼워 넣은 안내는 `<ide_opened_file>`·`<system-reminder>` 같은
- * 태그로 시작한다. 그런 덩어리는 그날의 의도가 아니므로 버린다.
- *
- * <p><b>덩어리마다 판단한다.</b> 이어 붙인 뒤에 보면 안 된다 — VS Code 안에서 Claude Code 를
- * 쓰면 사람이 친 말 **앞에** `<ide_opened_file>` 안내가 한 덩어리 붙는다. 붙여 놓고 보면
- * 첫 글자가 `<` 라서 그 질문이, 나아가 그 대화가 통째로 사라졌다.
- */
-function said(content: unknown): string | undefined {
-  const blocks = Array.isArray(content)
-    ? content
-        .filter((b): b is { type: string; text?: unknown } =>
-          typeof b === 'object' && b !== null && (b as { type?: string }).type === 'text')
-        .map((b) => String(b.text ?? ''))
-    : typeof content === 'string'
-      ? [content]
-      : []
-  const kept = blocks.map((b) => b.trim()).filter((b) => b && !b.startsWith('<'))
-  const joined = kept.join(' ').replace(/\s+/g, ' ').trim()
-  return joined || undefined
 }
 
 function clip(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text
 }
 
-/** 자르지 않은 질문·답변 하나. 읽으라고 여는 문서에 쓴다. */
-export interface FullTurn {
-  at: string
-  prompt: string
-  answer?: string
-}
+export type { FullTurn } from './ai/source'
 
 /**
  * 대화 하나를 <b>자르지 않고</b> 읽는다 — 사람이 읽을 문서를 만들기 위해서다.
@@ -362,57 +175,20 @@ export interface FullTurn {
  * <p>{@link collectAiSessions} 가 만드는 요약본은 질문 200자·답변 300자로 자르고 최근
  * 12개만 담는다. 서버로 보낼 것이라 그렇다. 여기서는 그 반대가 필요하다.
  *
- * @param workDate 주면 그날 것만. 비우면 파일에 담긴 전부
+ * <p>기록 파일의 자리는 도구마다 다르고, 내장 채팅은 id 만으로 알 수도 없다(창마다 다른
+ * 해시 폴더에 들어 있다). 그래서 목록을 다시 훑어 찾는다.
  */
-export async function readFullConversation(
-  file: string,
-  workDate?: string,
-): Promise<{ title: string | undefined; turns: FullTurn[] }> {
-  const buffer = await readFile(file)
-  const text = buffer.subarray(Math.max(0, buffer.length - TAIL_BYTES)).toString('utf8')
-
-  const turns: FullTurn[] = []
-  let title: string | undefined
-  let current: FullTurn | undefined
-
-  for (const line of text.split('\n')) {
-    if (!line.startsWith('{')) continue
-    let entry: SessionEntry
-    try {
-      entry = JSON.parse(line) as SessionEntry
-    } catch {
-      continue
-    }
-    if (entry.type === 'ai-title') {
-      const recorded = entry.aiTitle?.trim()
-      if (recorded) title = recorded
-      continue
-    }
-    const at = entry.timestamp
-    if (!at || (workDate && kstDate(at) !== workDate)) continue
-    if (entry.isMeta || entry.isSidechain) continue
-
-    if (entry.type === 'user') {
-      const prompt = said(entry.message?.content)
-      if (!prompt) continue
-      current = { at, prompt }
-      turns.push(current)
-      continue
-    }
-    if (entry.type === 'assistant' && current) {
-      const answer = said(entry.message?.content)
-      if (answer) current.answer = answer
-    }
+export async function readConversation(
+  cwd: string,
+  id: string,
+): Promise<{ title: string | undefined; turns: FullTurn[]; file: string } | undefined> {
+  const { source, rawId } = sourceOf(id)
+  const ref = (await source.list(cwd)).find((r) => r.id === rawId)
+  if (!ref) {
+    log(`${source.label} 세션 ${rawId} 의 기록 파일을 찾지 못했습니다`)
+    return undefined
   }
-  return { title, turns }
-}
-
-/** ISO 문자열을 KST 기준 YYYY-MM-DD 로. 업무 일자는 KST 다 (PRD 12). */
-function kstDate(iso: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(iso))
+  const read = await source.read(ref)
+  if (!read) return undefined
+  return { title: read.title ?? ref.title, turns: read.turns, file: ref.file }
 }

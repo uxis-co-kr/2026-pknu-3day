@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
 import { AI_SCHEME, AiConversationProvider, openAiTurn } from './aiDocument'
+import { initAiSources } from './aiSessions'
 import { Collector, todayKst } from './collector'
+import {
+  CONNECT_URI_PATH, Connection, decodeConnection, normalizeServerUrl,
+} from './connect'
 import { initLog, log } from './log'
 import { WorkLogTreeProvider } from './sidebar'
 import { registeredRepos, Uploader } from './uploader'
@@ -23,13 +27,65 @@ let verifying = false
  */
 const DEFAULT_SERVER_URL = 'http://localhost:8080'
 
+/**
+ * 개인 키가 들어 있는 자리. 설정 파일이 아니라 편집기의 비밀 저장소(OS 키체인)다.
+ *
+ * <p>예전에는 `worklog.apiKey` 설정에 평문으로 뒀다. 설정 동기화를 켜 두면 키가 계정을 타고
+ * 다른 PC 로 따라가고, 화면을 공유하며 설정을 열면 그대로 보인다. 키 하나로 그 사람의
+ * 일지를 쓸 수 있으므로 눈에 띄는 자리에 둘 값이 아니다.
+ */
+const API_KEY_SECRET = 'worklog.apiKey'
+
+/** {@link API_KEY_SECRET} 를 읽는 통로. activate 에서 받아 둔다. */
+let secrets: vscode.SecretStorage | undefined
+
+/**
+ * 비밀 저장소는 비동기로만 읽힌다. 전송 때마다 await 하지 않도록 켤 때 한 번 읽어 둔다 —
+ * 키를 바꾸는 자리가 {@link storeApiKey} 하나뿐이라 값이 어긋날 데가 없다.
+ */
+let apiKeyCache = ''
+
 function readConfig() {
   const cfg = vscode.workspace.getConfiguration('worklog')
   return {
     serverUrl: cfg.get<string>('serverUrl', DEFAULT_SERVER_URL),
-    apiKey: cfg.get<string>('apiKey', ''),
+    apiKey: apiKeyCache,
     intervalMinutes: cfg.get<number>('intervalMinutes', 10),
     collectDiff: cfg.get<boolean>('collectDiff', true),
+  }
+}
+
+/** 키를 비밀 저장소에 넣고 캐시를 맞춘다. 키가 바뀌는 자리는 여기 하나뿐이다. */
+async function storeApiKey(key: string): Promise<void> {
+  apiKeyCache = key.trim()
+  await secrets?.store(API_KEY_SECRET, apiKeyCache)
+}
+
+/**
+ * 켤 때 키를 읽어 오고, 옛 설정에 남은 평문 키는 비밀 저장소로 옮긴다.
+ *
+ * <p>이미 쓰고 있던 사람에게 "다시 발급받으라" 고 할 일이 아니다. 한 번 옮기고 설정에서는
+ * 지운다 — 옮기기만 하고 두면 평문이 그대로 남아 옮긴 뜻이 없어진다.
+ */
+async function loadApiKey(context: vscode.ExtensionContext): Promise<void> {
+  secrets = context.secrets
+  apiKeyCache = (await context.secrets.get(API_KEY_SECRET))?.trim() ?? ''
+
+  const cfg = vscode.workspace.getConfiguration('worklog')
+  const legacy = cfg.inspect<string>('apiKey')
+  const plain = (legacy?.globalValue ?? legacy?.workspaceValue ?? '').trim()
+  if (!plain) return
+
+  if (!apiKeyCache) {
+    await storeApiKey(plain)
+    log('설정에 있던 API Key 를 비밀 저장소로 옮겼습니다.')
+  }
+  // 값이 남은 자리만 지운다. 없는 자리를 지우려 하면 VS Code 가 오류를 던진다.
+  if (legacy?.globalValue !== undefined) {
+    await cfg.update('apiKey', undefined, vscode.ConfigurationTarget.Global)
+  }
+  if (legacy?.workspaceValue !== undefined) {
+    await cfg.update('apiKey', undefined, vscode.ConfigurationTarget.Workspace)
   }
 }
 
@@ -142,30 +198,6 @@ async function send(reason: string): Promise<SendResult> {
 }
 
 /**
- * 사람이 적은 서버 주소를 쓸 수 있는 형태로 다듬는다.
- *
- * <p>`192.168.0.224:8080` 처럼 스킴 없이 적거나, 주소창에서 복사해 끝 슬래시나 `/api` 를
- * 달고 오는 일이 잦다. `/api` 는 {@link Uploader} 가 붙이므로 그대로 두면 `/api/api` 가 된다.
- *
- * @return 다듬은 주소. 주소로 볼 수 없으면 undefined
- */
-function normalizeServerUrl(raw: string): string | undefined {
-  const trimmed = raw.trim()
-  if (!trimmed) return undefined
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
-  let url: URL
-  try {
-    url = new URL(withScheme)
-  } catch {
-    return undefined
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
-  if (!url.hostname) return undefined
-  const tail = url.pathname.replace(/\/+$/, '').replace(/\/api$/i, '')
-  return `${url.origin}${tail}`
-}
-
-/**
  * 백엔드 주소를 그 자리에서 받아 저장한다.
  *
  * <p>서버를 한 대만 띄우고 여럿이 붙는 것이 이 도구의 쓰임인데, 기본값은 `localhost` 다.
@@ -219,33 +251,87 @@ async function askApiKey(step?: string): Promise<boolean> {
   if (key === undefined) {
     return false
   }
-  // 워크스페이스마다 다른 키를 쓸 이유가 없다. 사용자 설정에 둔다.
-  await vscode.workspace
-    .getConfiguration('worklog')
-    .update('apiKey', key.trim(), vscode.ConfigurationTarget.Global)
+  await storeApiKey(key)
   log('API Key 를 새로 저장했습니다.')
-  // 저장만 하고 두면 상태바에 옛 오류가 그대로 남는다. 키를 고쳤는데도 실패한 것처럼
-  // 보이므로 바로 한 번 보내 결과를 갱신한다. 사용자에게는 "확인" 으로 알린다 —
-  // 키만 넣었는데 "전송했습니다" 가 뜨면 무엇이 나갔는지 몰라 놀란다.
+  await verifySaved('키를')
+  return true
+}
+
+/**
+ * 방금 저장한 것이 실제로 통하는지 한 번 보내 확인한다.
+ *
+ * <p>저장만 하고 두면 상태바에 옛 오류가 그대로 남는다. 고쳤는데도 실패한 것처럼 보인다.
+ * 결과는 "확인" 으로 알린다 — 키만 넣었는데 "전송했습니다" 가 뜨면 무엇이 나갔는지 몰라
+ * 놀란다. 서버에 닿지도 못했으면 닿았다고 말하지 않는다.
+ *
+ * @param what `키를` 처럼 무엇을 저장했는지. 알림 문장에 그대로 들어간다
+ */
+async function verifySaved(what: string): Promise<void> {
   verifying = true
   try {
-    const result = await send('키 확인')
+    const result = await send('저장 후 확인')
     if (result.kind === 'sent') {
       void vscode.window.showInformationMessage(
-        `WorkLog: 키를 저장하고 확인했습니다. 오늘 작업 ${result.files}파일을 보냈습니다.`)
+        `WorkLog: ${what} 저장하고 확인했습니다. 오늘 작업 ${result.files}파일을 보냈습니다.`)
     } else if (result.kind === 'nothing') {
-      // 서버에 닿지도 않았다. 여기서 "확인했습니다" 라고 하면 거짓말이 된다.
       void vscode.window.showInformationMessage(
-        'WorkLog: 키를 저장했습니다. 보낼 작업이 없어 아직 확인하지는 못했습니다 —'
+        `WorkLog: ${what} 저장했습니다. 보낼 작업이 없어 아직 확인하지는 못했습니다 —`
           + ' git 저장소를 열고 다시 전송해 보세요.')
     } else if (result.kind === 'failed') {
       void vscode.window.showWarningMessage(
-        `WorkLog: 키를 저장했지만 확인에 실패했습니다 — ${result.reason}`)
+        `WorkLog: ${what} 저장했지만 확인에 실패했습니다 — ${result.reason}`)
     }
   } finally {
     verifying = false
   }
-  return true
+}
+
+/**
+ * 대시보드가 건네준 연결(주소 + 키)을 그대로 받아 적는다.
+ *
+ * <p>이 확장을 처음 쓰는 자리에서 사람이 할 일을 없애는 길이다. 두 값을 모두 아는 쪽은
+ * 대시보드이므로, 링크 한 번이나 붙여넣기 한 번이면 주소도 키도 여기 들어온다
+ * — 주소를 잘못 적어 "키가 틀렸나" 를 의심하는 길이 통째로 사라진다.
+ *
+ * @param how 어디로 들어왔는지. 기록에만 쓴다
+ */
+async function applyConnection(connection: Connection, how: string): Promise<void> {
+  await vscode.workspace
+    .getConfiguration('worklog')
+    .update('serverUrl', connection.serverUrl, vscode.ConfigurationTarget.Global)
+  await storeApiKey(connection.apiKey)
+  log(`${how}(으)로 ${connection.serverUrl} 에 연결했습니다.`)
+  void tree.refresh()
+  await verifySaved(`${connection.serverUrl} 연결을`)
+}
+
+/**
+ * 연결 코드를 붙여 넣어 연결한다.
+ *
+ * <p>링크가 안 열리는 자리가 있다 — 원격(SSH·컨테이너)으로 붙었거나, 브라우저가 편집기를
+ * 부르는 것을 막아 두었거나, VS Code 가 아닌 편집기를 쓰는 경우다. 그때도 손으로 주소부터
+ * 적게 하지는 않는다. 대시보드에서 코드 한 줄을 복사해 여기 붙이면 같은 자리에 닿는다.
+ */
+async function askConnectCode(): Promise<void> {
+  const pasted = await vscode.window.showInputBox({
+    title: 'WorkLog: 대시보드 연결',
+    prompt: '대시보드 설정 > API 연동에서 "연결 코드 복사" 를 누른 값을 붙여 넣으세요.',
+    placeHolder: 'wlc1_…',
+    password: true, // 코드 안에 개인 키가 들어 있다. 어깨너머로 보이게 둘 값이 아니다
+    ignoreFocusOut: true, // 대시보드로 창을 옮겨 복사해 오는 동안 닫히면 안 된다
+    validateInput: (v) =>
+      v.trim().length === 0 || decodeConnection(v)
+        ? undefined
+        : '연결 코드나 연결 링크를 그대로 붙여 넣어 주세요.',
+  })
+  if (pasted === undefined) return
+  const connection = decodeConnection(pasted)
+  if (!connection) {
+    void vscode.window.showWarningMessage(
+      'WorkLog: 연결 코드를 읽지 못했습니다. 대시보드에서 다시 복사해 주세요.')
+    return
+  }
+  await applyConnection(connection, '연결 코드')
 }
 
 /**
@@ -303,14 +389,20 @@ async function tellResult(result: SendResult): Promise<void> {
  */
 async function promptForApiKey(failure: string): Promise<void> {
   const wrong = failure === WRONG_API_KEY
-  const enter = '키 입력'
+  const connect = '연결 코드 붙여넣기'
+  const enter = '키만 입력'
   const picked = await vscode.window.showWarningMessage(
     wrong
       ? 'WorkLog: 서버가 이 API Key 를 받지 않았습니다. 대시보드에서 새로 발급해 주세요.'
       : 'WorkLog: API Key 가 설정되지 않아 전송하지 못했습니다.',
+    // 대시보드에서 키를 발급하면 연결 코드가 같이 나온다. 주소까지 한 번에 맞춰 주는 쪽을
+    // 먼저 권한다 — 키만 고쳐 봐야 주소가 틀렸으면 같은 자리에서 또 막힌다.
+    connect,
     enter,
   )
-  if (picked === enter) {
+  if (picked === connect) {
+    await askConnectCode()
+  } else if (picked === enter) {
     await askApiKey()
   }
 }
@@ -592,12 +684,17 @@ function restartTimer() {
   log(`자동 전송 주기: ${minutes}분`)
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   initLog(context)
+  // 전송이 키를 동기로 읽으므로, 무엇이든 보내기 전에 비밀 저장소를 한 번 읽어 둔다.
+  await loadApiKey(context)
   // 저장 이벤트가 계획 문서인지 가릴 때 쓴다. 탭이 복원된 뒤에도 알아볼 수 있어야 한다.
   plansDir = context.globalStorageUri
   // 스킴을 남겨 둔다 — 계획 저장이 안 먹을 때 여기부터 본다 (한 번 여기서 막혔다).
   log(`계획 문서 폴더: ${plansDir.scheme}:${plansDir.path}`)
+  // 내장 채팅(Copilot 등) 기록이 어디 있는지는 편집기마다 다르다. globalStorage 에서
+  // 거슬러 올라가면 지금 돌고 있는 편집기의 자리가 나온다 — VS Code 든 Cursor 든.
+  initAiSources(plansDir.scheme === 'file' ? plansDir.fsPath : undefined)
   // globalState 에 저장 기록·계획을 남긴다. 재시작해도 그날 것은 이어 쌓인다.
   collector = new Collector(context.globalState)
 
@@ -655,8 +752,35 @@ export function activate(context: vscode.ExtensionContext): void {
   )
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('worklog.connect', () => askConnectCode()),
     vscode.commands.registerCommand('worklog.setApiKey', () => askServerAndKey()),
     vscode.commands.registerCommand('worklog.setServerUrl', () => askServerUrl()),
+  )
+
+  /*
+   * 대시보드의 "VS Code 에 연결" 버튼이 여는 길이다.
+   * vscode://withly.worklog-drafter/connect?server=…&key=…
+   *
+   * 편집기가 이 확장을 깨워 여기로 넘겨준다. 사람이 옮겨 적을 것이 없으니, 주소를 잘못 적어
+   * 엉뚱한 데를 부르거나 한 번만 보이는 키를 잃어버리는 일이 아예 생기지 않는다.
+   */
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri(uri) {
+        if (uri.path !== CONNECT_URI_PATH) {
+          log(`모르는 링크라 무시합니다: ${uri.path}`)
+          return
+        }
+        const connection = decodeConnection(uri.query)
+        if (!connection) {
+          log(`연결 링크를 읽지 못했습니다: ${uri.path}`) // 쿼리는 키가 들어 있어 남기지 않는다
+          void vscode.window.showWarningMessage(
+            'WorkLog: 연결 링크를 읽지 못했습니다. 대시보드에서 다시 눌러 주세요.')
+          return
+        }
+        void applyConnection(connection, '대시보드 링크')
+      },
+    }),
   )
 
   // AI 대화를 읽을 수 있는 문서로 여는 자리. 가상 문서라 파일을 만들지 않는다.

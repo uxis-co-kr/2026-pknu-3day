@@ -1,5 +1,6 @@
 import * as path from 'node:path'
 import * as vscode from 'vscode'
+import { sourceOfId } from './aiSessions'
 import { todayKst } from './collector'
 import type { Collector } from './collector'
 import { repoFullName } from './git'
@@ -371,8 +372,11 @@ function sessionNode(s: AiSessionSummary, cwd: string | undefined): Node {
   const node = group(s.title, 'comment', s.turns.map((t) => turnNode(t, s, cwd)))
   // 열어 두기만 한 대화는 마지막으로 오간 것이 어제일 수 있다. 시각만 적으면 오늘로 읽힌다.
   const when = day(s.lastAt) === day(new Date().toISOString()) ? '' : `${day(s.lastAt)} `
+  // 어느 도구에서 한 대화인지. Claude Code 는 적지 않는다 (sourceOfId 참고).
+  const from = sourceOfId(s.id)
+  const tool = from.key ? `${from.label} · ` : ''
   // 담은 것은 12개까지지만 실제로 물어본 횟수를 보여 준다.
-  node.item.description = `${when}${time(s.firstAt)}–${time(s.lastAt)} · ${s.promptCount}개`
+  node.item.description = `${tool}${when}${time(s.firstAt)}–${time(s.lastAt)} · ${s.promptCount}개`
   node.item.tooltip = s.turns.length < s.promptCount
     ? `${s.title}\n\n${s.promptCount}개 중 최근 ${s.turns.length}개만 보냅니다`
     : s.title
