@@ -96,13 +96,13 @@ JPA 는 `ddl-auto: validate` 라 엔티티와 스키마가 어긋나면 기동 �
 ```bash
 cd vscode-extension
 npm install
-npm run package        # worklog-drafter-0.1.0.vsix 생성
+npm run package        # worklog-drafter-<버전>.vsix 생성
 ```
 
 설치는 둘 중 하나로 한다.
 
 ```bash
-code --install-extension worklog-drafter-0.1.0.vsix
+code --install-extension worklog-drafter-<버전>.vsix
 ```
 
 또는 VS Code → 확장 패널 → 우상단 `⋯` → **Install from VSIX…**.
