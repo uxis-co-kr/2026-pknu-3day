@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useActivities, usePeopleStats } from '@/api/hooks'
 import { addDays, endOfMonth, startOfMonth, todayKst } from '@/lib/date'
-import { cn } from '@/lib/utils'
 import type { PeopleStats } from '@/types/api'
 import AdminGuard from './AdminGuard'
 import { useAdminPeople } from './api'
@@ -191,7 +190,7 @@ export default function AdminActivityPage() {
                   <TableHead className="w-24 text-right">커밋</TableHead>
                   <TableHead className="w-24 text-right">PR</TableHead>
                   <TableHead className="w-24 text-right">머지</TableHead>
-                  <TableHead className="w-40">업무 일지 (기간 내)</TableHead>
+                  <TableHead className="w-40 text-right">업무 일지 (기간 내)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -210,7 +209,7 @@ export default function AdminActivityPage() {
                       <TableCell className="text-right tabular-nums">{i.totals.commits}</TableCell>
                       <TableCell className="text-right tabular-nums">{i.totals.prs}</TableCell>
                       <TableCell className="text-right tabular-nums">{i.totals.merges}</TableCell>
-                      <TableCell className="text-[12px] text-muted-foreground">
+                      <TableCell className="text-right text-[12px] tabular-nums text-muted-foreground">
                         {drafts.length === 0 ? '없음' : `${drafts.length}건`}
                       </TableCell>
                     </TableRow>
@@ -275,7 +274,8 @@ export default function AdminActivityPage() {
             <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">이날 활동이 없습니다.</p>
           ) : (
             <>
-              <div className={cn('divide-y')}>
+              {/* divide-y 를 걸면 줄이 두 겹이 된다 — ActivityRow 가 자기 밑줄을 긋는다. */}
+              <div>
                 {/*
                   커밋 하나가 실제로 무엇을 고쳤는지는 여기서 알 수 없다 — 제목과 요약뿐이다.
                   관리자가 "이건 뭐지" 할 때 GitHub 을 손으로 찾아 들어가고 있었다. 행이 그
