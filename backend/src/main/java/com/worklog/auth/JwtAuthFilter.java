@@ -46,11 +46,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             String token = header.substring(PREFIX.length()).trim();
             try {
-                AuthenticatedUser fromToken = jwtService.verify(token);
+                JwtService.Verified verified = jwtService.verifyDetailed(token);
+                AuthenticatedUser fromToken = verified.user();
                 // 권한은 토큰이 아니라 DB 의 지금 값이다. 토큰에 적힌 권한을 믿으면, 관리자였을 때
                 // 받은 토큰이 만료될 때까지 계속 관리자로 통한다. 계정이 지워졌으면 토큰도 죽는다.
+                // 비밀번호를 바꾼 뒤에는 그 전에 받은 토큰도 죽는다 (V10 password_changed_at).
                 AuthenticatedUser user = userRepository
                         .findById(fromToken.id())
+                        .filter(u -> {
+                            boolean fresh = JwtService.matchesPasswordVersion(
+                                    verified.passwordVersion(), u.getPasswordChangedAt());
+                            if (!fresh) {
+                                log.debug("사용자 {} 의 토큰이 비밀번호 변경 전 것이라 거절한다.", u.getId());
+                            }
+                            return fresh;
+                        })
                         .map(u -> new AuthenticatedUser(
                                 u.getId(), fromToken.login(), AuthMethod.JWT,
                                 u.getRole() == null ? UserRole.MEMBER : u.getRole()))

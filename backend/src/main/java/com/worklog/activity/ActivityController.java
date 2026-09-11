@@ -1,5 +1,10 @@
 package com.worklog.activity;
 
+import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
+import com.worklog.config.ApiException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import com.worklog.activity.dto.ActivityDetailResponse;
 import com.worklog.activity.dto.ActivityResponse;
 import com.worklog.activity.dto.PageResponse;
@@ -27,6 +32,7 @@ public class ActivityController {
 
     @GetMapping
     public PageResponse<ActivityResponse> list(
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -36,13 +42,20 @@ public class ActivityController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
 
+        // MEMBER 는 자기 것만 (DataScope). 주인 없는 활동(미가입 기여자)은 MEMBER 에게 안 보인다.
+        Long scoped = DataScope.userIdFor(principal, userId);
         Page<Activity> result = queryService.search(
-                new ActivityQueryService.ActivityQuery(date, from, to, userId, repoId, type, page, size));
+                new ActivityQueryService.ActivityQuery(date, from, to, scoped, repoId, type, page, size));
         return PageResponse.of(result, result.getContent().stream().map(ActivityResponse::from).toList());
     }
 
     @GetMapping("/{id}")
-    public ActivityDetailResponse get(@PathVariable Long id) {
-        return ActivityDetailResponse.from(queryService.get(id));
+    public ActivityDetailResponse get(
+            @AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
+        Activity activity = queryService.get(id);
+        if (!DataScope.canSee(principal, activity.getUser() == null ? null : activity.getUser().getId())) {
+            throw ApiException.notFound("ACTIVITY_NOT_FOUND", "활동을 찾을 수 없습니다.");
+        }
+        return ActivityDetailResponse.from(activity);
     }
 }

@@ -33,6 +33,17 @@ public class StatsService {
 
     @Transactional(readOnly = true)
     public DailyStatsResponse daily(LocalDate date) {
+        return daily(date, null);
+    }
+
+    /**
+     * @param userId 이 사람 것만. null 이면 전원 (ADMIN 만 올 수 있다 — DataScope).
+     */
+    @Transactional(readOnly = true)
+    public DailyStatsResponse daily(LocalDate date, Long userId) {
+        if (userId != null) {
+            return dailyFor(date, userId);
+        }
         Map<ActivityType, Long> today = countsFor(date);
         long commitsToday = today.getOrDefault(ActivityType.COMMIT, 0L);
         long commitsYesterday = countsFor(date.minusDays(1)).getOrDefault(ActivityType.COMMIT, 0L);
@@ -55,6 +66,45 @@ public class StatsService {
                         unmapped.getOrDefault(ActivityType.PR_OPENED, 0L),
                         unmapped.getOrDefault(ActivityType.PR_MERGED, 0L)),
                 byUser(date));
+    }
+
+    /**
+     * 한 사람의 그날 요약. 전원 집계에서 그 사람 행만 뽑는다 — 미가입 기여자(unmapped)는
+     * 그 사람 것이 아니므로 0 이다. 방치 세션은 리마인드와 같은 기준(RemindPolicy)으로 센다.
+     */
+    private DailyStatsResponse dailyFor(LocalDate date, Long userId) {
+        Map<ActivityType, Long> today = countsForUser(date, userId);
+        long commitsToday = today.getOrDefault(ActivityType.COMMIT, 0L);
+        long commitsYesterday = countsForUser(date.minusDays(1), userId).getOrDefault(ActivityType.COMMIT, 0L);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        List<com.worklog.vscode.VscodeSession> mine = sessionRepository.findByUserIdAndWorkDate(userId, date);
+        long stale = mine.stream().filter(s -> RemindPolicy.isStale(s, now)).count();
+
+        List<DailyStatsResponse.ByUser> byUser = byUser(date).stream()
+                .filter(row -> userId.equals(row.userId()))
+                .toList();
+        return new DailyStatsResponse(
+                date,
+                commitsToday,
+                today.getOrDefault(ActivityType.PR_OPENED, 0L),
+                today.getOrDefault(ActivityType.PR_MERGED, 0L),
+                mine.size(),
+                commitsToday - commitsYesterday,
+                stale,
+                new DailyStatsResponse.Unmapped(0, 0, 0),
+                byUser);
+    }
+
+    private Map<ActivityType, Long> countsForUser(LocalDate date, Long userId) {
+        Map<ActivityType, Long> counts = new EnumMap<>(ActivityType.class);
+        for (Object[] row : activityRepository.countByUserAndTypeBetween(
+                KstDates.startOf(date), KstDates.endOf(date))) {
+            if (userId.equals(row[0])) {
+                counts.put((ActivityType) row[1], (Long) row[2]);
+            }
+        }
+        return counts;
     }
 
     /** 총계와 byUser 합계의 차이 — 가입하지 않은 GitHub 계정의 활동이다. */

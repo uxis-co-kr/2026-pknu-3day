@@ -113,6 +113,16 @@ public class DraftService {
         return toDetail(find(id));
     }
 
+    /** 단건 조회 — MEMBER 는 자기 것만. 남의 것은 404 (DataScope). */
+    @Transactional(readOnly = true)
+    public DraftDetailResponse detail(Long id, com.worklog.auth.AuthenticatedUser principal) {
+        Draft draft = find(id);
+        if (!com.worklog.auth.DataScope.canSee(principal, draft.getUser().getId())) {
+            throw ApiException.notFound("DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다.");
+        }
+        return toDetail(draft);
+    }
+
     /** 본문 저장. 본인 것만, 확정 전에만 (PRD 7). */
     @Transactional
     public DraftDetailResponse updateContent(Long id, Long requesterId, String contentMd) {

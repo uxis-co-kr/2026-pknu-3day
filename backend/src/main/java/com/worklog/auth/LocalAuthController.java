@@ -1,5 +1,7 @@
 package com.worklog.auth;
 
+import java.time.OffsetDateTime;
+
 import com.worklog.config.ApiException;
 import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
@@ -113,9 +115,12 @@ public class LocalAuthController {
 
         user.setPasswordHash(PasswordHasher.hash(request.newPassword()));
         user.setMustChangePassword(false);
+        // 이 시각보다 먼저 발급된 토큰은 전부 죽는다 — 다른 기기의 세션도, 유출된 토큰도 (V10).
+        user.setPasswordChangedAt(OffsetDateTime.now());
         userRepository.save(user);
-        log.info("{} 비밀번호 변경", user.getLoginId());
-        return new ChangePasswordResponse(true);
+        log.info("{} 비밀번호 변경 — 이전 토큰 무효", user.getLoginId());
+        // 지금 이 요청의 토큰도 방금 죽었다. 새 토큰을 실어 주어 화면이 갈아 끼우게 한다.
+        return new ChangePasswordResponse(true, jwtService.issue(user));
     }
 
     /**
@@ -134,5 +139,6 @@ public class LocalAuthController {
     public record ChangePasswordRequest(
             @NotBlank String currentPassword, @NotBlank String newPassword) {}
 
-    public record ChangePasswordResponse(boolean changed) {}
+    /** @param token 변경 뒤 새로 발급한 토큰. 이전 토큰은 더 통하지 않는다 */
+    public record ChangePasswordResponse(boolean changed, String token) {}
 }

@@ -1,6 +1,7 @@
 package com.worklog.vscode;
 
 import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,9 +38,12 @@ public class VscodeSessionController {
 
     @GetMapping
     public List<SessionResponse> list(
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Long userId) {
-        return service.findForDay(date, userId).stream().map(SessionResponse::from).toList();
+        // MEMBER 는 자기 것만 — 미커밋 diff 본문이 통째로 나가던 자리다 (DataScope).
+        Long scoped = DataScope.userIdFor(principal, userId);
+        return service.findForDay(date, scoped).stream().map(SessionResponse::from).toList();
     }
 
     /** PRD 7. — 200 {id}. */
