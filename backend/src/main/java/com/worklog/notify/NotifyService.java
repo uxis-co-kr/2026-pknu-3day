@@ -91,7 +91,7 @@ public class NotifyService {
     @Transactional(readOnly = true)
     public boolean notifyDraftSummarized(Draft draft) {
         String message = summarizedMessage(draft, KstDates.today());
-        // 대표 채널(V12)이 정해져 있으면 봇 계정이 그 채널에 쓴다 — 관리자가 콘솔에서 고른 곳이다.
+        // 대표 채널(V14)이 정해져 있으면 봇 계정이 그 채널에 쓴다 — 관리자가 콘솔에서 고른 곳이다.
         // 봇은 답을 읽을 수 있으니 예/아니오를 묻고, "예" 면 요약본을 이어서 보낸다. 웹훅은 못 읽으므로 묻지 않는다.
         if (bot != null && bot.postToPrimaryChannel(withConfirmQuestion(message), draft.getId())) {
             return true;

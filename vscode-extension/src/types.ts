@@ -10,7 +10,12 @@ export interface SessionPayload {
   uncommittedFiles: UncommittedFile[]
   todos: TodoItem[]
   planNote?: string
-  editTimeline: EditTimelineEntry[]
+  /**
+   * 고쳐 놓고 아직 저장하지 않은 파일.
+   *
+   * <p>git 에 아예 잡히지 않는 유일한 구간이다 — 디스크에 없으니 diff 에도 없다.
+   */
+  unsavedFiles: UnsavedFile[]
   /** ISO-8601. 마지막 커밋 시각을 못 읽으면 생략한다. */
   lastCommitAt?: string
   /** 이 폴더에서 오늘 오간, 또는 지금 열어 둔 AI 대화. 기록이 없으면 빈 배열. */
@@ -77,9 +82,15 @@ export interface AiTurn {
   answer?: string
 }
 
-export interface EditTimelineEntry {
+/**
+ * 저장하지 않은 채 열려 있는 파일 하나.
+ *
+ * <p>예전에는 <b>저장 이벤트</b>를 모았다. 그런데 `onDidSaveTextDocument` 는 편집기에서
+ * 저장할 때만 온다 — AI 도구처럼 파일을 디스크에 곧바로 쓰는 변경은 이벤트가 없어,
+ * 사람이 손으로 저장한 것만 남았다. 그런 목록은 그날 한 일을 대표하지 못한다.
+ */
+export interface UnsavedFile {
   path: string
-  firstSavedAt: string
-  lastSavedAt: string
-  saveCount: number
+  /** 고치기 시작해 아직 저장하지 않은 채 지난 시각. 확장을 다시 켜면 알 수 없어 생략한다. */
+  dirtySince?: string
 }

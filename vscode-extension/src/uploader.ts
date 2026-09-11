@@ -24,7 +24,7 @@ export interface RemoteSession {
   uncommittedFiles: { path: string }[]
   todos: unknown[]
   planNote?: string | null
-  editTimeline: unknown[]
+  unsavedFiles?: unknown[]
   aiSessions?: { id: string; title?: string; promptCount?: number }[]
   reportedAt: string
 }

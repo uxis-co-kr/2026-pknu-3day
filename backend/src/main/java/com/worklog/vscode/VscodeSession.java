@@ -74,9 +74,21 @@ public class VscodeSession {
     @Column(name = "plan_note", columnDefinition = "text")
     private String planNote;
 
+    /**
+     * 파일별 저장 횟수·시각. <b>2026-09-11 부터 수집하지 않는다.</b>
+     *
+     * <p>VS Code 의 저장 이벤트는 편집기에서 저장할 때만 와서, 파일을 디스크에 곧바로 쓰는
+     * AI 도구의 변경이 한 건도 남지 않았다. 자리는 {@link #unsavedFiles} 가 물려받았고,
+     * 지난 기록을 지우지 않으려고 컬럼만 남겨 둔다.
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "edit_timeline", nullable = false, columnDefinition = "jsonb")
     private List<EditTimelineEntry> editTimeline = new ArrayList<>();
+
+    /** 고쳐 놓고 아직 저장하지 않은 파일 (V12). git 에 잡히지 않는 유일한 구간이다. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "unsaved_files", nullable = false, columnDefinition = "jsonb")
+    private List<UnsavedFile> unsavedFiles = new ArrayList<>();
 
     /** 그 폴더에서 오간 AI 대화 (V9). 확장이 보낸다. */
     @JdbcTypeCode(SqlTypes.JSON)

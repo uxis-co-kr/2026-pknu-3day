@@ -588,8 +588,21 @@ export function activate(context: vscode.ExtensionContext): void {
         return
       }
       if (doc.uri.scheme !== 'file') return
-      collector.recordSave(doc.uri.fsPath)
+      // 저장했으니 미저장 목록에서 빠진다.
+      collector.markSaved(doc.uri.fsPath)
       scheduleTreeRefresh()
+    }),
+  )
+
+  // 고치기 시작한 때를 기억해 둔다. 무엇이 저장되지 않았는지는 편집기가 알고 있지만,
+  // **언제부터** 그랬는지는 여기서 보지 않으면 알 길이 없다 (두 시간째 저장 안 한 파일과
+  // 방금 한 글자 고친 파일은 다르다).
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      const doc = e.document
+      if (doc.uri.scheme !== 'file' || planFolderOf(doc)) return
+      if (doc.isDirty) collector.markDirty(doc.uri.fsPath)
+      else collector.markSaved(doc.uri.fsPath)
     }),
   )
 

@@ -5,7 +5,9 @@ import type { Collector } from './collector'
 import type { UnpushedCommit } from './git'
 import { Uploader } from './uploader'
 import type { RemoteSession } from './uploader'
-import type { AiSessionSummary, AiTurn, SessionPayload, TodoItem, UncommittedFile } from './types'
+import type {
+  AiSessionSummary, AiTurn, SessionPayload, TodoItem, UncommittedFile, UnsavedFile,
+} from './types'
 
 /**
  * 사이드바 뷰 — 지금 무엇이 서버로 갈지 보여 준다 (PRD X3, BACKLOG 1-14).
@@ -92,9 +94,9 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
       children.push(group(`TODO ${p.todos.length}개`, 'checklist', p.todos.map((t) => todoNode(t, cwd))))
       children.push(
         group(
-          `저장 이벤트 ${p.editTimeline.length}개`,
-          'history',
-          p.editTimeline.map((e) => leaf(e.path, 'file', `${e.saveCount}회 · ${time(e.lastSavedAt)}`, `${e.saveCount}회`)),
+          `미저장 파일 ${p.unsavedFiles.length}개`,
+          'save',
+          p.unsavedFiles.map((f) => unsavedNode(f, cwd)),
         ),
       )
 
@@ -179,7 +181,7 @@ function remoteSessionNode(s: RemoteSession): Node {
   const children: Node[] = [
     leaf(`미커밋 파일 ${s.uncommittedFiles.length}개`, 'diff'),
     leaf(`TODO ${s.todos.length}개`, 'checklist'),
-    leaf(`저장 이벤트 ${s.editTimeline.length}개`, 'history'),
+    leaf(`미저장 파일 ${(s.unsavedFiles ?? []).length}개`, 'save'),
     group('계획', 'note', planLines(plan)),
     group(
       `AI 대화 ${ai.length}세션`,
@@ -349,6 +351,30 @@ function fileNode(f: UncommittedFile, cwd: string | undefined): Node {
     node.item.command = { command: 'vscode.open', title: '열기', arguments: [node.item.resourceUri] }
   }
   return node
+}
+
+/**
+ * 고쳐 놓고 저장하지 않은 파일. 누르면 열린다.
+ *
+ * <p>git 에 잡히지 않는 유일한 구간이라 여기서 보이지 않으면 어디에서도 안 보인다 —
+ * 저장하지 않은 내용은 디스크에 없어 diff 에도 없다.
+ */
+function unsavedNode(f: UnsavedFile, cwd: string | undefined): Node {
+  const node = leaf(path.basename(f.path), 'circle-filled', f.path, sinceLabel(f.dirtySince))
+  node.item.resourceUri = cwd ? vscode.Uri.file(path.join(cwd, f.path)) : undefined
+  if (node.item.resourceUri) {
+    node.item.command = { command: 'vscode.open', title: '열기', arguments: [node.item.resourceUri] }
+  }
+  return node
+}
+
+/** "12분째" — 언제부터 저장하지 않았는지. 확장을 다시 켠 뒤라 모르면 비운다. */
+function sinceLabel(iso: string | undefined): string | undefined {
+  if (!iso) return undefined
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (Number.isNaN(minutes) || minutes < 1) return '방금'
+  if (minutes < 60) return `${minutes}분째`
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분째`
 }
 
 function todoNode(t: TodoItem, cwd: string | undefined): Node {

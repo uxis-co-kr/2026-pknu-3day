@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Clock, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, ListTodo, MessagesSquare, NotebookPen } from 'lucide-react'
+import { ChevronRight, Clock, FileDiff, GitCommitHorizontal, GitMerge, GitPullRequest, ListTodo, MessagesSquare, NotebookPen, Save } from 'lucide-react'
 import ActivityRow from '@/components/activity/ActivityRow'
 import DiffStat from '@/components/common/DiffStat'
 import { Card } from '@/components/ui/card'
@@ -147,17 +147,33 @@ function SessionEvidence({ session, onJump }: { session: VscodeSession; onJump: 
           )))}
       </Category>
 
-      {/* 저장 이벤트는 초안 본문에 직접 쓰이지 않는다. 얼마나 손댔는지 가늠하는 값이라 눌러도 이동하지 않는다. */}
-      <Category label="저장 이벤트" count={session.editTimeline.length} Icon={Clock}>
-        {session.editTimeline.map((e) => (
-          <Row key={e.path}>
-            <span className="min-w-0 flex-1 truncate">{e.path}</span>
-            <span className="shrink-0 tabular-nums text-muted-foreground/70">
-              {e.saveCount}회 · {formatTime(e.lastSavedAt)}
-            </span>
+      {/* 미저장 파일은 초안 본문에 직접 쓰이지 않는다. 아직 디스크에도 없는 것이라 눌러도 이동하지 않는다. */}
+      <Category label="미저장 파일" count={(session.unsavedFiles ?? []).length} Icon={Save}>
+        {(session.unsavedFiles ?? []).map((f) => (
+          <Row key={f.path}>
+            <span className="min-w-0 flex-1 truncate">{f.path}</span>
+            {f.dirtySince && (
+              <span className="shrink-0 tabular-nums text-muted-foreground/70">
+                {formatTime(f.dirtySince)}부터
+              </span>
+            )}
           </Row>
         ))}
       </Category>
+
+      {/* 2026-09-11 부터 모으지 않는다. 그전 기록에만 남아 있다. */}
+      {session.editTimeline.length > 0 && (
+        <Category label="저장 이벤트 (지난 기록)" count={session.editTimeline.length} Icon={Clock}>
+          {session.editTimeline.map((e) => (
+            <Row key={e.path}>
+              <span className="min-w-0 flex-1 truncate">{e.path}</span>
+              <span className="shrink-0 tabular-nums text-muted-foreground/70">
+                {e.saveCount}회 · {formatTime(e.lastSavedAt)}
+              </span>
+            </Row>
+          ))}
+        </Category>
+      )}
     </div>
   )
 }

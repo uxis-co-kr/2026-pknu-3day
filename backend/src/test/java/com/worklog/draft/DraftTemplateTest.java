@@ -139,7 +139,7 @@ class DraftTemplateTest {
 
         assertThat(md).contains("미커밋 2개 — src/api/attendance.ts, src/api/user.ts");
     }
-// TODO: 할일
+
     @Test
     @DisplayName("계획 문서와 TODO 주석이 계획 섹션에 들어간다")
     void rendersPlansAndTodos() {

@@ -56,7 +56,11 @@ public class VscodeSessionService {
         session.setRepo(matchRepo(request.remoteUrl()));
         session.setUncommittedFiles(orEmpty(request.uncommittedFiles()));
         session.setTodos(orEmpty(request.todos()));
-        session.setEditTimeline(orEmpty(request.editTimeline()));
+        // 저장 이벤트는 더 이상 오지 않는다. 지난 기록을 지우지 않으려고, 보내 줄 때만 덮는다.
+        if (request.editTimeline() != null) {
+            session.setEditTimeline(request.editTimeline());
+        }
+        session.setUnsavedFiles(orEmpty(request.unsavedFiles()));
         // 확장은 요약을 모른다. 서버가 적어 둔 것을 물려주지 않으면 10분마다 지워진다.
         session.setAiSessions(carryOverSummaries(session.getAiSessions(), orEmpty(request.aiSessions())));
         // null 을 그대로 둔다. 빈 배열로 바꾸면 "셀 수 없음" 이 "미푸시 없음" 으로 둔갑한다.
