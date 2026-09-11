@@ -82,3 +82,21 @@ export function firstWeekdayOfMonth(isoDate: string): number {
   const [y, m] = isoDate.split('-').map(Number)
   return new Date(y, m - 1, 1).getDay()
 }
+
+/**
+ * 그 날이 든 주의 월요일 (KST). 주는 월요일에 시작해 일요일에 끝난다.
+ *
+ * <p>주간·저장소별 업무일지가 주를 단위로 쓴다 — 같은 주를 조금씩 다르게 잡으면 일지가 쌓인다.
+ */
+export function mondayOf(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  // getDay: 0=일 … 6=토. 일요일은 그 주의 마지막이므로 6일을 되돌린다.
+  // addDays 와 같은 방식(로컬 Date)으로 센다 — 섞으면 경계에서 하루가 어긋난다.
+  const day = new Date(y, m - 1, d).getDay()
+  return addDays(isoDate, day === 0 ? -6 : 1 - day)
+}
+
+/** "2026-09-07(월) ~ 2026-09-13(일)" — 화면에 보일 주 표기. */
+export function weekLabel(monday: string): string {
+  return `${monday}(월) ~ ${addDays(monday, 6)}(일)`
+}

@@ -192,10 +192,10 @@ export const useGenerateDraft = () => {
 export const useGeneratePeriodDraft = () => {
   const qc = useQueryClient()
   return useMutation({
+    // date 는 그 주의 아무 날. 서버가 월~일로 맞춘다 — 같은 주면 버전만 올라간다.
     mutationFn: ({ kind, ...body }: {
       kind: 'weekly' | 'repo'
-      from: string
-      to: string
+      date: string
       userId?: number
       repoId?: number
       mineOnly?: boolean
