@@ -62,6 +62,8 @@ export default function GithubPage() {
    * (9/10 결정 — 일반 로그인은 내 것만 본다).
    */
   const myStat = {
+    // 저장소를 맨 앞에 둔다 — 하루에 여러 저장소를 오간 날에 그 사실이 먼저 보여야 한다.
+    repos: new Set(mine.map((a) => a.repo.id)).size,
     commits: mine.filter((a) => a.type === 'COMMIT').length,
     prs: mine.filter((a) => a.type === 'PR_OPENED').length,
     merges: mine.filter((a) => a.type === 'PR_MERGED').length,
@@ -81,11 +83,12 @@ export default function GithubPage() {
       {/* 달력은 요약 박스와 같은 줄에서 시작한다. 필터 줄은 위에 통째로 둔다. */}
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {activities.isLoading ? (
-              TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
+              [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[101px]" />)
             ) : (
               <>
+                <SummaryCard label="저장소" value={myStat.repos} />
                 <SummaryCard label="커밋" value={myStat.commits} />
                 <SummaryCard label="열린 PR" value={myStat.prs} />
                 <SummaryCard label="머지된 PR" value={myStat.merges} />

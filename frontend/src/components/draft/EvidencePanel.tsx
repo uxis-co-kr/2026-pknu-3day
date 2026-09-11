@@ -24,6 +24,14 @@ export default function EvidencePanel({
   onJump: (needles: string[]) => void
 }) {
   const byTime = [...activities].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt))
+  // 저장소 이름 순. 날마다 순서가 흔들리면 어제 근거와 나란히 놓고 읽을 수 없다.
+  const byRepo = [...byTime
+    .reduce((map, a) => {
+      const key = a.repo?.fullName ?? '(알 수 없는 저장소)'
+      map.set(key, [...(map.get(key) ?? []), a])
+      return map
+    }, new Map<string, Activity[]>())
+    .entries()].sort(([a], [b]) => a.localeCompare(b))
 
   return (
     <Card className="flex h-full flex-col overflow-hidden rounded-lg shadow-none">
@@ -31,27 +39,40 @@ export default function EvidencePanel({
         이 초안의 근거
       </div>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-[18px] py-3">
+        {/*
+          VS 활동과 같은 모양으로 **저장소 먼저** 나눈다 (9/11). 저장소를 둘 이상 오간 날에
+          커밋·PR 을 한 덩어리로 늘어놓으면 어느 저장소 이야기인지 줄마다 다시 읽어야 한다.
+          일지 본문도 같은 순서로 쓰인다.
+        */}
         <Source label="GitHub 활동" count={activities.length} unit="건">
-          {ACTIVITY_KINDS.map(({ type, label, Icon }) => {
-            const rows = byTime.filter((a) => a.type === type)
-            if (rows.length === 0) return null
-            return (
-              <Category key={type} label={label} count={rows.length} Icon={Icon}>
-                <div className="-mx-1 min-w-0">
-                  {rows.map((a) => (
-                    <ActivityRow
-                      key={a.id}
-                      activity={a}
-                      dense
-                      className="rounded"
-                      // 본문에는 짧은 sha 가 들어간다. 전체 sha 만 찾으면 늘 빗나간다.
-                      onClick={() => onJump(jumpTargets(a))}
-                    />
-                  ))}
-                </div>
-              </Category>
-            )
-          })}
+          {byRepo.map(([repo, rows]) => (
+            <div key={repo} className="mb-1 last:mb-0">
+              <div className="mb-1 flex items-center gap-2 text-[12px]">
+                <span className="truncate font-medium">{repo}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground/70">{rows.length}건</span>
+              </div>
+              {ACTIVITY_KINDS.map(({ type, label, Icon }) => {
+                const kind = rows.filter((a) => a.type === type)
+                if (kind.length === 0) return null
+                return (
+                  <Category key={type} label={label} count={kind.length} Icon={Icon}>
+                    <div className="-mx-1 min-w-0">
+                      {kind.map((a) => (
+                        <ActivityRow
+                          key={a.id}
+                          activity={a}
+                          dense
+                          className="rounded"
+                          // 본문에는 짧은 sha 가 들어간다. 전체 sha 만 찾으면 늘 빗나간다.
+                          onClick={() => onJump(jumpTargets(a))}
+                        />
+                      ))}
+                    </div>
+                  </Category>
+                )
+              })}
+            </div>
+          ))}
           {activities.length === 0 && <Empty />}
         </Source>
 
