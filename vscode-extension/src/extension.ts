@@ -13,10 +13,16 @@ let sending = false
 /** 키 확인 때문에 부른 전송인지. 알림을 두 번 띄우지 않기 위한 표시다. */
 let verifying = false
 
+/**
+ * 설정에 아무것도 없을 때 쓰는 주소. 서버를 띄운 PC 가 따로 있으면 이 값으로는 닿지 못한다
+ * — 자기 컴퓨터를 부른다 (BACKLOG2 §2-1).
+ */
+const DEFAULT_SERVER_URL = 'http://localhost:8080'
+
 function readConfig() {
   const cfg = vscode.workspace.getConfiguration('worklog')
   return {
-    serverUrl: cfg.get<string>('serverUrl', 'http://localhost:8080'),
+    serverUrl: cfg.get<string>('serverUrl', DEFAULT_SERVER_URL),
     apiKey: cfg.get<string>('apiKey', ''),
     intervalMinutes: cfg.get<number>('intervalMinutes', 10),
     collectDiff: cfg.get<boolean>('collectDiff', true),
@@ -27,10 +33,19 @@ function readConfig() {
 function renderStatusBar(error?: string) {
   if (error) {
     const keyProblem = error === NO_API_KEY || error === WRONG_API_KEY
+    const urlProblem = CONNECTION_FAILURES.includes(error)
     statusBar.text = `$(warning) WorkLog: ${error}`
-    // 키가 문제면 다시 전송해 봐야 같은 곳에서 막힌다. 바로 키 입력으로 보낸다.
-    statusBar.command = keyProblem ? 'worklog.setApiKey' : 'worklog.sendNow'
-    statusBar.tooltip = keyProblem ? `${error} — 클릭하면 키를 입력합니다` : `${error} — 클릭하면 다시 전송합니다`
+    // 키나 주소가 문제면 다시 전송해 봐야 같은 곳에서 막힌다. 고칠 자리로 바로 보낸다.
+    statusBar.command = keyProblem
+      ? 'worklog.setApiKey'
+      : urlProblem
+        ? 'worklog.setServerUrl'
+        : 'worklog.sendNow'
+    statusBar.tooltip = keyProblem
+      ? `${error} — 클릭하면 키를 입력합니다`
+      : urlProblem
+        ? `${error} — 클릭하면 서버 주소를 설정합니다`
+        : `${error} — 클릭하면 다시 전송합니다`
     statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
   } else {
     // 미푸시는 셀 수 있을 때만 붙인다. 업스트림이 없는 브랜치에서 0 으로 보이면 거짓말이다.
@@ -48,6 +63,11 @@ function renderStatusBar(error?: string) {
 const NO_API_KEY = 'API Key 미설정'
 /** 서버가 401/403 을 돌려줬을 때 Uploader 가 주는 사유. */
 const WRONG_API_KEY = 'API Key 오류'
+/**
+ * 서버에 **닿지도 못한** 사유. 대개 주소가 틀린 것이다 — 기본값이 `localhost` 라
+ * 서버를 띄운 PC 가 따로 있으면 여기서 막힌다.
+ */
+const CONNECTION_FAILURES = ['서버에 연결할 수 없음', '서버 응답 없음']
 
 /**
  * 전송 결과.
@@ -101,6 +121,61 @@ async function send(reason: string): Promise<SendResult> {
 }
 
 /**
+ * 사람이 적은 서버 주소를 쓸 수 있는 형태로 다듬는다.
+ *
+ * <p>`192.168.0.224:8080` 처럼 스킴 없이 적거나, 주소창에서 복사해 끝 슬래시나 `/api` 를
+ * 달고 오는 일이 잦다. `/api` 는 {@link Uploader} 가 붙이므로 그대로 두면 `/api/api` 가 된다.
+ *
+ * @return 다듬은 주소. 주소로 볼 수 없으면 undefined
+ */
+function normalizeServerUrl(raw: string): string | undefined {
+  const trimmed = raw.trim()
+  if (!trimmed) return undefined
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
+  let url: URL
+  try {
+    url = new URL(withScheme)
+  } catch {
+    return undefined
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+  if (!url.hostname) return undefined
+  const tail = url.pathname.replace(/\/+$/, '').replace(/\/api$/i, '')
+  return `${url.origin}${tail}`
+}
+
+/**
+ * 백엔드 주소를 그 자리에서 받아 저장한다.
+ *
+ * <p>서버를 한 대만 띄우고 여럿이 붙는 것이 이 도구의 쓰임인데, 기본값은 `localhost` 다.
+ * 남의 PC 에서 열면 자기 백엔드를 부르다 실패한다. 설정 화면을 뒤지게 하지 않고
+ * 키와 마찬가지로 명령으로 받는다 (BACKLOG2 §2-1).
+ *
+ * @param step `1/2` 처럼 몇 단계 중 몇 번째인지. 키 입력과 이어서 물을 때만 준다
+ * @return 저장한 주소. 취소했으면 undefined
+ */
+async function askServerUrl(step?: string): Promise<string | undefined> {
+  const current = readConfig().serverUrl
+  const answer = await vscode.window.showInputBox({
+    title: step ? `WorkLog: 서버 주소 (${step})` : 'WorkLog: 서버 주소 설정',
+    prompt: '대시보드를 여는 주소가 아니라 백엔드 주소입니다. 예) http://192.168.0.224:8080',
+    value: current,
+    ignoreFocusOut: true, // 서버를 띄운 사람에게 주소를 물어보는 동안 닫히면 안 된다
+    validateInput: (v) =>
+      normalizeServerUrl(v) ? undefined : '주소:포트 형태로 적어 주세요. 예) http://192.168.0.224:8080',
+  })
+  if (answer === undefined) return undefined
+  const url = normalizeServerUrl(answer)
+  if (!url) return undefined
+  // 워크스페이스마다 다른 서버를 볼 이유가 없다. 키와 같이 사용자 설정에 둔다.
+  await vscode.workspace
+    .getConfiguration('worklog')
+    .update('serverUrl', url, vscode.ConfigurationTarget.Global)
+  log(`서버 주소를 ${url} 로 저장했습니다.`)
+  return url
+}
+
+/**
  * 키를 그 자리에서 받아 저장한다.
  *
  * <p>예전에는 설정 화면만 열어 줬다. 그러면 대시보드에서 복사한 키를 들고 설정 검색창에
@@ -109,11 +184,11 @@ async function send(reason: string): Promise<SendResult> {
  *
  * @return 저장했으면 true
  */
-async function askApiKey(reason?: string): Promise<boolean> {
+async function askApiKey(step?: string): Promise<boolean> {
   const current = readConfig().apiKey
   const key = await vscode.window.showInputBox({
-    title: 'WorkLog: API Key 입력',
-    prompt: reason ?? '대시보드 설정 > API 연동에서 발급한 키를 붙여 넣으세요.',
+    title: step ? `WorkLog: API Key (${step})` : 'WorkLog: API Key 입력',
+    prompt: '대시보드 설정 > API 연동에서 발급한 키를 붙여 넣으세요.',
     placeHolder: 'wl_...',
     value: current,
     password: true,
@@ -152,6 +227,19 @@ async function askApiKey(reason?: string): Promise<boolean> {
   return true
 }
 
+/**
+ * 서버 주소와 API Key 를 차례로 받는다.
+ *
+ * <p>주소를 먼저 묻는다 — 키가 맞아도 주소가 자기 PC 를 가리키면 아무 데도 닿지 않고,
+ * 그때 뜨는 "서버에 연결할 수 없음" 은 키를 의심하게 만든다. 키를 넣는 자리가 곧
+ * 이 확장을 처음 쓰는 자리이므로 여기서 둘 다 받는다.
+ */
+async function askServerAndKey(): Promise<void> {
+  const url = await askServerUrl('1/2')
+  if (url === undefined) return // 주소를 취소했으면 키도 묻지 않는다
+  await askApiKey('2/2')
+}
+
 /** 사용자가 직접 누른 전송의 결과를 알린다. 무엇이 일어났는지 그대로 말한다. */
 async function tellResult(result: SendResult): Promise<void> {
   switch (result.kind) {
@@ -167,6 +255,10 @@ async function tellResult(result: SendResult): Promise<void> {
     case 'failed':
       if (result.reason === NO_API_KEY || result.reason === WRONG_API_KEY) {
         await promptForApiKey(result.reason)
+        return
+      }
+      if (CONNECTION_FAILURES.includes(result.reason)) {
+        await promptForServerUrl(result.reason)
         return
       }
       void vscode.window.showWarningMessage(`WorkLog: 전송하지 못했습니다 — ${result.reason}`)
@@ -190,6 +282,31 @@ async function promptForApiKey(failure: string): Promise<void> {
   )
   if (picked === enter) {
     await askApiKey()
+  }
+}
+
+/**
+ * 서버에 닿지 못했을 때 주소부터 묻는다.
+ *
+ * <p>"전송 실패" 한 줄만 띄우면 무엇을 고쳐야 하는지 알 수 없다. 지금 부르고 있는 주소를
+ * 그대로 보여 주면 `localhost` 를 부르고 있다는 것이 바로 보인다.
+ */
+async function promptForServerUrl(failure: string): Promise<void> {
+  const setUrl = '서버 주소 설정'
+  const picked = await vscode.window.showWarningMessage(
+    `WorkLog: ${readConfig().serverUrl} 에 닿지 못했습니다 (${failure}). 서버를 띄운 PC 의 주소가 맞는지 확인해 주세요.`,
+    setUrl,
+  )
+  if (picked !== setUrl) return
+  if ((await askServerUrl()) === undefined) return
+
+  const result = await send('주소 확인')
+  if (result.kind === 'sent') {
+    void vscode.window.showInformationMessage(
+      `WorkLog: 연결됐습니다. 오늘 작업 ${result.files}파일을 보냈습니다.`)
+  } else if (result.kind === 'failed') {
+    // 여기서 또 물으면 끝이 없다. 사유만 알리고 멈춘다.
+    void vscode.window.showWarningMessage(`WorkLog: 아직 닿지 못했습니다 — ${result.reason}`)
   }
 }
 
@@ -274,7 +391,8 @@ export function activate(context: vscode.ExtensionContext): void {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('worklog.setApiKey', () => askApiKey()),
+    vscode.commands.registerCommand('worklog.setApiKey', () => askServerAndKey()),
+    vscode.commands.registerCommand('worklog.setServerUrl', () => askServerUrl()),
   )
 
   // 커밋·푸시는 대개 터미널이나 소스 제어 패널에서 한다. 파일 저장만 보고 있으면 그때
