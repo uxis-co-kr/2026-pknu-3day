@@ -11,6 +11,7 @@ import com.worklog.vscode.AiSessionSummary;
 import com.worklog.vscode.AiTurn;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
+import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -45,6 +46,8 @@ public class WorklogWriter {
     private static final int MAX_AI_PROMPTS_PER_SESSION = 6;
     /** 전체 AI 프롬프트 상한. */
     private static final int MAX_AI_PROMPTS = 20;
+    /** 세션 하나에서 넣을 미푸시 커밋 수. 커밋 메시지는 짧지만 하루에 수십 개일 수 있다. */
+    private static final int MAX_UNPUSHED = 10;
 
     private final LlmProviderResolver resolver;
     private final LlmSettingService settingService;
@@ -154,18 +157,29 @@ public class WorklogWriter {
                     sb.append("  · TODO %s:%d %s\n".formatted(t.path(), t.line(), t.text()));
                 }
             }
+            // 커밋했지만 아직 push 하지 않은 것 (V11). GitHub 수집기가 못 보는 구간이라
+            // 여기서 넣지 않으면 그날 한 일에서 통째로 빠진다. 메시지는 이미 사람이 쓴 요약이다.
+            List<UnpushedCommit> unpushed = s.getUnpushedCommits();
+            if (unpushed != null) {
+                for (UnpushedCommit c : unpushed.stream().limit(MAX_UNPUSHED).toList()) {
+                    sb.append("  · 미푸시 커밋 %s %s\n".formatted(c.sha(), c.subject()));
+                }
+            }
         }
         return sb.toString().strip();
     }
 
     /**
-     * AI 와 나눈 대화에서 사용자가 친 말만 (V9, V10 에서 제목이 붙었다).
+     * AI 와 나눈 대화 (V9, V10 에서 제목이 붙었다).
      *
-     * <p>커밋에도 미커밋 변경에도 남지 않는 작업의 단서다. 세션마다 앞의 몇 개만 넣는다 —
-     * 전부 넣으면 이 부분이 프롬프트를 차지해 정작 커밋이 밀린다.
+     * <p>커밋에도 미커밋 변경에도 남지 않는 작업의 단서다.
      *
-     * <p>V10 부터는 답변도 함께 들어오지만 <b>여기에는 담지 않는다.</b> 답변은 질문보다
-     * 훨씬 길어 20개만 넣어도 프롬프트가 두 배가 된다. 답변은 화면(VSCode 내역)에서 본다.
+     * <p><b>요약이 있으면 요약을 쓴다.</b> {@code AiSessionSummarizer} 가 대화마다 두어 문장을
+     * 적어 두므로, 질문 스무 개를 늘어놓는 것보다 짧고 무엇을 했는지도 분명하다 — 커밋 요약을
+     * 그대로 쓰는 것과 같은 이유다(두 번 요약하지 않고 컨텍스트도 아낀다).
+     *
+     * <p>아직 요약이 없는 대화(방금 올라온 것)는 예전처럼 질문 몇 개를 넣는다. 답변은 담지
+     * 않는다 — 질문보다 훨씬 길어 프롬프트가 두 배가 된다. 답변은 화면에서 본다.
      */
     private static String aiLines(List<VscodeSession> sessions) {
         StringBuilder sb = new StringBuilder();
@@ -173,6 +187,13 @@ public class WorklogWriter {
         for (AiSessionSummary a : distinctAiSessions(sessions)) {
             if (used >= MAX_AI_PROMPTS) {
                 break;
+            }
+            if (a.summary() != null && !a.summary().isBlank()) {
+                sb.append("· %s (%d회 물음)%n".formatted(a.title(), nz(a.promptCount())));
+                sb.append("  ").append(a.summary().replace("\n", " ").strip()).append(System.lineSeparator());
+                // 요약 한 덩어리를 질문 하나 몫으로 센다. 길이가 질문 몇 개와 비슷하다.
+                used += 1;
+                continue;
             }
             List<String> asked = a.turns().stream()
                     .map(AiTurn::prompt)
@@ -185,7 +206,8 @@ public class WorklogWriter {
                 continue;
             }
             // 제목을 앞에 세운다 — 어느 대화에서 나온 말인지 묶여야 일지가 갈래를 잡는다.
-            sb.append("· %s (%d회 물음)%n".formatted(a.title(), a.promptCount() == null ? asked.size() : a.promptCount()));
+            sb.append("· %s (%d회 물음)%n".formatted(
+                    a.title(), a.promptCount() == null ? asked.size() : a.promptCount()));
             for (String p : asked) {
                 sb.append("  - ").append(p).append(System.lineSeparator());
             }

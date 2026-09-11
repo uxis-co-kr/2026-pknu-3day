@@ -7,8 +7,10 @@ import com.worklog.activity.ActivityType;
 import com.worklog.github.Repo;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
+import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -138,6 +140,28 @@ class DraftTemplateTest {
         String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
 
         assertThat(md).contains("미커밋 2개 — src/api/attendance.ts, src/api/user.ts");
+    }
+
+    @Test
+    @DisplayName("미푸시 커밋이 진행 중 섹션에 한 줄로 들어간다 — GitHub 수집기가 못 보는 구간이다")
+    void rendersUnpushedCommits() {
+        VscodeSession s = session();
+        s.setUnpushedCommits(List.of(
+                new UnpushedCommit("9f2c1ab", "feat: 출석 중복 검증", OffsetDateTime.parse("2026-09-10T11:30:00+09:00")),
+                new UnpushedCommit("3be70d4", "refactor: 의존성 정리", OffsetDateTime.parse("2026-09-10T10:00:00+09:00"))));
+
+        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
+
+        assertThat(md).contains("미푸시 커밋 2개 — feat: 출석 중복 검증, refactor: 의존성 정리");
+        assertThat(md.indexOf("미푸시 커밋")).isLessThan(md.indexOf("## 계획 / TODO"));
+    }
+
+    @Test
+    @DisplayName("미푸시 커밋이 없으면 그 줄을 만들지 않는다")
+    void skipsUnpushedLineWhenNone() {
+        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(session()));
+
+        assertThat(md).doesNotContain("미푸시 커밋");
     }
 
     @Test

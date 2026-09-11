@@ -4,9 +4,11 @@ import com.worklog.activity.Activity;
 import com.worklog.activity.ActivityType;
 import com.worklog.vscode.TodoItem;
 import com.worklog.vscode.UncommittedFile;
+import com.worklog.vscode.UnpushedCommit;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -58,7 +60,10 @@ public final class DraftTemplate {
         if (sessions.isEmpty()) {
             md.append("- (미커밋 작업 없음)\n");
         } else {
-            sessions.forEach(s -> md.append(inProgressLine(s)).append('\n'));
+            sessions.forEach(s -> {
+                md.append(inProgressLine(s)).append('\n');
+                unpushedLine(s).ifPresent(line -> md.append(line).append('\n'));
+            });
         }
 
         md.append("\n## 계획 / TODO\n");
@@ -110,6 +115,27 @@ public final class DraftTemplate {
         String names = files.stream().map(UncommittedFile::path).limit(5).collect(Collectors.joining(", "));
         String more = files.size() > 5 ? " 외 %d개".formatted(files.size() - 5) : "";
         return "- [%s] 미커밋 %d개 — %s%s".formatted(repo, files.size(), names, more);
+    }
+
+    /**
+     * 커밋했지만 아직 push 하지 않은 것 (V11).
+     *
+     * <p>GitHub 수집기가 보지 못하는 구간이라 "완료한 작업" 에는 오르지 않는다. 그렇다고
+     * 빼 두면 <b>커밋까지 해 둔 일</b>이 그날 일지에서 통째로 사라진다. 커밋 메시지는 이미
+     * 사람이 쓴 요약이라 그대로 옮긴다.
+     */
+    private static Optional<String> unpushedLine(VscodeSession s) {
+        List<UnpushedCommit> commits = s.getUnpushedCommits();
+        if (commits == null || commits.isEmpty()) {
+            return Optional.empty();
+        }
+        String repo = s.getRepo() != null ? s.getRepo().getFullName() : s.getRemoteUrl();
+        String subjects = commits.stream()
+                .limit(5)
+                .map(UnpushedCommit::subject)
+                .collect(Collectors.joining(", "));
+        String more = commits.size() > 5 ? " 외 %d개".formatted(commits.size() - 5) : "";
+        return Optional.of("- [%s] 미푸시 커밋 %d개 — %s%s".formatted(repo, commits.size(), subjects, more));
     }
 
     /**
