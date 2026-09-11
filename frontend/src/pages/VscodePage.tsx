@@ -31,7 +31,11 @@ export default function VscodePage() {
     .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt))
 
   const files = shown.reduce((n, x) => n + x.uncommittedFiles.length, 0)
-  const aiSessions = shown.reduce((n, x) => n + (x.aiSessions?.length ?? 0), 0)
+  /**
+   * 세션 행 여럿에 같은 대화가 들어 있을 수 있다 — 세션 키는 브랜치별인데 AI 대화는
+   * 폴더 단위다. 그대로 더하면 브랜치를 바꾼 날 두 배로 세어진다 (BACKLOG2_client C-1).
+   */
+  const aiSessions = new Set(shown.flatMap((x) => (x.aiSessions ?? []).map((a) => a.id))).size
 
 
 

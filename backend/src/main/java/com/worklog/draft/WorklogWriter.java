@@ -13,6 +13,8 @@ import com.worklog.vscode.UncommittedFile;
 import com.worklog.vscode.VscodeSession;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -162,8 +164,7 @@ public class WorklogWriter {
      * 전부 넣으면 이 부분이 프롬프트를 차지해 정작 커밋이 밀린다.
      */
     private static String aiLines(List<VscodeSession> sessions) {
-        String lines = sessions.stream()
-                .flatMap(s -> s.getAiSessions() == null ? Stream.<AiSessionSummary>of() : s.getAiSessions().stream())
+        String lines = distinctAiSessions(sessions).stream()
                 .flatMap(a -> a.prompts().stream().limit(MAX_AI_PROMPTS_PER_SESSION))
                 .map(String::strip)
                 .filter(p -> !p.isEmpty())
@@ -172,6 +173,27 @@ public class WorklogWriter {
                 .map(p -> "- " + p)
                 .collect(Collectors.joining("\n"));
         return lines.isEmpty() ? "(없음)" : lines;
+    }
+
+    /**
+     * 세션 행 여럿에 같은 대화가 들어 있을 수 있다.
+     *
+     * <p>세션 키는 브랜치별인데 AI 대화는 <b>폴더 단위</b>다. 오전에 A 브랜치, 오후에 B
+     * 브랜치로 일하면 두 행이 같은 대화를 각각 들고 있다. 대화 id 로 한 번만 남긴다
+     * (BACKLOG2_client C-1).
+     */
+    private static Collection<AiSessionSummary> distinctAiSessions(List<VscodeSession> sessions) {
+        Map<String, AiSessionSummary> byId = new LinkedHashMap<>();
+        for (VscodeSession s : sessions) {
+            if (s.getAiSessions() == null) {
+                continue;
+            }
+            for (AiSessionSummary a : s.getAiSessions()) {
+                // 같은 대화가 여러 행에 있으면 프롬프트가 더 많은 쪽(늦게 보고된 것)을 남긴다.
+                byId.merge(a.id(), a, (x, y) -> y.prompts().size() >= x.prompts().size() ? y : x);
+            }
+        }
+        return byId.values();
     }
 
     private static String planLines(List<VscodeSession> sessions) {
