@@ -10,7 +10,15 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { useCreateBlankDraft, useDraft, useGenerateDraft, useNotifyDraft, useSaveDraft } from '@/api/hooks'
+import {
+  useActivities,
+  useCreateBlankDraft,
+  useDraft,
+  useGenerateDraft,
+  useNotifyDraft,
+  useSaveDraft,
+  useSessions,
+} from '@/api/hooks'
 import { ApiError } from '@/api/apiClient'
 import { formatTime } from '@/lib/date'
 import { cn } from '@/lib/utils'
@@ -129,6 +137,18 @@ export default function DraftWorkspace({
     })
   }
 
+  // 근거는 **그날의 기록 그대로**를 보여 준다. 초안이 들고 있는 것(sourceSessionIds)은 그
+  // 초안을 만든 순간의 스냅샷이라, 오후에 저장소를 하나 더 열면 화면과 VSCode 내역 탭의
+  // 숫자가 어긋난다 (9/11). 다시 생성을 누르면 어차피 지금 기록 전부를 쓴다.
+  //
+  // 지난 일지를 목록에서 열고 들어온 경우(DraftEditorPage)에는 evidence 가 없다. 초안이
+  // 자기 날짜를 아니 그 날짜로 직접 불러온다.
+  const day = draft?.workDate ?? workDate
+  const owner = draft?.userId ?? userId
+  const needsFetch = !evidence && !!day && !!owner
+  const dayActivities = useActivities({ date: day ?? '', userId: owner }, needsFetch)
+  const daySessions = useSessions({ date: day ?? '', userId: owner }, needsFetch)
+
   async function run(action: () => Promise<unknown>, ok: string) {
     try {
       await action()
@@ -147,28 +167,14 @@ export default function DraftWorkspace({
     )
   }
 
-  const sourceActivities = draft?.sourceActivities ?? evidence?.activities ?? []
-  const sourceSessions = draft?.sourceSessions ?? evidence?.sessions ?? []
+  const live = evidence ?? {
+    activities: (dayActivities.data?.items ?? []).filter((a) => a.user?.id === owner),
+    sessions: (daySessions.data ?? []).filter((s) => s.userId === owner),
+  }
+  // 아직 못 읽었으면 초안이 들고 있는 것이라도 보여 준다 — 빈 칸보다 낫다.
+  const sourceActivities = live.activities.length > 0 ? live.activities : draft?.sourceActivities ?? []
+  const sourceSessions = live.sessions.length > 0 ? live.sessions : draft?.sourceSessions ?? []
 
-  /**
-   * 근거는 **이 초안이 만들어질 때 쓴 재료**다 (`sourceSessionIds`). 그래서 초안을 만든 뒤에
-   * 들어온 기록 — 오후에 새 저장소를 열었다든지 — 은 여기 없다. 화면에는 "1저장소" 인데
-   * VSCode 내역 탭에는 둘이 보이는 일이 그래서 생긴다.
-   *
-   * <p>스냅샷을 라이브로 바꾸면 "이 초안의 근거" 라는 말이 거짓이 된다. 대신 그 사이에 더
-   * 들어온 것이 있으면 몇 건인지와 어떻게 반영하는지를 알려 준다.
-   */
-  const behind = (() => {
-    if (!draft || !evidence) return undefined
-    const moreSessions = evidence.sessions.length - sourceSessions.length
-    const moreActivities = evidence.activities.length - sourceActivities.length
-    if (moreSessions <= 0 && moreActivities <= 0) return undefined
-    const parts = [
-      moreSessions > 0 ? `저장소 ${moreSessions}곳` : null,
-      moreActivities > 0 ? `GitHub 활동 ${moreActivities}건` : null,
-    ].filter(Boolean)
-    return `이 초안을 만든 뒤 ${parts.join(' · ')}이 더 들어왔습니다. AI 생성을 다시 누르면 반영됩니다.`
-  })()
   const author = draft ? sourceActivities[0]?.user?.name : displayName
   const busy = save.isPending || notify.isPending || regenerate.isPending || createBlank.isPending
 
@@ -313,7 +319,6 @@ export default function DraftWorkspace({
       <EvidencePanel
         activities={sourceActivities}
         sessions={sourceSessions}
-        behind={behind}
         onJump={jumpTo}
       />
     </div>

@@ -125,11 +125,13 @@ public class RepoController {
      * 끌어올 때 쓴다.
      */
     @PostMapping("/sync-all")
-    public ResponseEntity<ImportResponse> syncAll(@RequestParam(defaultValue = "false") boolean full) {
+    public ResponseEntity<ImportResponse> syncAll(
+            @RequestParam(defaultValue = "false") boolean full,
+            @RequestParam(defaultValue = "7") int days) {
         // 화면에 보이는 것과 같은 집합이어야 한다. 목록은 팀 전체인데 동기화만 내 것이면,
         // 팀원이 눌렀을 때 아무 일도 일어나지 않는다.
         List<Repo> all = repoService.list();
-        all.forEach(repo -> collector.syncAsync(repo.getId(), full));
+        all.forEach(repo -> collector.syncAsync(repo.getId(), full, Math.clamp(days, 1, 365)));
         return ResponseEntity.accepted()
                 .body(new ImportResponse(all.size(), all.stream().map(Repo::getFullName).toList()));
     }
@@ -151,9 +153,11 @@ public class RepoController {
      */
     @PostMapping("/{id}/sync")
     public ResponseEntity<Void> sync(
-            @PathVariable Long id, @RequestParam(defaultValue = "false") boolean full) {
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean full,
+            @RequestParam(defaultValue = "7") int days) {
         repoService.get(id); // 없는 리포면 404
-        collector.syncAsync(id, full);
+        collector.syncAsync(id, full, Math.clamp(days, 1, 365));
         return ResponseEntity.accepted().build();
     }
 

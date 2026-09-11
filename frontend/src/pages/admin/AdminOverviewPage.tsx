@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, MessagesSquare, RefreshCw, Sparkles } from
 import { ApiError } from '@/api/apiClient'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import AdminGuard from './AdminGuard'
 import { useAdminOverview, useRunAiSummaries, useRunSummaries, useSyncAllRepos } from './api'
@@ -49,6 +50,8 @@ export default function AdminOverviewPage() {
   const syncAll = useSyncAllRepos()
   const runSummaries = useRunSummaries()
   const runAiSummaries = useRunAiSummaries()
+  /** 전체 재수집이 거슬러 볼 날 수. 7일로 못 박으면 오래된 저장소를 영영 채울 수 없다. */
+  const [backfillDays, setBackfillDays] = useState(30)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
   async function run(fn: () => Promise<string>) {
@@ -133,7 +136,7 @@ export default function AdminOverviewPage() {
                   variant="outline" size="sm" className="w-[148px] shrink-0 justify-start"
                   disabled={syncAll.isPending}
                   onClick={() => void run(async () => {
-                    const r = await syncAll.mutateAsync(false)
+                    const r = await syncAll.mutateAsync({ full: false })
                     return `리포 ${r.repoCount}개의 동기화를 시작했습니다. 잠시 뒤 새로고침하세요.`
                   })}
                 >
@@ -152,16 +155,33 @@ export default function AdminOverviewPage() {
                   variant="outline" size="sm" className="w-[148px] shrink-0 justify-start"
                   disabled={syncAll.isPending}
                   onClick={() => void run(async () => {
-                    const r = await syncAll.mutateAsync(true)
-                    return `리포 ${r.repoCount}개를 최근 7일까지 다시 훑습니다.`
+                    const r = await syncAll.mutateAsync({ full: true, days: backfillDays })
+                    return `리포 ${r.repoCount}개를 최근 ${r.days}일까지 다시 훑습니다.`
                   })}
                 >
-                  전체 재수집 (7일)
+                  전체 재수집
                 </Button>
                 <span className="flex-1 text-[13px] text-muted-foreground">
-                  같은 일을 하되 마지막 동기화 시각을 <b className="font-medium text-foreground">무시하고 최근
-                  7일</b>을 통째로 다시 봅니다. 리포를 새로 등록했거나 빠진 커밋이 있을 때 씁니다. 이미
-                  저장한 활동은 중복되지 않습니다.
+                  <span className="mb-1 flex items-center gap-1.5">
+                    {/*
+                      기간을 고르게 둔다. 7일로 못 박아 두면 한동안 손대지 않은 저장소가 통째로
+                      비어 보인다 — 마지막 커밋이 2주 전이면 몇 번을 눌러도 창 밖이다 (9/11).
+                    */}
+                    <Select value={String(backfillDays)} onValueChange={(v) => setBackfillDays(Number(v))}>
+                      <SelectTrigger className="h-7 w-[104px] text-[12px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[7, 30, 90, 365].map((d) => (
+                          <SelectItem key={d} value={String(d)}>최근 {d}일</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span>까지 거슬러 봅니다</span>
+                  </span>
+                  같은 일을 하되 마지막 동기화 시각을 <b className="font-medium text-foreground">무시하고</b> 고른
+                  기간을 통째로 다시 봅니다. 리포를 새로 등록했거나, 한동안 손대지 않아 최근 7일에
+                  아무것도 없는 저장소를 채울 때 씁니다. 이미 저장한 활동은 중복되지 않습니다.
                 </span>
               </li>
               <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5">

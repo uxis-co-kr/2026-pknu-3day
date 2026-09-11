@@ -246,12 +246,19 @@ public class AdminController {
      * <p>지금은 리포 관리 화면에서 한 건씩 눌러야 한다. 리포가 늘면 손이 많이 가고,
      * 무엇보다 "지금 전부 최신인가" 를 한 번에 맞출 방법이 없다.
      */
+    /**
+     * @param days {@code full} 일 때 거슬러 올라갈 날 수. 기본 7일로는 한동안 손대지 않은
+     *     저장소가 통째로 비어 보인다 — 마지막 커밋이 2주 전이면 창 밖이라 한 건도 들어오지
+     *     않는다 (9/11 확인). 1~365 로 묶는다.
+     */
     @PostMapping("/repos/sync-all")
     public SyncAllResponse syncAll(
-            @RequestParam(defaultValue = "false") boolean full) {
+            @RequestParam(defaultValue = "false") boolean full,
+            @RequestParam(defaultValue = "7") int days) {
+        int window = Math.clamp(days, 1, 365);
         List<Repo> repos = repoRepository.findAllWithRegistrant();
-        repos.forEach(repo -> collector.syncAsync(repo.getId(), full));
-        return new SyncAllResponse(repos.size(), full);
+        repos.forEach(repo -> collector.syncAsync(repo.getId(), full, window));
+        return new SyncAllResponse(repos.size(), full, window);
     }
 
     /**
@@ -434,7 +441,7 @@ public class AdminController {
             /** 관리자 비밀번호가 아직 기본값인가 — 콘솔이 띠를 띄운다 (BACKLOG2 §2-2) */
             boolean defaultAdminPassword) {}
 
-    public record SyncAllResponse(int repoCount, boolean full) {}
+    public record SyncAllResponse(int repoCount, boolean full, int days) {}
 
     public record SummaryRunResponse(int summarized) {}
 

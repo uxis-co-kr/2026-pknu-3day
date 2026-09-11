@@ -17,12 +17,10 @@ import type { Activity, ActivityType, VscodeSession } from '@/types/api'
  * <p>행을 누르면 에디터에서 그 근거가 적힌 줄로 이동한다.
  */
 export default function EvidencePanel({
-  activities, sessions, behind, onJump,
+  activities, sessions, onJump,
 }: {
   activities: Activity[]
   sessions: VscodeSession[]
-  /** 이 초안을 만든 뒤로 더 들어온 기록이 있으면 그 안내. 없으면 undefined */
-  behind?: string
   onJump: (needles: string[]) => void
 }) {
   const byTime = [...activities].sort((x, y) => x.occurredAt.localeCompare(y.occurredAt))
@@ -65,11 +63,6 @@ export default function EvidencePanel({
         <Source label="VS 활동" count={sessions.length} unit="저장소">
           {sessions.map((s) => <SessionEvidence key={s.id} session={s} onJump={onJump} />)}
           {sessions.length === 0 && <Empty />}
-          {behind && (
-            <p className="mt-2 rounded border border-dashed px-2.5 py-2 text-[12px] text-muted-foreground">
-              {behind}
-            </p>
-          )}
         </Source>
 
         <p className="pt-3 text-[12px] text-muted-foreground/70">

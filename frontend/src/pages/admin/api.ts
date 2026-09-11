@@ -120,8 +120,11 @@ export const useTestWebhook = () =>
 export const useSyncAllRepos = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (full: boolean) =>
-      api.post<{ repoCount: number; full: boolean }>(`/admin/repos/sync-all?full=${full}`),
+    // days 는 full 일 때만 쓴다. 기본 7일로는 한동안 손대지 않은 저장소가 통째로 비어 보인다.
+    mutationFn: ({ full, days = 7 }: { full: boolean; days?: number }) =>
+      api.post<{ repoCount: number; full: boolean; days: number }>(
+        `/admin/repos/sync-all?full=${full}&days=${days}`,
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: adminQk.overview })
       void qc.invalidateQueries({ queryKey: adminQk.people })

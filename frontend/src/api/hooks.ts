@@ -87,8 +87,13 @@ export const useStartGithubLink = () =>
     onSuccess: (r) => window.location.assign(r.url),
   })
 
-export const useActivities = (f: ActivityFilter) =>
-  useQuery({ queryKey: qk.activities(f), queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`), ...LIVE })
+export const useActivities = (f: ActivityFilter, enabled = true) =>
+  useQuery({
+    queryKey: qk.activities(f),
+    queryFn: () => api.get<Page<Activity>>(`/activities${qs({ ...f })}`),
+    enabled,
+    ...LIVE,
+  })
 
 /** 행을 펼칠 때만 부른다 — 목록에 없는 커밋 메시지가 여기 있다. */
 export const useActivityDetail = (id: number | undefined, enabled: boolean) =>
@@ -104,8 +109,13 @@ export const useDailyStats = (date: string) =>
 export const usePeopleStats = (f: PeopleFilter) =>
   useQuery({ queryKey: qk.statsPeople(f), queryFn: () => api.get<PeopleStats>(`/stats/people${qs({ ...f })}`) })
 
-export const useSessions = (f: DayFilter) =>
-  useQuery({ queryKey: qk.sessions(f), queryFn: () => api.get<VscodeSession[]>(`/vscode/sessions${qs({ ...f })}`), ...LIVE })
+export const useSessions = (f: DayFilter, enabled = true) =>
+  useQuery({
+    queryKey: qk.sessions(f),
+    queryFn: () => api.get<VscodeSession[]>(`/vscode/sessions${qs({ ...f })}`),
+    enabled,
+    ...LIVE,
+  })
 
 /** 기간 안의 내 VSCode 내역. 같은 날 안에서는 늦게 보고한 것이 먼저 온다 (서버 정렬). */
 export const useSessionRange = (f: SessionRangeFilter, enabled = true) =>
