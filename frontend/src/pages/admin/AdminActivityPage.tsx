@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import ActivityRow from '@/components/activity/ActivityRow'
 import Pagination from '@/components/common/Pagination'
 import { DraftStatusBadge } from '@/components/common/StatusBadge'
@@ -10,7 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useActivities, usePeopleStats } from '@/api/hooks'
 import { addDays, endOfMonth, startOfMonth, todayKst } from '@/lib/date'
-import { cn } from '@/lib/utils'
 import type { PeopleStats } from '@/types/api'
 import AdminGuard from './AdminGuard'
 import { useAdminPeople } from './api'
@@ -48,7 +47,8 @@ export default function AdminActivityPage() {
   const [selected, setSelected] = useState<string>(ALL)
   const [openDate, setOpenDate] = useState<string | null>(null)
   const [peoplePage, setPeoplePage] = useState(0)
-  const [activityPage, setActivityPage] = useState(0)
+  /** 어느 목록의 몇 쪽인지. 날짜나 사람이 바뀌면 그 자리에서 첫 쪽으로 돌아간다. */
+  const [activityPage, setActivityPage] = useState({ key: '', page: 0 })
 
   const range =
     period === 'week' ? { from: addDays(today, -6), to: today }
@@ -93,11 +93,12 @@ export default function AdminActivityPage() {
   const dayActivities = useActivities({ date: openDate ?? today, userId: row?.user.id })
   const dayItems = dayActivities.data?.items ?? []
   const activityPageCount = Math.max(1, Math.ceil(dayItems.length / PER_PAGE))
-  const activityCurrent = Math.min(activityPage, activityPageCount - 1)
-  const activityRows = dayItems.slice(activityCurrent * PER_PAGE, (activityCurrent + 1) * PER_PAGE)
-
   // 다른 날·다른 사람을 고르면 목록이 통째로 바뀐다. 3쪽을 보던 채로 남아 있으면 안 된다.
-  useEffect(() => setActivityPage(0), [openDate, selected])
+  const activityKey = `${openDate ?? today}|${selected}`
+  const activityCurrent = activityPage.key === activityKey
+    ? Math.min(activityPage.page, activityPageCount - 1)
+    : 0
+  const activityRows = dayItems.slice(activityCurrent * PER_PAGE, (activityCurrent + 1) * PER_PAGE)
 
   return (
     <AdminGuard error={error}>
@@ -173,7 +174,7 @@ export default function AdminActivityPage() {
                   <TableHead className="w-24 text-right">커밋</TableHead>
                   <TableHead className="w-24 text-right">PR</TableHead>
                   <TableHead className="w-24 text-right">머지</TableHead>
-                  <TableHead className="w-40">업무 일지 (기간 내)</TableHead>
+                  <TableHead className="w-40 text-right">업무 일지 (기간 내)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -183,7 +184,6 @@ export default function AdminActivityPage() {
                   <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">계정이 없습니다.</TableCell></TableRow>
                 ) : peopleRows.map((i) => {
                   const drafts = i.series.filter((p) => p.draft)
-                  const confirmed = drafts.filter((p) => p.draft?.status === 'CONFIRMED').length
                   return (
                     <TableRow key={i.user.id} className="cursor-pointer" onClick={() => setSelected(String(i.user.id))}>
                       <TableCell>
@@ -193,8 +193,8 @@ export default function AdminActivityPage() {
                       <TableCell className="text-right tabular-nums">{i.totals.commits}</TableCell>
                       <TableCell className="text-right tabular-nums">{i.totals.prs}</TableCell>
                       <TableCell className="text-right tabular-nums">{i.totals.merges}</TableCell>
-                      <TableCell className="text-[12px] text-muted-foreground">
-                        {drafts.length === 0 ? '없음' : `${drafts.length}건 · 확정 ${confirmed}`}
+                      <TableCell className="text-right text-[12px] tabular-nums text-muted-foreground">
+                        {drafts.length === 0 ? '없음' : `${drafts.length}건`}
                       </TableCell>
                     </TableRow>
                   )
@@ -215,6 +215,7 @@ export default function AdminActivityPage() {
           <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
             <h2 className="text-[13px] font-medium">
               {openDate ?? today} 활동{row ? ` — ${nameOf(row)}` : ' — 전체'}
+              <span className="ml-2 font-normal text-muted-foreground">행을 누르면 GitHub 에서 엽니다</span>
             </h2>
             {/* 막대그래프를 없애면서 날짜를 고를 길이 사라졌다. 날짜 입력으로 대신한다. */}
             <Input
@@ -236,14 +237,27 @@ export default function AdminActivityPage() {
             <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">이날 활동이 없습니다.</p>
           ) : (
             <>
-              <div className={cn('divide-y')}>
-                {activityRows.map((a) => <ActivityRow key={a.id} activity={a} dense />)}
+              {/* divide-y 를 걸면 줄이 두 겹이 된다 — ActivityRow 가 자기 밑줄을 긋는다. */}
+              <div>
+                {/*
+                  커밋 하나가 실제로 무엇을 고쳤는지는 여기서 알 수 없다 — 제목과 요약뿐이다.
+                  관리자가 "이건 뭐지" 할 때 GitHub 을 손으로 찾아 들어가고 있었다. 행이 그
+                  주소를 이미 들고 있으므로(activity.url) 눌러서 바로 가게 한다.
+                */}
+                {activityRows.map((a) => (
+                  <ActivityRow
+                    key={a.id}
+                    activity={a}
+                    dense
+                    onClick={a.url ? () => window.open(a.url, '_blank', 'noopener,noreferrer') : undefined}
+                  />
+                ))}
               </div>
               <Pagination
                 page={activityCurrent}
                 pageCount={activityPageCount}
                 total={dayItems.length}
-                onChange={setActivityPage}
+                onChange={(p) => setActivityPage({ key: activityKey, page: p })}
               />
             </>
           )}

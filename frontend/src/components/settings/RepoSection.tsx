@@ -105,6 +105,7 @@ export default function RepoSection() {
             <p className="text-sm font-medium">등록된 리포지터리가 없습니다</p>
             <p className="mt-1.5 text-[13px] text-muted-foreground">
               위 입력창에 <span className="font-mono">owner/repo</span> 를 넣어 첫 리포를 등록해 주세요.
+              팀에서 한 사람만 등록하면 모두의 커밋이 모입니다.
             </p>
           </div>
         ) : (

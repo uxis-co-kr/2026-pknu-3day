@@ -136,13 +136,25 @@ public class PeopleStatsService {
      *
      * <p>활동이 없는 사용자도 넣는다 — 화면의 사용자 선택기에서 사라지면 안 된다.
      * 가입하지 않은 GitHub 계정은 user 가 없으므로 애초에 대상이 아니다 (PRD F1-5).
+     *
+     * <p>다만 <b>사람이 아닌 계정</b>은 뺀다. 콘솔을 열려고 둔 관리자 계정은 사원도 아니고
+     * GitHub 도 붙어 있지 않아 늘 0 인 줄로만 남는다 — "누가 무엇을 했나" 를 보는 화면에
+     * 팀원인 척 서 있을 이유가 없다 (9/11). 이름을 콕 집지 않고 "사원 정보도 GitHub 도 없는
+     * 관리자" 로 가린다 — 관리자를 겸하는 팀원은 그대로 남는다.
      */
     private List<User> targetUsers(Long userId) {
         if (userId == null) {
-            return userRepository.findAll();
+            return userRepository.findAll().stream().filter(u -> !isServiceAccount(u)).toList();
         }
         return userRepository.findById(userId).map(List::of).orElseThrow(
                 () -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+    }
+
+    /** 사람이 아닌 계정 — 사원 정보도 GitHub 연동도 없는 관리자. */
+    private static boolean isServiceAccount(User user) {
+        return user.getRole() == com.worklog.auth.UserRole.ADMIN
+                && user.getEmpSeq() == null
+                && user.getGithubId() == null;
     }
 
     /** [userId][구간 시작일][타입] → 건수. */

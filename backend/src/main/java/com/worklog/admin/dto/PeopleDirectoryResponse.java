@@ -45,16 +45,25 @@ public record PeopleDirectoryResponse(
             boolean githubLinked,
             boolean vscodeLinked,
             long apiKeyCount,
+            /** VS Code 에서 보내 온 세션 행 수 (사용자·저장소·브랜치·날짜로 한 행). */
             long sessionCount,
+            /** 그중 <b>몇 곳의 저장소</b>에서 보냈는지. 행 수는 브랜치·날짜마다 늘어난다. */
+            long sessionRepoCount,
             Long empSeq,
             long activityCount,
             OffsetDateTime joinedAt,
             List<RepoRow> repos) {}
 
     /**
-     * 그 사람이 등록한 리포 (PRD F1 — 등록자의 토큰으로 수집한다).
+     * 그 사람이 <b>연결된</b> 리포 — 등록했거나, 활동이 잡혔거나, VS 기록을 보낸 곳.
      *
+     * <p>등록만 세면 팀원은 어느 리포에도 붙어 있지 않은 것처럼 보인다. 리포는 한 사람만
+     * 등록할 수 있어(수집이 등록자 토큰으로 돈다) 두 번째 사람은 등록할 길이 없다
+     * (BACKLOG2 §2-4).
+     *
+     * @param registered 이 사람이 등록한 리포인가. 수집은 등록자의 토큰으로 돈다 (PRD F1)
      * @param activityCount 이 리포에서 그 사람 앞으로 잡힌 활동 수
+     * @param sessionCount 이 리포에서 그 사람이 보낸 VS Code 세션 수
      */
     public record RepoRow(
             Long repoId,
@@ -62,7 +71,9 @@ public record PeopleDirectoryResponse(
             String defaultBranch,
             OffsetDateTime lastSyncedAt,
             String syncStatus,
-            long activityCount) {}
+            boolean registered,
+            long activityCount,
+            long sessionCount) {}
 
     /**
      * 커밋 author 로만 남은 GitHub 계정 (PRD F1-5).

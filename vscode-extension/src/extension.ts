@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import * as path from 'node:path'
 import * as vscode from 'vscode'
+import { AI_SCHEME, AiConversationProvider, openAiTurn } from './aiDocument'
 import { Collector, todayKst } from './collector'
 import { initLog, log } from './log'
 import { WorkLogTreeProvider } from './sidebar'
@@ -81,8 +82,14 @@ const CONNECTION_FAILURES = ['서버에 연결할 수 없음', '서버 응답 �
  */
 type SendResult =
   | { kind: 'sent'; files: number }
-  /** 워크스페이스가 git 저장소가 아니거나 origin 이 없다. 서버에 닿지 않았다. */
-  | { kind: 'nothing' }
+  /**
+   * 보낼 것이 없었다. 서버에 닿지 않았다.
+   *
+   * <p>이유가 둘이라 가른다. 워크스페이스가 git 저장소가 아닌 것과, 수집은 했는데 <b>서버에
+   * 등록되지 않은 리포라 걸러진 것</b>이다. 둘을 묶어 "git 저장소가 아닙니다" 라고만 말하면,
+   * 멀쩡한 저장소에서 일하는 사람이 엉뚱한 데를 들여다보게 된다.
+   */
+  | { kind: 'nothing'; unregistered?: string[] }
   /** 다른 전송이 도는 중이라 건너뛰었다. */
   | { kind: 'skipped' }
   | { kind: 'failed'; reason: string }
@@ -103,13 +110,15 @@ async function send(reason: string): Promise<SendResult> {
     const payloads = registered
       ? all.filter((p) => registered.has(repoFullName(p.remoteUrl).toLowerCase()))
       : all
-    const skipped = all.length - payloads.length
-    log(`${reason}: 저장소 ${payloads.length}곳${skipped > 0 ? ` (등록 안 된 ${skipped}곳 제외)` : ''}, `
+    const dropped = registered
+      ? all.filter((p) => !registered.has(repoFullName(p.remoteUrl).toLowerCase()))
+      : []
+    log(`${reason}: 저장소 ${payloads.length}곳${dropped.length > 0 ? ` (등록 안 된 ${dropped.length}곳 제외)` : ''}, `
       + `미커밋 ${collector.uncommittedCount}파일`)
 
     if (payloads.length === 0) {
       renderStatusBar()
-      return { kind: 'nothing' }
+      return { kind: 'nothing', unregistered: dropped.map((p) => repoFullName(p.remoteUrl)) }
     }
     const result = await new Uploader({ serverUrl, apiKey }).send(payloads)
     renderStatusBar(result.ok ? undefined : result.reason)
@@ -258,10 +267,19 @@ async function tellResult(result: SendResult): Promise<void> {
     case 'sent':
       void vscode.window.showInformationMessage(`WorkLog: 전송했습니다 (미커밋 파일 ${result.files}개).`)
       return
-    case 'nothing':
+    case 'nothing': {
+      const un = result.unregistered ?? []
+      if (un.length > 0) {
+        // 수집은 됐는데 서버가 모르는 저장소라 걸러진 것이다. 무엇을 해야 하는지까지 말한다.
+        void vscode.window.showWarningMessage(
+          `WorkLog: ${un.join(', ')} 은(는) 서버에 등록된 저장소가 아니라 보내지 않았습니다. `
+            + '팀에서 한 사람이 대시보드 설정 > 리포지터리에 등록하면 모두의 기록이 올라갑니다.')
+        return
+      }
       void vscode.window.showInformationMessage(
         'WorkLog: 보낼 것이 없습니다. 열린 폴더가 git 저장소가 아니거나 origin 이 없습니다.')
       return
+    }
     case 'skipped':
       return // 다른 전송이 도는 중이다. 굳이 알릴 일이 아니다.
     case 'failed':
@@ -639,6 +657,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('worklog.setApiKey', () => askServerAndKey()),
     vscode.commands.registerCommand('worklog.setServerUrl', () => askServerUrl()),
+  )
+
+  // AI 대화를 읽을 수 있는 문서로 여는 자리. 가상 문서라 파일을 만들지 않는다.
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(AI_SCHEME, new AiConversationProvider()),
+    vscode.commands.registerCommand('worklog.openAiTurn', (args) => void openAiTurn(args)),
   )
 
   // 커밋·푸시는 대개 터미널이나 소스 제어 패널에서 한다. 파일 저장만 보고 있으면 그때

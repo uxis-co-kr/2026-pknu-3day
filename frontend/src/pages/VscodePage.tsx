@@ -3,6 +3,7 @@ import {
   CalendarDays, ChevronLeft, ChevronRight, Clock, FileDiff, GitCommitHorizontal, ListTodo,
   MessagesSquare, NotebookPen, Save,
 } from 'lucide-react'
+import DateSidebar from '@/components/day/DateSidebar'
 import DayFilters from '@/components/day/DayFilters'
 import PlanMarkdown from '@/components/common/PlanMarkdown'
 import SummaryCard from '@/components/common/SummaryCard'
@@ -52,34 +53,41 @@ export default function VscodePage() {
         <DayFilters repos={repos.data ?? []} repoFilter={repoFilter} onRepo={setRepoFilter} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {sessions.isLoading ? (
-          [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
-        ) : (
-          <>
-            {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
-            <SummaryCard label="저장소" value={shown.length} />
-            <SummaryCard label="미커밋 파일" value={files} />
-            <SummaryCard label="AI 대화 세션" value={aiSessions} />
-          </>
-        )}
-      </div>
-
-      <Card className="overflow-hidden rounded-lg shadow-none">
-        {shown.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <p className="text-[13px] text-muted-foreground">이 날짜에는 VS Code 에서 보낸 작업이 없습니다.</p>
-            <p className="mx-auto mt-2 max-w-[420px] text-[12px] leading-relaxed text-muted-foreground/70">
-              VS Code 에서 <strong>WorkLog: 지금 전송</strong> 을 누르거나, 확장 사이드바의 전송 버튼을 쓰면
-              여기에 나타납니다.
-            </p>
+      {/* 달력은 요약 박스와 같은 줄에서 시작한다. 필터 줄은 위에 통째로 둔다. */}
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            {sessions.isLoading ? (
+              [0, 1, 2].map((i) => <Skeleton key={i} className="h-[101px]" />)
+            ) : (
+              <>
+                {/* 팀 전체 숫자는 관리자 콘솔이 맡는다 (9/10 결정). 여기는 내 것만 본다. */}
+                <SummaryCard label="저장소" value={shown.length} />
+                <SummaryCard label="미커밋 파일" value={files} />
+                <SummaryCard label="AI 대화 세션" value={aiSessions} />
+              </>
+            )}
           </div>
-        ) : (
-          shown.map((session) => <SessionDetail key={session.id} session={session} />)
-        )}
-      </Card>
 
-      <MonthList selectedDate={date} userId={me?.id} />
+          <Card className="overflow-hidden rounded-lg shadow-none">
+            {shown.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <p className="text-[13px] text-muted-foreground">이 날짜에는 VS Code 에서 보낸 작업이 없습니다.</p>
+                <p className="mx-auto mt-2 max-w-[420px] text-[12px] leading-relaxed text-muted-foreground/70">
+                  VS Code 에서 <strong>WorkLog: 지금 전송</strong> 을 누르거나, 확장 사이드바의 전송 버튼을 쓰면
+                  여기에 나타납니다.
+                </p>
+              </div>
+            ) : (
+              shown.map((session) => <SessionDetail key={session.id} session={session} />)
+            )}
+          </Card>
+
+          <MonthList selectedDate={date} userId={me?.id} />
+        </div>
+
+        <DateSidebar />
+      </div>
     </div>
   )
 }
@@ -235,20 +243,6 @@ function SessionDetail({ session }: { session: VscodeSession }) {
             </div>
           ))}
         </Group>
-
-        {/* 2026-09-11 부터 모으지 않는다. 그전 기록에만 남아 있어, 있을 때만 보여 준다. */}
-        {session.editTimeline.length > 0 && (
-          <Group label="저장 이벤트 (지난 기록)" count={session.editTimeline.length} Icon={Clock}>
-            {session.editTimeline.map((e) => (
-              <div key={e.path} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate">{e.path}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground/70">
-                  {e.saveCount}회 · {formatTime(e.lastSavedAt)}
-                </span>
-              </div>
-            ))}
-          </Group>
-        )}
       </div>
     </div>
   )
@@ -301,46 +295,27 @@ function DayRow({ workDate, sessions }: { workDate: string; sessions: VscodeSess
  * 앞에 세우고, 펼치면 질문마다 무엇이라 답했는지 본다 (BACKLOG2 §2-3).
  */
 function AiSession({ ai }: { ai: AiSessionSummary }) {
-  const [open, setOpen] = useState(false)
-  const turns = ai.turns ?? []
-  const shown = open ? turns : turns.slice(0, 2)
-
   return (
     <div className="rounded border border-border/60 px-2 py-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-1.5 text-left"
-      >
-        <ChevronRight className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')} />
+      <div className="flex w-full items-center gap-1.5">
         <span className="min-w-0 flex-1 truncate font-medium">{ai.title}</span>
         <span className="shrink-0 tabular-nums text-muted-foreground/70">
           {formatTime(ai.firstAt)}–{formatTime(ai.lastAt)} · {ai.promptCount}개
         </span>
-      </button>
-
-      <div className="mt-1 space-y-1 pl-[18px]">
-        {/* 서버가 붙인 요약. 질문 원문보다 먼저 읽히도록 위에 둔다 — 접은 채로도 무슨
-            대화였는지 알 수 있어야 한다. 전송 직후에는 잠깐 없다. */}
-        {ai.summary && <p className="text-foreground/80">{ai.summary}</p>}
-        {shown.map((t, i) => (
-          <div key={`${t.at}:${i}`}>
-            <p className={open ? '' : 'truncate'}>· {t.prompt}</p>
-            {t.answer && (
-              <p className={cn('pl-2 text-muted-foreground/70', !open && 'truncate')}>↳ {t.answer}</p>
-            )}
-          </div>
-        ))}
-        {!open && turns.length > shown.length && (
-          <p className="text-muted-foreground/60">… 그 외 {turns.length - shown.length}개</p>
-        )}
-        {/* 담은 것은 12개까지다. 실제로 물어본 횟수와 다르면 그렇다고 말한다 (C-1 ①). */}
-        {open && ai.promptCount > turns.length && (
-          <p className="text-muted-foreground/60">
-            {ai.promptCount}개 중 최근 {turns.length}개만 보관합니다
-          </p>
-        )}
       </div>
+
+      {/*
+        요약만 보여 준다 (9/11 결정). 질문과 답변 원문을 여기 펼쳐 두면, 하루를 되짚어 보는
+        화면이 대화 기록을 그대로 옮겨 적은 것이 된다 — 길기도 하고, 남이 볼 수 있는 자리에
+        원문이 놓이는 것도 부담이다. 원문은 각자의 VS Code 확장에서 본다.
+      */}
+      <p className="mt-1 pl-1 text-foreground/80">
+        {ai.summary ?? (
+          // 전송 직후에는 아직 없고, 9/11 이전 기록에는 영영 없다 (요약은 전송 때 채운다).
+          // 둘을 구분해 말할 방법이 없으니 단정하지 않는다.
+          <span className="text-muted-foreground/60">요약이 아직 없습니다</span>
+        )}
+      </p>
     </div>
   )
 }

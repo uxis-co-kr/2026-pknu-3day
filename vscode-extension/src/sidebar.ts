@@ -95,7 +95,7 @@ export class WorkLogTreeProvider implements vscode.TreeDataProvider<Node> {
       const children: Node[] = [planNode(this.collector.planOf(cwd), cwd)]
       children.push(group(`미커밋 파일 ${p.uncommittedFiles.length}개`, 'diff', p.uncommittedFiles.map((f) => fileNode(f, cwd))))
       children.push(unpushedGroup(this.collector.unpushedOf(p)))
-      children.push(aiGroup(p.aiSessions))
+      children.push(aiGroup(p.aiSessions, cwd))
       children.push(group(`TODO ${p.todos.length}개`, 'checklist', p.todos.map((t) => todoNode(t, cwd))))
       children.push(
         group(
@@ -352,8 +352,12 @@ function planLines(plan: string): Node[] {
  * <p>커밋에도 미커밋 변경에도 남지 않는 작업이다 — 무엇을 어떻게 할지 묻고 정한 과정.
  * 여기 있는 것은 모두 서버로 간다. "보내지 않음" 으로 따로 붙이던 줄은 없앴다.
  */
-function aiGroup(sessions: AiSessionSummary[]): Node {
-  return group(`AI 대화 ${sessions.length}세션`, 'comment-discussion', sessions.map((s) => sessionNode(s)))
+function aiGroup(sessions: AiSessionSummary[], cwd: string | undefined): Node {
+  return group(
+    `AI 대화 ${sessions.length}세션`,
+    'comment-discussion',
+    sessions.map((s) => sessionNode(s, cwd)),
+  )
 }
 
 /** "9/10" */
@@ -363,8 +367,8 @@ function day(iso: string): string {
 }
 
 /** 세션 하나. 시각만으로는 무슨 대화였는지 알 수 없어 제목을 앞에 세운다. */
-function sessionNode(s: AiSessionSummary): Node {
-  const node = group(s.title, 'comment', s.turns.map((t) => turnNode(t)))
+function sessionNode(s: AiSessionSummary, cwd: string | undefined): Node {
+  const node = group(s.title, 'comment', s.turns.map((t) => turnNode(t, s, cwd)))
   // 열어 두기만 한 대화는 마지막으로 오간 것이 어제일 수 있다. 시각만 적으면 오늘로 읽힌다.
   const when = day(s.lastAt) === day(new Date().toISOString()) ? '' : `${day(s.lastAt)} `
   // 담은 것은 12개까지지만 실제로 물어본 횟수를 보여 준다.
@@ -375,13 +379,24 @@ function sessionNode(s: AiSessionSummary): Node {
   return node
 }
 
-/** 질문 하나. 답변이 있으면 펼쳐 볼 수 있게 자식으로 단다. */
-function turnNode(turn: AiTurn): Node {
-  const node = turn.answer
-    ? group(turn.prompt, 'quote', [leaf(turn.answer, 'comment-discussion', turn.answer)])
-    : leaf(turn.prompt, 'quote')
+/**
+ * 질문 하나. 누르면 그 대화를 읽을 수 있는 문서로 열고 이 질문 자리로 간다.
+ *
+ * <p>예전에는 답변을 자식 노드로 달았다. 트리 한 줄에 답변 전문을 넣는 것이라 줄바꿈도
+ * 코드 블록도 사라지고 뒷부분은 잘렸다 — 답을 읽을 수 있는 모양이 아니었다. 답변은 문서에
+ * 있고, 여기서는 <b>어디를 볼지 고르는 것</b>만 한다.
+ */
+function turnNode(turn: AiTurn, session: AiSessionSummary, cwd: string | undefined): Node {
+  const node = leaf(turn.prompt, 'quote')
   node.item.description = time(turn.at)
-  node.item.tooltip = turn.answer ? `${turn.prompt}\n\n${turn.answer}` : turn.prompt
+  node.item.tooltip = `${turn.prompt}\n\n누르면 이 질문이 있는 대화를 엽니다`
+  if (cwd) {
+    node.item.command = {
+      command: 'worklog.openAiTurn',
+      title: '대화 열기',
+      arguments: [{ cwd, id: session.id, title: session.title, at: turn.at }],
+    }
+  }
   return node
 }
 

@@ -182,7 +182,9 @@ public class RepoService {
                 .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
         String token = userService.githubTokenOf(registrant);
         if (token == null) {
-            throw ApiException.forbidden("GITHUB_TOKEN_MISSING", "GitHub 토큰이 없습니다. 다시 로그인해 주세요.");
+            // "다시 로그인" 은 틀린 안내다 — 로그인은 사원번호로 했고, 없는 것은 GitHub 연결이다.
+            throw ApiException.forbidden(
+                    "GITHUB_TOKEN_MISSING", "먼저 설정 > 깃허브 연동에서 GitHub 을 연결해 주세요.");
         }
 
         String[] parts = normalized.split("/", 2);

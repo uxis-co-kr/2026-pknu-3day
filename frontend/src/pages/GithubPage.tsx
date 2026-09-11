@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import ActivityDetailRow from '@/components/activity/ActivityDetailRow'
+import DateSidebar from '@/components/day/DateSidebar'
 import Pagination from '@/components/common/Pagination'
 import DayFilters from '@/components/day/DayFilters'
 import SummaryCard from '@/components/common/SummaryCard'
@@ -41,11 +42,22 @@ export default function GithubPage() {
     .filter((a) => a.user?.id === me?.id)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
 
-  const shown = useMemo(
-    () => mine.filter((a) =>
-      types.includes(a.type) && (repoFilter === 'all' || a.repo.id === Number(repoFilter))),
+  /**
+   * 요약 박스가 세는 자리 — **리포 필터만** 따른다.
+   *
+   * <p>타입 탭까지 반영하면 "커밋만 보기" 를 눌렀을 때 PR·머지 칸이 0 이 된다. 그 칸들은
+   * 원래 타입별로 몇 건인지 말하는 자리라, 타입을 걸러 놓고 타입별로 세면 늘 자기 자신이다.
+   */
+  const inRepo = useMemo(
+    () => mine.filter((a) => repoFilter === 'all' || a.repo.id === Number(repoFilter)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activities.data, types, repoFilter],
+    [activities.data, repoFilter],
+  )
+
+  const shown = useMemo(
+    () => inRepo.filter((a) => types.includes(a.type)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inRepo, types],
   )
 
   // 필터를 바꾸면 있던 페이지가 사라질 수 있다. 범위를 벗어나면 마지막 페이지로 당긴다.
@@ -61,9 +73,11 @@ export default function GithubPage() {
    * (9/10 결정 — 일반 로그인은 내 것만 본다).
    */
   const myStat = {
-    commits: mine.filter((a) => a.type === 'COMMIT').length,
-    prs: mine.filter((a) => a.type === 'PR_OPENED').length,
-    merges: mine.filter((a) => a.type === 'PR_MERGED').length,
+    // 저장소를 맨 앞에 둔다 — 하루에 여러 저장소를 오간 날에 그 사실이 먼저 보여야 한다.
+    repos: new Set(inRepo.map((a) => a.repo.id)).size,
+    commits: inRepo.filter((a) => a.type === 'COMMIT').length,
+    prs: inRepo.filter((a) => a.type === 'PR_OPENED').length,
+    merges: inRepo.filter((a) => a.type === 'PR_MERGED').length,
   }
 
 
@@ -77,55 +91,63 @@ export default function GithubPage() {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {activities.isLoading ? (
-          TYPE_TABS.map((t) => <Skeleton key={t.key} className="h-[101px]" />)
-        ) : (
-          <>
-            <SummaryCard label="커밋" value={myStat.commits} />
-            <SummaryCard label="열린 PR" value={myStat.prs} />
-            <SummaryCard label="머지된 PR" value={myStat.merges} />
-          </>
-        )}
-      </div>
-
-      <div className="flex h-[34px] w-fit overflow-hidden rounded-md border">
-        {TYPE_TABS.map((t, i) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => {
-              setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
-              setPage(0)
-            }}
-            className={cn(
-              'px-3 text-[13px] transition-colors',
-              i > 0 && 'border-l',
-              types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+      {/* 달력은 요약 박스와 같은 줄에서 시작한다. 필터 줄은 위에 통째로 둔다. */}
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="grid grid-cols-4 gap-3">
+            {activities.isLoading ? (
+              [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[101px]" />)
+            ) : (
+              <>
+                <SummaryCard label="저장소" value={myStat.repos} />
+                <SummaryCard label="커밋" value={myStat.commits} />
+                <SummaryCard label="열린 PR" value={myStat.prs} />
+                <SummaryCard label="머지된 PR" value={myStat.merges} />
+              </>
             )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+          </div>
 
-      <Card className="overflow-hidden rounded-lg shadow-none">
-        {activities.isLoading ? (
-          <div className="space-y-2 p-4"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
-        ) : shown.length === 0 ? (
-          <EmptyHint hasAny={mine.length > 0} />
-        ) : (
-          <>
-            {rows.map((a) => <ActivityDetailRow key={a.id} activity={a} />)}
-            <Pagination
-              page={current}
-              pageCount={pageCount}
-              total={shown.length}
-              onChange={setPage}
-            />
-          </>
-        )}
-      </Card>
+          <div className="flex h-[34px] w-fit overflow-hidden rounded-md border">
+            {TYPE_TABS.map((t, i) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => {
+                  setTypes((prev) => prev.includes(t.key) ? prev.filter((x) => x !== t.key) : [...prev, t.key])
+                  setPage(0)
+                }}
+                className={cn(
+                  'px-3 text-[13px] transition-colors',
+                  i > 0 && 'border-l',
+                  types.includes(t.key) ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <Card className="overflow-hidden rounded-lg shadow-none">
+            {activities.isLoading ? (
+              <div className="space-y-2 p-4"><Skeleton className="h-8" /><Skeleton className="h-8" /></div>
+            ) : shown.length === 0 ? (
+              <EmptyHint hasAny={mine.length > 0} />
+            ) : (
+              <>
+                {rows.map((a) => <ActivityDetailRow key={a.id} activity={a} />)}
+                <Pagination
+                  page={current}
+                  pageCount={pageCount}
+                  total={shown.length}
+                  onChange={setPage}
+                />
+              </>
+            )}
+          </Card>
+        </div>
+
+        <DateSidebar />
+      </div>
     </div>
   )
 }

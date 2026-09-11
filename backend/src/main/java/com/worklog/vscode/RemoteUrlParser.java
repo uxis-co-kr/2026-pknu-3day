@@ -10,14 +10,14 @@ import java.util.regex.Pattern;
  *
  * <p>등록되지 않은 리포일 수도 있으므로 실패는 예외가 아니라 빈 값이다. 세션은 repo 없이도 저장된다.
  */
-final class RemoteUrlParser {
+public final class RemoteUrlParser {
 
     private static final Pattern PATTERN =
             Pattern.compile("(?:^|[/:])([\\w.-]+)/([\\w.-]+?)(?:\\.git)?/?$");
 
     private RemoteUrlParser() {}
 
-    static Optional<String> toFullName(String remoteUrl) {
+    public static Optional<String> toFullName(String remoteUrl) {
         if (remoteUrl == null || remoteUrl.isBlank()) {
             return Optional.empty();
         }

@@ -27,6 +27,14 @@ export default function RequireAuth() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
 
+  /*
+   * 콘솔용 관리자 계정은 일반 화면에 보여 줄 기록이 하나도 없다 — 사원도 아니고 GitHub 도
+   * 붙어 있지 않다 (9/11). 빈 화면을 띄우느니 콘솔로 돌려보낸다. 관리자를 겸하는 팀원은
+   * 자기 기록이 있으므로 이 값이 false 라 그대로 쓴다.
+   */
+  if (me?.consoleOnly && !location.pathname.startsWith('/admin')) {
+    return <Navigate to="/admin" replace />
+  }
 
   return <Outlet />
 }

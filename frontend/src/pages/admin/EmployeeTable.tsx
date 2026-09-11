@@ -83,19 +83,28 @@ function ResetPasswordButton({ account, empSeq }: { account: AdminAccount; empSe
   )
 }
 
-/** 펼쳤을 때 보이는 리포 목록. 그 사람이 등록한 리포다 (PRD F1 — 등록자 토큰으로 수집). */
+/**
+ * 펼쳤을 때 보이는 리포 목록 — 그 사람이 **연결된** 리포다.
+ *
+ * <p>등록한 것만 보여 주면 팀원은 늘 "없습니다" 가 된다. 리포는 한 사람만 등록할 수 있어
+ * (수집이 등록자 토큰으로 돈다) 두 번째 사람은 등록할 길이 없다. 활동이 잡혔거나 VS 기록을
+ * 보낸 리포도 함께 세고, 등록한 것에는 표를 단다 (BACKLOG2 §2-4).
+ */
 function RepoList({ account }: { account: AdminAccount }) {
   if (account.repos.length === 0) {
     return (
       <p className="px-4 py-3 text-[13px] text-muted-foreground">
-        등록한 리포지터리가 없습니다. 리포를 등록해야 그 사람 커밋이 수집됩니다.
+        연결된 리포지터리가 없습니다. 팀에서 한 사람이 리포를 등록하고 이 사람이 GitHub 을
+        연결하면, 그때부터 이 사람 커밋이 여기 잡힙니다.
       </p>
     )
   }
+  const registered = account.repos.filter((r) => r.registered).length
   return (
     <div className="px-4 py-3">
       <p className="mb-2 text-[12px] text-muted-foreground">
-        {account.login} 님이 등록한 리포지터리 {account.repos.length}개
+        {account.login} 님이 연결된 리포지터리 {account.repos.length}개
+        {registered > 0 && ` · 그중 ${registered}개를 등록했습니다`}
       </p>
       <div className="space-y-1">
         {account.repos.map((r) => (
@@ -111,6 +120,10 @@ function RepoList({ account }: { account: AdminAccount }) {
               {r.fullName}
               <ExternalLink className="size-3 text-muted-foreground" />
             </span>
+            {/* 등록자는 수집이 그 사람 토큰으로 돈다는 뜻이라, 남과 구분해 둔다. */}
+            <Badge variant="outline" className="font-normal text-muted-foreground">
+              {r.registered ? '등록자' : '참여'}
+            </Badge>
             {r.defaultBranch && (
               <span className="text-[12px] text-muted-foreground">{r.defaultBranch}</span>
             )}
@@ -119,7 +132,9 @@ function RepoList({ account }: { account: AdminAccount }) {
                 {r.syncStatus === 'SYNCING' ? '동기화 중' : '동기화 실패'}
               </Badge>
             )}
-            <span className="ml-auto tabular-nums text-muted-foreground">활동 {r.activityCount}</span>
+            <span className="ml-auto tabular-nums text-muted-foreground">
+              활동 {r.activityCount} · VS 기록 {r.sessionCount}
+            </span>
           </a>
         ))}
       </div>
@@ -160,7 +175,7 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
           <TableHead>서비스 계정</TableHead>
           <TableHead className="w-40">VS Code 연동</TableHead>
           <TableHead className="w-40">GitHub 연동</TableHead>
-          <TableHead className="w-20 text-right">리포</TableHead>
+          <TableHead className="w-24 text-right">연결된 리포</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -193,7 +208,9 @@ export default function EmployeeTable({ employees }: { employees: AdminEmployee[
                       linked={acc.vscodeLinked}
                       note={
                         acc.vscodeLinked
-                          ? `세션 ${acc.sessionCount}`
+                          // 행 수가 아니라 저장소 수다 — 같은 저장소도 브랜치·날짜마다 행이
+                          // 늘어, 그 수를 적으면 두 곳에서 일한 사람이 셋으로 보인다 (9/11).
+                          ? `저장소 ${acc.sessionRepoCount}`
                           : acc.apiKeyCount > 0
                             ? '키만 발급됨'
                             : undefined

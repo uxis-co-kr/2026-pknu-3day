@@ -13,6 +13,7 @@ import { useSelectedDate } from '@/hooks/useSelectedDate'
 import {
   endOfMonth, formatDateLabel, formatTime, monthLabel, shiftMonth, startOfMonth, todayKst,
 } from '@/lib/date'
+import { sessionHasContent } from '@/lib/session'
 
 /**
  * 업무 일지 작성 — 오늘 것은 맨 위에서 **펼쳐 놓고** 바로 쓰고, 지난 것은 아래에서 고른다.
@@ -46,7 +47,9 @@ export default function DraftsPage() {
   // 내 활동에서 직접 센다. /stats/daily 응답에는 팀 전원의 숫자가 실려 온다.
   const myActivities = (activities.data?.items ?? []).filter((a) => a.user?.id === me?.id)
   const mySessions = (sessions.data ?? []).filter((s) => s.userId === me?.id)
-  const material = myActivities.length + mySessions.length
+  // 세션이 있다고 일한 것은 아니다 — 확장이 10분마다 보내 빈 세션이 쌓인다. 그것까지 재료로
+  // 세면 아무것도 하지 않은 날에도 AI 생성이 열린다 (서버도 같은 기준으로 막는다).
+  const material = myActivities.length + mySessions.filter(sessionHasContent).length
 
   // 오늘 것은 위에서 이미 펼쳐 놓았다. 목록에서는 뺀다.
   const past = (list.data ?? []).filter((d) => d.workDate !== date)

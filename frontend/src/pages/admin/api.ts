@@ -120,8 +120,11 @@ export const useTestWebhook = () =>
 export const useSyncAllRepos = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (full: boolean) =>
-      api.post<{ repoCount: number; full: boolean }>(`/admin/repos/sync-all?full=${full}`),
+    // days 는 full 일 때만 쓴다. 기본 7일로는 한동안 손대지 않은 저장소가 통째로 비어 보인다.
+    mutationFn: ({ full, days = 7 }: { full: boolean; days?: number }) =>
+      api.post<{ repoCount: number; full: boolean; days: number }>(
+        `/admin/repos/sync-all?full=${full}&days=${days}`,
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: adminQk.overview })
       void qc.invalidateQueries({ queryKey: adminQk.people })
@@ -134,6 +137,20 @@ export const useRunSummaries = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api.post<{ summarized: number }>('/admin/summaries/run'),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.overview }),
+  })
+}
+
+/**
+ * 요약이 빠진 AI 대화를 채운다.
+ *
+ * <p>대화 요약은 확장이 보낼 때 채우므로, 다시 전송될 일이 없는 지난 세션은 영영 빈 채로
+ * 남는다. VS 내역 탭이 요약만 보여 주게 된 뒤로는 그 날들이 빈칸이 된다.
+ */
+export const useRunAiSummaries = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<{ sessions: number }>('/admin/ai-summaries/run'),
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminQk.overview }),
   })
 }

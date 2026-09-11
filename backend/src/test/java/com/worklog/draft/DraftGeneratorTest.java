@@ -17,6 +17,7 @@ import com.worklog.auth.User;
 import com.worklog.auth.UserRepository;
 import com.worklog.github.Repo;
 import com.worklog.notify.NotifyService;
+import com.worklog.vscode.VscodeSession;
 import com.worklog.vscode.VscodeSessionRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -109,6 +110,38 @@ class DraftGeneratorTest {
         assertThat(draft.getSourceSessionIds()).isEmpty();
         // 초안을 만든 것 자체는 알리지 않는다 (9/11). 알림은 [Mattermost 전송] 을 눌렀을 때만.
         verifyNoInteractions(notifyService);
+    }
+
+    /**
+     * 확장은 10분마다 보낸다. 열어만 두고 아무것도 하지 않은 날에도 저장소·브랜치·날짜만 담긴
+     * 빈 세션이 쌓인다. 그것을 재료로 치면 <b>아무것도 하지 않은 날에 AI 가 일지를 지어낸다</b>
+     * (9/11 확인).
+     */
+    @Test
+    @DisplayName("빈 세션만 있으면 초안을 만들지 않는다 — 행이 있다고 일한 것은 아니다")
+    void skipsWhenSessionHasNothingInIt() {
+        givenActivities();
+        VscodeSession empty = new VscodeSession();
+        empty.setWorkDate(DAY);
+        when(sessionRepository.findByUserIdAndWorkDate(eq(USER_ID), eq(DAY))).thenReturn(List.of(empty));
+
+        assertThat(generator.generate(USER_ID, DAY)).isEmpty();
+        verify(draftRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("세션에 적을 것이 하나라도 있으면 만든다 — 계획만 적어 둔 날도 기록이다")
+    void generatesWhenSessionHasContent() {
+        givenActivities();
+        VscodeSession planned = new VscodeSession();
+        planned.setId(9L);
+        planned.setWorkDate(DAY);
+        planned.setPlanNote("오늘은 출석 API 를 붙인다");
+        when(sessionRepository.findByUserIdAndWorkDate(eq(USER_ID), eq(DAY))).thenReturn(List.of(planned));
+
+        Draft draft = generator.generate(USER_ID, DAY).orElseThrow();
+
+        assertThat(draft.getSourceSessionIds()).containsExactly(9L);
     }
 
     @Test

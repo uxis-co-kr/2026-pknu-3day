@@ -83,8 +83,14 @@ public class GitHubCollector {
 
     @Async
     public void syncAsync(Long repoId, boolean full) {
+        syncAsync(repoId, full, FIRST_SYNC_DAYS);
+    }
+
+    /** @param days full 일 때 거슬러 올라갈 날 수 */
+    @Async
+    public void syncAsync(Long repoId, boolean full, int days) {
         try {
-            sync(repoId, full);
+            sync(repoId, full, days);
         } catch (Exception e) {
             // 비동기라 예외를 받아줄 호출자가 없다. 로그만 남기고 다음 스케줄에 다시 시도한다.
             log.error("리포 {} 동기화 실패", repoId, e);
@@ -100,12 +106,23 @@ public class GitHubCollector {
      * 각각의 트랜잭션이고, 중간에 실패해도 그때까지 저장된 활동은 남는다. 다음 동기화는
      * last_synced_at 이 갱신되지 않았으므로 같은 구간을 다시 훑고, 중복은 UNIQUE 로 걸러진다.
      *
-     * @param full true 면 last_synced_at 을 무시하고 최근 7일을 다시 훑는다. 수집 대상을 새로
-     *     추가했을 때(예: PR) 기존 리포는 last_synced_at 이 이미 앞서 있어 증분으로는 영영
+     * @param full true 면 last_synced_at 을 무시하고 {@code days} 일을 다시 훑는다. 수집 대상을
+     *     새로 추가했을 때(예: PR) 기존 리포는 last_synced_at 이 이미 앞서 있어 증분으로는 영영
      *     들어오지 않으므로 백필 통로가 필요하다.
      * @return 새로 저장한 활동 수
      */
     public int sync(Long repoId, boolean full) {
+        return sync(repoId, full, FIRST_SYNC_DAYS);
+    }
+
+    /**
+     * @param days {@code full} 일 때 거슬러 올라갈 날 수.
+     *
+     *     <p>기본 7일로는 <b>한동안 손대지 않은 저장소가 통째로 비어 보인다</b> — 마지막 커밋이
+     *     2주 전이면 몇 번을 다시 훑어도 창 밖이라 한 건도 들어오지 않는다 (9/11 확인).
+     *     그래서 관리자가 기간을 골라 부를 수 있게 열어 둔다.
+     */
+    public int sync(Long repoId, boolean full, int days) {
         if (!inProgress.add(repoId)) {
             log.info("리포 {} 는 이미 동기화 중이라 건너뛴다.", repoId);
             return 0;
@@ -132,7 +149,7 @@ public class GitHubCollector {
             OffsetDateTime since = (!full && repo.getLastSyncedAt() != null)
                     // 푸시가 늦은 커밋을 놓치지 않도록 되돌아본다.
                     ? repo.getLastSyncedAt().minus(SINCE_LOOKBACK)
-                    : syncStartedAt.minusDays(FIRST_SYNC_DAYS);
+                    : syncStartedAt.minusDays(Math.max(1, days));
 
             Set<String> known = new HashSet<>(
                     activityRepository.findExternalIds(repo.getId(), ActivityType.COMMIT));

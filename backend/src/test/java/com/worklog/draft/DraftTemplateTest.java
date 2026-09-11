@@ -54,19 +54,43 @@ class DraftTemplateTest {
         return s;
     }
 
+    /**
+     * 9/11 부터 저장소로 먼저 나눈다. 저장소를 둘 이상 오간 날에 한 덩어리로 늘어놓으면
+     * 무엇이 어느 이야기인지 알 수 없다.
+     */
     @Test
-    @DisplayName("PRD F3 의 네 섹션이 순서대로 들어간다")
-    void hasAllSections() {
-        String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of());
+    @DisplayName("저장소 머리말 아래에 세 섹션이 순서대로 들어간다")
+    void groupsByRepo() {
+        String md = DraftTemplate.render(DAY, "배태일", List.of(commit("abc1234", "고쳤다")), List.of());
 
         assertThat(md)
                 .startsWith("# 2026-09-10 업무 일지 — 배태일")
-                .contains("## 완료한 작업")
-                .contains("## 진행 중 / 미커밋")
-                .contains("## 계획 / TODO")
+                .contains("## uxis-co-kr/2026-pknu-3day")
+                .contains("### 완료한 작업")
+                .contains("### 진행 중 / 미커밋")
+                .contains("### 계획 / TODO")
                 .contains("## 메모");
-        assertThat(md.indexOf("## 완료한 작업")).isLessThan(md.indexOf("## 진행 중 / 미커밋"));
-        assertThat(md.indexOf("## 계획 / TODO")).isLessThan(md.indexOf("## 메모"));
+        assertThat(md.indexOf("## uxis-co-kr/2026-pknu-3day")).isLessThan(md.indexOf("### 완료한 작업"));
+        assertThat(md.indexOf("### 완료한 작업")).isLessThan(md.indexOf("### 진행 중 / 미커밋"));
+        assertThat(md.indexOf("### 계획 / TODO")).isLessThan(md.indexOf("## 메모"));
+    }
+
+    @Test
+    @DisplayName("저장소가 둘이면 단락도 둘이고, 메모는 맨 끝에 한 번만 있다")
+    void oneSectionPerRepo() {
+        Repo other = new Repo();
+        other.setFullName("Ae-Ti/CodeAtlas");
+        Activity elsewhere = commit("bbb2222", "문서를 고쳤다.");
+        elsewhere.setRepo(other);
+
+        String md = DraftTemplate.render(
+                DAY, "배태일", List.of(commit("abc1234", "출석 API 를 추가했다."), elsewhere), List.of());
+
+        assertThat(md).contains("## Ae-Ti/CodeAtlas").contains("## uxis-co-kr/2026-pknu-3day");
+        // 이름 순이라 날마다 순서가 흔들리지 않는다.
+        assertThat(md.indexOf("## Ae-Ti/CodeAtlas")).isLessThan(md.indexOf("## uxis-co-kr/2026-pknu-3day"));
+        assertThat(md.split("## 메모", -1)).hasSize(2);
+        assertThat(md.indexOf("## 메모")).isGreaterThan(md.indexOf("## uxis-co-kr/2026-pknu-3day"));
     }
 
     @Test
@@ -82,14 +106,14 @@ class DraftTemplateTest {
                 List.of());
 
         List<String> completed = md.lines()
-                .dropWhile(l -> !l.startsWith("## 완료한 작업"))
+                .dropWhile(l -> !l.startsWith("### 완료한 작업"))
                 .skip(1)
                 .takeWhile(l -> l.startsWith("- "))
                 .toList();
 
         assertThat(completed).hasSize(3);
-        assertThat(completed.get(0))
-                .isEqualTo("- [uxis-co-kr/2026-pknu-3day] 출석 API 를 추가했다.  (commit abc1234)");
+        // 저장소는 머리말이 말한다. 줄마다 다시 적으면 같은 말이 세 줄에 걸쳐 되풀이된다.
+        assertThat(completed.get(0)).isEqualTo("- 출석 API 를 추가했다.  (commit abc1234)");
     }
 
     @Test
@@ -104,8 +128,8 @@ class DraftTemplateTest {
                 List.of());
 
         assertThat(md)
-                .contains("- [uxis-co-kr/2026-pknu-3day] PR #12 머지: 출석 기능을 병합했다.")
-                .contains("- [uxis-co-kr/2026-pknu-3day] PR #13 생성: 리뷰를 요청했다.");
+                .contains("- PR #12 머지: 출석 기능을 병합했다.")
+                .contains("- PR #13 생성: 리뷰를 요청했다.");
     }
 
     @Test
@@ -153,7 +177,7 @@ class DraftTemplateTest {
         String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
 
         assertThat(md).contains("미푸시 커밋 2개 — feat: 출석 중복 검증, refactor: 의존성 정리");
-        assertThat(md.indexOf("미푸시 커밋")).isLessThan(md.indexOf("## 계획 / TODO"));
+        assertThat(md.indexOf("미푸시 커밋")).isLessThan(md.indexOf("### 계획 / TODO"));
     }
 
     @Test
@@ -187,7 +211,7 @@ class DraftTemplateTest {
         String md = DraftTemplate.render(DAY, "배태일", List.of(), List.of(s));
 
         List<String> plan = md.lines()
-                .dropWhile(l -> !l.startsWith("## 계획 / TODO"))
+                .dropWhile(l -> !l.startsWith("### 계획 / TODO"))
                 .skip(1)
                 .takeWhile(l -> !l.startsWith("## 메모"))
                 .toList();
@@ -215,6 +239,8 @@ class DraftTemplateTest {
     void keepsEmptySections() {
         String md = DraftTemplate.render(DAY, "배태일", List.of(commit("abc", "요약")), List.of());
 
-        assertThat(md).contains("- (미커밋 작업 없음)").contains("- (기록된 계획 없음)");
+        // 저장소 단락 안에서 비는 자리는 "- (없음)" 으로 남는다. 섹션마다 문구를 달리 하면
+        // 저장소가 늘어날수록 같은 뜻의 말이 여러 가지로 흩어진다.
+        assertThat(md.lines().filter(l -> l.equals("- (없음)")).count()).isEqualTo(2);
     }
 }

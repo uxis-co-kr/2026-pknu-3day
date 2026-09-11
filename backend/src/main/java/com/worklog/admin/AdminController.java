@@ -57,6 +57,8 @@ public class AdminController {
     private final ChatBotSettingsService chatBotSettings;
     private final com.worklog.auth.AdminAccountInitializer adminAccount;
     private final com.worklog.chat.WorkLogAnswerService answerService;
+    private final com.worklog.vscode.VscodeSessionRepository sessionRepository;
+    private final com.worklog.vscode.AiSessionSummarizer aiSummarizer;
 
     public AdminController(
             PeopleDirectoryService directoryService,
@@ -71,7 +73,11 @@ public class AdminController {
             MattermostBot mattermostBot,
             ChatBotSettingsService chatBotSettings,
             com.worklog.auth.AdminAccountInitializer adminAccount,
-            com.worklog.chat.WorkLogAnswerService answerService) {
+            com.worklog.chat.WorkLogAnswerService answerService,
+            com.worklog.vscode.VscodeSessionRepository sessionRepository,
+            com.worklog.vscode.AiSessionSummarizer aiSummarizer) {
+        this.sessionRepository = sessionRepository;
+        this.aiSummarizer = aiSummarizer;
         this.adminAccount = adminAccount;
         this.answerService = answerService;
         this.directoryService = directoryService;
@@ -240,12 +246,19 @@ public class AdminController {
      * <p>지금은 리포 관리 화면에서 한 건씩 눌러야 한다. 리포가 늘면 손이 많이 가고,
      * 무엇보다 "지금 전부 최신인가" 를 한 번에 맞출 방법이 없다.
      */
+    /**
+     * @param days {@code full} 일 때 거슬러 올라갈 날 수. 기본 7일로는 한동안 손대지 않은
+     *     저장소가 통째로 비어 보인다 — 마지막 커밋이 2주 전이면 창 밖이라 한 건도 들어오지
+     *     않는다 (9/11 확인). 1~365 로 묶는다.
+     */
     @PostMapping("/repos/sync-all")
     public SyncAllResponse syncAll(
-            @RequestParam(defaultValue = "false") boolean full) {
+            @RequestParam(defaultValue = "false") boolean full,
+            @RequestParam(defaultValue = "7") int days) {
+        int window = Math.clamp(days, 1, 365);
         List<Repo> repos = repoRepository.findAllWithRegistrant();
-        repos.forEach(repo -> collector.syncAsync(repo.getId(), full));
-        return new SyncAllResponse(repos.size(), full);
+        repos.forEach(repo -> collector.syncAsync(repo.getId(), full, window));
+        return new SyncAllResponse(repos.size(), full, window);
     }
 
     /**
@@ -257,6 +270,22 @@ public class AdminController {
     @PostMapping("/summaries/run")
     public SummaryRunResponse runSummaries() {
         return new SummaryRunResponse(summaryService.runOnce());
+    }
+
+    /**
+     * 요약이 빠진 AI 대화를 채운다.
+     *
+     * <p>대화 요약은 확장이 보낼 때 채운다. 지난 세션은 다시 전송될 일이 없어 영영 빈 채로
+     * 남는다 — 요약 기능이 생기기 전에 끝난 날이 그렇다. VS 내역 탭은 이제 요약만 보여 주므로
+     * (9/11), 그 날들이 빈칸으로 남는다. 여기서 한 번 훑어 채운다.
+     *
+     * <p>세션마다 비동기로 돈다. 돌려주는 수는 "채운 건수" 가 아니라 "훑기 시작한 세션 수" 다.
+     */
+    @PostMapping("/ai-summaries/run")
+    public AiSummaryRunResponse runAiSummaries() {
+        List<Long> ids = sessionRepository.findIdsWithUnsummarizedAi();
+        ids.forEach(aiSummarizer::summarizeMissing);
+        return new AiSummaryRunResponse(ids.size());
     }
 
     /** 회사 직원 목록 + GitHub 활성화 상태 (§1-3 넷째). */
@@ -412,9 +441,11 @@ public class AdminController {
             /** 관리자 비밀번호가 아직 기본값인가 — 콘솔이 띠를 띄운다 (BACKLOG2 §2-2) */
             boolean defaultAdminPassword) {}
 
-    public record SyncAllResponse(int repoCount, boolean full) {}
+    public record SyncAllResponse(int repoCount, boolean full, int days) {}
 
     public record SummaryRunResponse(int summarized) {}
+
+    public record AiSummaryRunResponse(int sessions) {}
 
     public record LinkEmployeeRequest(Long coSeq, Long empSeq) {}
 
