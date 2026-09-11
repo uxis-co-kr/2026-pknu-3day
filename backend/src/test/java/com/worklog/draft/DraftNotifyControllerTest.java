@@ -8,7 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.worklog.auth.AuthMethod;
+import com.worklog.auth.AuthenticatedUser;
 import com.worklog.auth.User;
+import com.worklog.auth.UserRole;
 import com.worklog.config.ApiException;
 import com.worklog.notify.NotifyService;
 import java.time.LocalDate;
@@ -21,6 +24,9 @@ import org.springframework.http.HttpStatus;
 class DraftNotifyControllerTest {
 
     private static final Long DRAFT_ID = 7L;
+    /** 이 일지의 주인. 전송은 주인과 관리자만 할 수 있다. */
+    private static final AuthenticatedUser OWNER =
+            new AuthenticatedUser(1L, "UngsikJo", AuthMethod.JWT, UserRole.MEMBER);
 
     private DraftRepository draftRepository;
     private NotifyService notifyService;
@@ -67,7 +73,7 @@ class DraftNotifyControllerTest {
         Draft draft = givenDraft(true);
         when(notifyService.notifyDraftSummarized(draft)).thenReturn(true);
 
-        var response = controller.notifyDraft(DRAFT_ID);
+        var response = controller.notifyDraft(OWNER, DRAFT_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().sent()).isTrue();
@@ -78,7 +84,7 @@ class DraftNotifyControllerTest {
     void rejectsUnconfirmedDraft() {
         givenDraft(false);
 
-        assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
+        assertThatThrownBy(() -> controller.notifyDraft(OWNER, DRAFT_ID))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> {
                     ApiException api = (ApiException) e;
@@ -95,7 +101,7 @@ class DraftNotifyControllerTest {
         // webhook 이 없어 전송이 실패하는 상황을 만들어도
         when(notifyService.notifyDraftSummarized(any())).thenReturn(false);
 
-        assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
+        assertThatThrownBy(() -> controller.notifyDraft(OWNER, DRAFT_ID))
                 .isInstanceOf(ApiException.class)
                 // 503 NOTIFY_FAILED 가 아니라 409 가 나와야 한다
                 .satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo("DRAFT_NOT_EDITED"));
@@ -107,7 +113,7 @@ class DraftNotifyControllerTest {
         Draft draft = givenDraft(true);
         when(notifyService.notifyDraftSummarized(draft)).thenReturn(false);
 
-        assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
+        assertThatThrownBy(() -> controller.notifyDraft(OWNER, DRAFT_ID))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> {
                     ApiException api = (ApiException) e;
@@ -121,8 +127,35 @@ class DraftNotifyControllerTest {
     void missingDraftIs404() {
         when(draftRepository.findById(DRAFT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> controller.notifyDraft(DRAFT_ID))
+        assertThatThrownBy(() -> controller.notifyDraft(OWNER, DRAFT_ID))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(((ApiException) e).getCode()).isEqualTo("DRAFT_NOT_FOUND"));
+    }
+
+    /**
+     * 누구 일지인지 보지 않고 보내고 있었다 — 로그인만 했으면 남의 일지를 채널에 올릴 수
+     * 있었다 (9/11 점검). 남의 것은 있는지도 알리지 않는다.
+     */
+    @Test
+    @DisplayName("남의 일지는 전송할 수 없다 — 있는지도 알리지 않는다")
+    void refusesOthersDraft() {
+        Draft draft = givenDraft(true);
+        AuthenticatedUser stranger = new AuthenticatedUser(9L, "other", AuthMethod.JWT, UserRole.MEMBER);
+
+        assertThatThrownBy(() -> controller.notifyDraft(stranger, DRAFT_ID))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(notifyService, never()).notifyDraftSummarized(draft);
+    }
+
+    /** 관리자 콘솔은 팀원 일지를 다룬다. 그 길은 열어 둔다. */
+    @Test
+    @DisplayName("관리자는 남의 일지도 보낼 수 있다")
+    void adminMayNotify() {
+        Draft draft = givenDraft(true);
+        when(notifyService.notifyDraftSummarized(draft)).thenReturn(true);
+        AuthenticatedUser admin = new AuthenticatedUser(5L, "admin", AuthMethod.JWT, UserRole.ADMIN);
+
+        assertThat(controller.notifyDraft(admin, DRAFT_ID).getBody().sent()).isTrue();
     }
 }

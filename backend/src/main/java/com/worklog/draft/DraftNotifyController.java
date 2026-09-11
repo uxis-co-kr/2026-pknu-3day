@@ -1,10 +1,13 @@
 package com.worklog.draft;
 
+import com.worklog.auth.AuthenticatedUser;
+import com.worklog.auth.DataScope;
 import com.worklog.config.ApiException;
 import org.springframework.http.HttpStatus;
 import com.worklog.notify.NotifyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,10 +38,17 @@ public class DraftNotifyController {
      */
     @PostMapping("/{id}/notify")
     @Transactional(readOnly = true)
-    public ResponseEntity<NotifyResponse> notifyDraft(@PathVariable Long id) {
+    public ResponseEntity<NotifyResponse> notifyDraft(
+            @AuthenticationPrincipal AuthenticatedUser principal, @PathVariable Long id) {
         Draft draft = draftRepository
                 .findById(id)
                 .orElseThrow(() -> ApiException.notFound("DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다."));
+
+        // 누구 일지인지 보지 않고 보내고 있었다 — 로그인만 했으면 **남의 일지를 채널에 올릴 수
+        // 있었다** (9/11 점검에서 확인). 읽기와 같은 자를 쓴다: 남의 것은 있는지도 알리지 않는다.
+        if (!DataScope.canSee(principal, draft.getUser() == null ? null : draft.getUser().getId())) {
+            throw ApiException.notFound("DRAFT_NOT_FOUND", "초안을 찾을 수 없습니다.");
+        }
 
         // 완료 버튼을 없앴다 (9/10 결정). 예전에는 확정본만 나갈 수 있었는데, 이제 잠그는
         // 상태가 없다. 대신 **사람이 한 번이라도 저장한 일지**만 내보낸다 — 자동 생성 그대로를
